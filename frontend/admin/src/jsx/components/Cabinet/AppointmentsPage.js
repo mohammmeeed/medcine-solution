@@ -21,6 +21,17 @@ const CARD_COLORS = [
   "#8b5cf6", // Violet (Arjun Sekhar)
 ];
 
+const calculateTicketNumber = (timeStr) => {
+  if (!timeStr) return 1;
+  const [h, m] = timeStr.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return 1;
+  const totalMin = h * 60 + m;
+  const startMin = 9 * 60; // 09:00
+  const diff = totalMin - startMin;
+  if (diff < 0) return 1;
+  return Math.floor(diff / 30) + 1;
+};
+
 const AppointmentsPage = () => {
   const [appointments, setAppointments] = useState(initialAppointments);
   const [patients, setPatients] = useState(initialPatients);
@@ -1232,7 +1243,10 @@ const AppointmentsPage = () => {
                     filteredAppointments.map((rdv) => (
                       <tr key={rdv.id}>
                         <td>
-                          <strong>{rdv.date}</strong> à {rdv.time}
+                          <div><strong>{rdv.date}</strong> à {rdv.time}</div>
+                          <span className="badge badge-xs badge-info light mt-1">
+                            Ticket N° {rdv.ticketNumber || calculateTicketNumber(rdv.time)}
+                          </span>
                         </td>
                         <td>
                           <span className="font-w600 text-dark">{rdv.patientName}</span>

@@ -40,6 +40,30 @@ const EVENING_SLOTS = [
   "17:00", "17:30"
 ];
 
+// Tous les créneaux quotidiens ordonnés
+const ALL_DAY_SLOTS = [...MORNING_SLOTS, ...EVENING_SLOTS];
+
+// Calcule l'ordre de passage / numéro de ticket journalier selon l'heure choisie :
+// 09:00 -> 1, 09:30 -> 2, 10:00 -> 3... et chaque nouveau jour repart toujours à 1, 2, 3...
+const getTicketNumber = (slotTime) => {
+  if (!slotTime) return 1;
+  const normalized = slotTime.trim().padStart(5, "0");
+  const idx = ALL_DAY_SLOTS.indexOf(normalized);
+  if (idx !== -1) return idx + 1;
+
+  // Calcul mathématique si heure personnalisée au format HH:MM
+  const [h, m] = slotTime.split(":").map(Number);
+  if (!isNaN(h) && !isNaN(m)) {
+    const totalMin = h * 60 + m;
+    const startMin = 9 * 60; // 09:00 = 540 min
+    const diff = totalMin - startMin;
+    if (diff >= 0) {
+      return Math.floor(diff / 30) + 1;
+    }
+  }
+  return 1;
+};
+
 export default function App() {
   // Navigation entre vues: 'doctor' (présentation) | 'schedule' (agenda) | 'profile' (profil) | 'about' (à propos) | 'confirmed' (succès)
   const [view, setView] = useState("doctor");
@@ -252,8 +276,11 @@ export default function App() {
       return;
     }
 
+    const ticketNumber = getTicketNumber(selectedTime);
+
     const bookingData = {
       id: "RDV-" + Math.floor(1000 + Math.random() * 9000),
+      ticketNumber: ticketNumber, // Numéro de ticket / passage journalier (ex: 1 pour 09:00, 2 pour 09:30...)
       doctorName: "Dr. N. BELBACHIR OULD HENNIA",
       specialty: "Gynécologie Obstétrique & Échographie",
       date: `${selectedDay} ${MONTH_NAMES[selectedMonth]} ${selectedYear}`,
@@ -291,7 +318,7 @@ export default function App() {
           duration: "30 min",
           reason: consultationReason,
           status: "Confirmé",
-          notes: "Réservation en ligne depuis l'application patient",
+          notes: `[Ticket N° ${ticketNumber}] Réservation en ligne depuis l'application patient`,
         }),
       }).catch((err) => console.warn("Erreur enregistrement rendez-vous MySQL :", err));
     } catch (e) {
@@ -728,7 +755,7 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Grille des créneaux horaires avec blocage des heures passées */}
+              {/* Grille des créneaux horaires avec blocage des heures passées et affichage des tickets */}
               <div
                 style={{
                   display: "grid",
@@ -740,22 +767,58 @@ export default function App() {
                 {(timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).map((slot) => {
                   const isPast = isSlotPast(slot, selectedDay, selectedMonth, selectedYear);
                   const isSelected = selectedTime === slot && !isPast;
+                  const ticketNo = getTicketNumber(slot);
 
                   return (
                     <div
                       key={slot}
                       className={`time-slot-pill ${isPast ? "disabled" : isSelected ? "selected" : ""}`}
                       onClick={!isPast ? () => setSelectedTime(slot) : undefined}
-                      title={isPast ? `${slot} (Passé - non réservable)` : `Réserver pour ${slot}`}
-                      style={{
-                        padding: "10px 4px",
-                        fontSize: "12.5px",
-                      }}
+                      title={isPast ? `${slot} (Passé - non réservable)` : `Réserver pour ${slot} • Ticket N° ${ticketNo}`}
                     >
-                      {slot}
+                      <span className="slot-time">{slot}</span>
+                      <span className="slot-badge">N° {ticketNo}</span>
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Récapitulatif dynamique du créneau sélectionné avec son Ticket N° */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "rgba(187, 247, 208, 0.08)",
+                  border: "1px solid rgba(187, 247, 208, 0.2)",
+                  borderRadius: "10px",
+                  padding: "10px 14px",
+                  marginTop: "10px",
+                  marginBottom: "6px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Clock size={16} color="var(--accent-mint)" />
+                  <span style={{ fontSize: "12.5px", color: "#fff" }}>
+                    Heure choisie : <strong style={{ color: "var(--accent-mint)" }}>{selectedTime}</strong>
+                  </span>
+                </div>
+                <div
+                  style={{
+                    background: "var(--accent-mint)",
+                    color: "#064e3b",
+                    padding: "4px 10px",
+                    borderRadius: "20px",
+                    fontSize: "12px",
+                    fontWeight: "800",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <span>Ticket N°</span>
+                  <span>{getTicketNumber(selectedTime)}</span>
+                </div>
               </div>
 
               {/* Message d'alerte contextuel si tous les créneaux de la période sont passés aujourd'hui */}
@@ -851,14 +914,16 @@ export default function App() {
               </div>
 
 
-              {/* Bouton de confirmation finale */}
+              {/* Bouton de confirmation finale avec indication du Ticket N° */}
               <button
                 type="submit"
                 className="btn-primary-mint"
                 style={{ padding: "16px", fontSize: "15px" }}
               >
                 <CheckCircle2 size={18} />
-                <span>Confirmer pour le {selectedDay} {MONTH_NAMES[selectedMonth].slice(0, 3)}. à {selectedTime}</span>
+                <span>
+                  Confirmer pour le {selectedDay} {MONTH_NAMES[selectedMonth].slice(0, 3)}. à {selectedTime} • Ticket N° {getTicketNumber(selectedTime)}
+                </span>
               </button>
             </form>
           </div>
@@ -893,6 +958,59 @@ export default function App() {
               Votre demande a été enregistrée avec succès au cabinet.
             </p>
 
+            {/* CARTE NUMÉRO DE PASSAGE / TICKET DU JOUR */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(5, 150, 105, 0.08))",
+                border: "1.5px solid var(--accent-mint)",
+                borderRadius: "16px",
+                padding: "20px 16px",
+                marginBottom: "20px",
+                boxShadow: "0 8px 30px rgba(16, 185, 129, 0.2)",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "800",
+                  letterSpacing: "1.2px",
+                  color: "var(--accent-mint)",
+                  textTransform: "uppercase",
+                  marginBottom: "8px",
+                }}
+              >
+                VOTRE NUMÉRO DE PASSAGE DU JOUR
+              </div>
+
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "80px",
+                  height: "80px",
+                  borderRadius: "50%",
+                  background: "var(--accent-mint)",
+                  color: "#072813",
+                  fontSize: "38px",
+                  fontWeight: "900",
+                  margin: "6px auto",
+                  boxShadow: "0 0 30px rgba(187, 247, 208, 0.6)",
+                }}
+              >
+                {confirmedBooking.ticketNumber || getTicketNumber(confirmedBooking.time)}
+              </div>
+
+              <div style={{ fontSize: "16px", fontWeight: "800", color: "#ffffff", marginTop: "8px" }}>
+                Ticket N° {confirmedBooking.ticketNumber || getTicketNumber(confirmedBooking.time)} ({confirmedBooking.time})
+              </div>
+              <div style={{ fontSize: "12.5px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                Ordre de passage estimé pour le {confirmedBooking.date}
+              </div>
+            </div>
+
             {/* Ticket / Reçu de réservation */}
             <div
               className="glass-panel"
@@ -921,7 +1039,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
                 <div>
                   <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Date</span>
                   <div style={{ fontSize: "13px", fontWeight: "700", color: "#fff" }}>
@@ -932,6 +1050,12 @@ export default function App() {
                   <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Heure</span>
                   <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--accent-mint)" }}>
                     {confirmedBooking.time}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>N° Passage</span>
+                  <div style={{ fontSize: "13px", fontWeight: "800", color: "var(--accent-mint)" }}>
+                    Ticket #{confirmedBooking.ticketNumber || getTicketNumber(confirmedBooking.time)}
                   </div>
                 </div>
               </div>
@@ -1113,9 +1237,24 @@ export default function App() {
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                        <span style={{ fontSize: "11px", fontWeight: "800", color: "var(--accent-mint)" }}>
-                          {apt.id || "RDV"}
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "11px", fontWeight: "800", color: "var(--accent-mint)" }}>
+                            {apt.id || "RDV"}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              padding: "2px 8px",
+                              borderRadius: "6px",
+                              background: "rgba(187, 247, 208, 0.18)",
+                              color: "var(--accent-mint)",
+                              fontWeight: "800",
+                              border: "1px solid rgba(187, 247, 208, 0.35)",
+                            }}
+                          >
+                            Ticket #{apt.ticketNumber || getTicketNumber(apt.time)}
+                          </span>
+                        </div>
                         <span
                           style={{
                             fontSize: "10.5px",

@@ -26,6 +26,29 @@ switch ($method) {
         sendResponse("error", null, "Méthode non autorisée", 405);
 }
 
+function calculateTicketNumber($timeStr) {
+    if (empty($timeStr)) return 1;
+    $timeClean = substr(trim($timeStr), 0, 5);
+    $allSlots = [
+        "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+        "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+        "17:00", "17:30"
+    ];
+    $idx = array_search($timeClean, $allSlots);
+    if ($idx !== false) {
+        return $idx + 1;
+    }
+    $parts = explode(':', $timeClean);
+    $h = intval($parts[0] ?? 9);
+    $m = intval($parts[1] ?? 0);
+    $totalMinutes = $h * 60 + $m;
+    $diff = $totalMinutes - (9 * 60);
+    if ($diff >= 0) {
+        return floor($diff / 30) + 1;
+    }
+    return 1;
+}
+
 function handleGetAppointments($db) {
     try {
         $date = $_GET['date'] ?? null;
@@ -54,8 +77,10 @@ function handleGetAppointments($db) {
 
         $appointments = [];
         foreach ($rows as $r) {
+            $timeShort = substr($r['appointment_time'], 0, 5);
             $appointments[] = [
                 "id" => intval($r['id']),
+                "ticketNumber" => calculateTicketNumber($timeShort),
                 "patientId" => intval($r['patient_id']),
                 "patientName" => $r['patient_name'],
                 "firstName" => $r['first_name'],
@@ -63,7 +88,7 @@ function handleGetAppointments($db) {
                 "phone" => $r['patient_phone'],
                 "email" => $r['patient_email'],
                 "date" => $r['appointment_date'],
-                "time" => substr($r['appointment_time'], 0, 5),
+                "time" => $timeShort,
                 "duration" => $r['duration'],
                 "reason" => $r['reason'],
                 "status" => $r['status'],
@@ -140,7 +165,8 @@ function handleCreateAppointment($db) {
         ]);
 
         $newId = intval($db->lastInsertId());
-        sendResponse("success", ["id" => $newId], "Rendez-vous créé avec succès dans MySQL", 201);
+        $ticketNo = calculateTicketNumber($time);
+        sendResponse("success", ["id" => $newId, "ticketNumber" => $ticketNo], "Rendez-vous créé avec succès dans MySQL", 201);
     } catch (Exception $e) {
         sendResponse("error", null, "Erreur création rendez-vous : " . $e->getMessage(), 500);
     }
