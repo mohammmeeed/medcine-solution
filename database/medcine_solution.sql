@@ -16,14 +16,9 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Current Database: `medcine_solution_db`
+-- Database schema for medcine_solution
+-- Compatible with cPanel / Host.dz phpMyAdmin
 --
-
-/*!40000 DROP DATABASE IF EXISTS `medcine_solution_db`*/;
-
-CREATE DATABASE /*!32312 IF NOT EXISTS*/ `medcine_solution_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */;
-
-USE `medcine_solution_db`;
 
 --
 -- Table structure for table `appointments`
@@ -853,10 +848,8 @@ UNLOCK TABLES;
 --
 
 --
--- Current Database: `medcine_solution_db`
+-- Views structure
 --
-
-USE `medcine_solution_db`;
 
 --
 -- Final view structure for view `v_monthly_revenue`
@@ -869,9 +862,7 @@ USE `medcine_solution_db`;
 /*!50001 SET character_set_client      = utf8mb4 */;
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_general_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `v_monthly_revenue` AS select date_format(`payments`.`payment_date`,'%Y-%m') AS `month`,`payments`.`method` AS `method`,count(0) AS `transaction_count`,sum(`payments`.`amount`) AS `total_collected` from `payments` where `payments`.`status` = 'Encaissé' group by date_format(`payments`.`payment_date`,'%Y-%m'),`payments`.`method` */;
+CREATE OR REPLACE VIEW `v_monthly_revenue` AS select date_format(`payments`.`payment_date`,'%Y-%m') AS `month`,`payments`.`method` AS `method`,count(0) AS `transaction_count`,sum(`payments`.`amount`) AS `total_collected` from `payments` where `payments`.`status` = 'Encaissé' group by date_format(`payments`.`payment_date`,'%Y-%m'),`payments`.`method`;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
@@ -887,9 +878,7 @@ USE `medcine_solution_db`;
 /*!50001 SET character_set_client      = utf8mb4 */;
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_general_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `v_patient_summary` AS select `p`.`id` AS `id`,`p`.`file_number` AS `file_number`,concat(`p`.`first_name`,' ',`p`.`last_name`) AS `full_name`,`p`.`gender` AS `gender`,`p`.`dob` AS `dob`,`p`.`age` AS `age`,`p`.`phone` AS `phone`,`p`.`email` AS `email`,`p`.`secu_number` AS `secu_number`,`p`.`blood_group` AS `blood_group`,`p`.`status` AS `status`,count(distinct `c`.`id`) AS `total_consultations`,count(distinct `pr`.`id`) AS `total_prescriptions`,count(distinct `i`.`id`) AS `total_invoices`,coalesce(sum(`i`.`amount`),0) AS `total_billed`,coalesce(sum(`i`.`patient_remaining`),0) AS `total_outstanding` from (((`patients` `p` left join `consultations` `c` on(`c`.`patient_id` = `p`.`id`)) left join `prescriptions` `pr` on(`pr`.`patient_id` = `p`.`id`)) left join `invoices` `i` on(`i`.`patient_id` = `p`.`id`)) group by `p`.`id` */;
+CREATE OR REPLACE VIEW `v_patient_summary` AS select `p`.`id` AS `id`,`p`.`file_number` AS `file_number`,concat(`p`.`first_name`,' ',`p`.`last_name`) AS `full_name`,`p`.`gender` AS `gender`,`p`.`dob` AS `dob`,`p`.`age` AS `age`,`p`.`phone` AS `phone`,`p`.`email` AS `email`,`p`.`secu_number` AS `secu_number`,`p`.`blood_group` AS `blood_group`,`p`.`status` AS `status`,count(distinct `c`.`id`) AS `total_consultations`,count(distinct `pr`.`id`) AS `total_prescriptions`,count(distinct `i`.`id`) AS `total_invoices`,coalesce(sum(`i`.`amount`),0) AS `total_billed`,coalesce(sum(`i`.`patient_remaining`),0) AS `total_outstanding` from (((`patients` `p` left join `consultations` `c` on(`c`.`patient_id` = `p`.`id`)) left join `prescriptions` `pr` on(`pr`.`patient_id` = `p`.`id`)) left join `invoices` `i` on(`i`.`patient_id` = `p`.`id`)) group by `p`.`id`;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
@@ -905,9 +894,7 @@ USE `medcine_solution_db`;
 /*!50001 SET character_set_client      = utf8mb4 */;
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_general_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `v_today_appointments` AS select `a`.`id` AS `appointment_id`,`a`.`appointment_date` AS `appointment_date`,`a`.`appointment_time` AS `appointment_time`,`a`.`duration` AS `duration`,`a`.`reason` AS `reason`,`a`.`status` AS `appointment_status`,`p`.`id` AS `patient_id`,`p`.`file_number` AS `file_number`,concat(`p`.`first_name`,' ',`p`.`last_name`) AS `patient_name`,`p`.`phone` AS `phone`,`p`.`gender` AS `gender`,`p`.`age` AS `age` from (`appointments` `a` join `patients` `p` on(`p`.`id` = `a`.`patient_id`)) where `a`.`appointment_date` = curdate() order by `a`.`appointment_time` */;
+CREATE OR REPLACE VIEW `v_today_appointments` AS select `a`.`id` AS `appointment_id`,`a`.`appointment_date` AS `appointment_date`,`a`.`appointment_time` AS `appointment_time`,`a`.`duration` AS `duration`,`a`.`reason` AS `reason`,`a`.`status` AS `appointment_status`,`p`.`id` AS `patient_id`,`p`.`file_number` AS `file_number`,concat(`p`.`first_name`,' ',`p`.`last_name`) AS `patient_name`,`p`.`phone` AS `phone`,`p`.`gender` AS `gender`,`p`.`age` AS `age` from (`appointments` `a` join `patients` `p` on(`p`.`id` = `a`.`patient_id`)) where `a`.`appointment_date` = curdate() order by `a`.`appointment_time`;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
