@@ -1,0 +1,1223 @@
+import React, { useState, useRef } from "react";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import timeGridPlugin from "@fullcalendar/timegrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import { Button } from "react-bootstrap";
+import Swal from "sweetalert2";
+import PageTitle from "../../layouts/PageTitle";
+import { initialAppointments, initialPatients } from "../../../services/CabinetData";
+
+const CARD_COLORS = [
+  "#ef4444", // Red (Preeti Sharma, Rohan Verma)
+  "#f97316", // Orange (Priya Reddy)
+  "#ec4899", // Magenta/Pink (Rahul Singh)
+  "#d946ef", // Purple (Aryan Desai)
+  "#10b981", // Emerald (Sneha Gupta)
+  "#eab308", // Yellow (Arjun Sharma)
+  "#84cc16", // Lime (Ananya Kapoor)
+  "#3b82f6", // Blue (Saravana kumar)
+  "#8b5cf6", // Violet (Arjun Sekhar)
+];
+
+const AppointmentsPage = () => {
+  const [appointments, setAppointments] = useState(initialAppointments);
+  const [viewMode, setViewMode] = useState("calendar"); // "calendar" | "list"
+  const [activeView, setActiveView] = useState("timeGridWeek"); // "timeGridWeek" | "dayGridMonth"
+  const [calendarTitle, setCalendarTitle] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const calendarRef = useRef(null);
+
+  const [showModal, setShowModal] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [formRdv, setFormRdv] = useState({
+    patientId: 1,
+    date: new Date().toISOString().split("T")[0],
+    time: "14:00",
+    duration: "20 min",
+    reason: "Consultation de routine",
+    status: "Confirmé",
+    notes: "",
+  });
+
+  // Calcul de l'heure de fin pour FullCalendar basé sur la durée réelle
+  const calculateEndTime = (dateStr, timeStr, durationStr) => {
+    const minutes = parseInt(durationStr, 10) || 60;
+    const [h, m] = (timeStr || "09:00").split(":").map(Number);
+    const totalMinutes = h * 60 + m + minutes;
+    const endH = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+    const endM = String(totalMinutes % 60).padStart(2, "0");
+    return `${dateStr}T${endH}:${endM}:00`;
+  };
+
+  // Événements pour FullCalendar
+  const calendarEvents = appointments.map((rdv, idx) => ({
+    id: String(rdv.id),
+    title: `${rdv.time} - ${rdv.patientName} (${rdv.reason})`,
+    start: `${rdv.date}T${rdv.time}:00`,
+    end: calculateEndTime(rdv.date, rdv.time, rdv.duration || "60 min"),
+    extendedProps: {
+      ...rdv,
+      accentColor: rdv.accentColor || CARD_COLORS[idx % CARD_COLORS.length],
+    },
+  }));
+
+  const handlePrev = () => {
+    calendarRef.current?.getApi().prev();
+  };
+  const handleNext = () => {
+    calendarRef.current?.getApi().next();
+  };
+  const handleToday = () => {
+    calendarRef.current?.getApi().today();
+  };
+  const handleViewChange = (viewName) => {
+    setActiveView(viewName);
+    calendarRef.current?.getApi().changeView(viewName);
+  };
+  const handleDatesSet = (dateInfo) => {
+    setCalendarTitle(dateInfo.view.title);
+  };
+
+  const handleEventDrop = (info) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    const d = info.event.start;
+    if (!d) return;
+    const newDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const newTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    let newDuration = "30 min";
+    if (info.event.end) {
+      const diffMin = Math.round((info.event.end - info.event.start) / (1000 * 60));
+      newDuration = `${diffMin} min`;
+    }
+
+    setAppointments((prev) =>
+      prev.map((app) =>
+        String(app.id) === info.event.id
+          ? {
+              ...app,
+              date: newDate,
+              time: newTime,
+              duration: newDuration,
+            }
+          : app
+      )
+    );
+
+    Swal.fire({
+      icon: "success",
+      title: "Rendez-vous déplacé !",
+      text: `${info.event.extendedProps?.patientName || "Patient"} déplacé au ${newDate} à ${newTime} (${newDuration})`,
+      timer: 1600,
+      showConfirmButton: false,
+    });
+  };
+
+  const handleEventResize = (info) => {
+    if (!info.event.end || !info.event.start) return;
+    const diffMin = Math.round((info.event.end - info.event.start) / (1000 * 60));
+    const newDuration = `${diffMin} min`;
+
+    setAppointments((prev) =>
+      prev.map((app) =>
+        String(app.id) === info.event.id
+          ? {
+              ...app,
+              duration: newDuration,
+            }
+          : app
+      )
+    );
+
+    Swal.fire({
+      icon: "success",
+      title: "Durée ajustée !",
+      text: `Nouvelle durée : ${newDuration}`,
+      timer: 1400,
+      showConfirmButton: false,
+    });
+  };
+
+  const handleOpenAdd = () => {
+    setEditId(null);
+    setFormRdv({
+      patientId: initialPatients[0]?.id || 1,
+      date: new Date().toISOString().split("T")[0],
+      time: "10:00",
+      duration: "20 min",
+      reason: "Consultation de médecine générale",
+      status: "Confirmé",
+      notes: "",
+    });
+    setShowModal(true);
+    setTimeout(() => {
+      document.getElementById("rdv-form-card")?.scrollIntoView({ behavior: "smooth" });
+    }, 50);
+  };
+
+  const handleOpenEdit = (rdv) => {
+    setEditId(rdv.id);
+    setFormRdv({
+      patientId: rdv.patientId,
+      date: rdv.date,
+      time: rdv.time,
+      duration: rdv.duration,
+      reason: rdv.reason,
+      status: rdv.status,
+      notes: rdv.notes || "",
+    });
+    setShowModal(true);
+    setTimeout(() => {
+      document.getElementById("rdv-form-card")?.scrollIntoView({ behavior: "smooth" });
+    }, 50);
+  };
+
+  const handleSaveRdv = (e) => {
+    e.preventDefault();
+
+    // Règle métier : Prévention des chevauchements réels de rendez-vous pour le praticien
+    const toMinutes = (timeStr) => {
+      const [h, m] = (timeStr || "09:00").split(":").map(Number);
+      return h * 60 + m;
+    };
+    const formStart = toMinutes(formRdv.time);
+    const formEnd = formStart + (parseInt(formRdv.duration, 10) || 20);
+
+    const conflict = appointments.find((a) => {
+      if (
+        a.id === editId ||
+        a.date !== formRdv.date ||
+        a.status === "Annulé" ||
+        a.status === "Absent"
+      ) {
+        return false;
+      }
+      const aStart = toMinutes(a.time);
+      const aEnd = aStart + (parseInt(a.duration, 10) || 20);
+      return formStart < aEnd && aStart < formEnd;
+    });
+
+    if (conflict) {
+      Swal.fire({
+        icon: "warning",
+        title: "Créneau déjà occupé",
+        text: `Le praticien a déjà un rendez-vous prévu de ${conflict.time} avec ${conflict.patientName} (${conflict.duration}). Veuillez choisir un autre horaire.`,
+        confirmButtonColor: "#1e60d5",
+      });
+      return;
+    }
+
+    const patient = initialPatients.find((p) => p.id === parseInt(formRdv.patientId)) || initialPatients[0];
+
+    if (editId) {
+      setAppointments(
+        appointments.map((a) =>
+          a.id === editId
+            ? {
+                ...a,
+                patientId: patient.id,
+                patientName: `${patient.firstName} ${patient.lastName}`,
+                phone: patient.phone,
+                date: formRdv.date,
+                time: formRdv.time,
+                duration: formRdv.duration,
+                reason: formRdv.reason,
+                status: formRdv.status,
+                notes: formRdv.notes,
+              }
+            : a
+        )
+      );
+      Swal.fire({
+        icon: "success",
+        title: "Rendez-vous mis à jour",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } else {
+      const newAppt = {
+        id: appointments.length + 1,
+        patientId: patient.id,
+        patientName: `${patient.firstName} ${patient.lastName}`,
+        phone: patient.phone,
+        date: formRdv.date,
+        time: formRdv.time,
+        duration: formRdv.duration,
+        reason: formRdv.reason,
+        status: formRdv.status,
+        notes: formRdv.notes,
+      };
+      setAppointments([...appointments, newAppt]);
+      Swal.fire({
+        icon: "success",
+        title: "Rendez-vous créé avec succès",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    }
+
+    setShowModal(false);
+  };
+
+  const handleDeleteRdv = (id) => {
+    Swal.fire({
+      title: "Annuler ce rendez-vous ?",
+      text: "Le créneau sera libéré dans l'agenda.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#f72b50",
+      cancelButtonColor: "#6e6e6e",
+      confirmButtonText: "Oui, annuler",
+      cancelButtonText: "Fermer",
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setAppointments(appointments.filter((a) => a.id !== id));
+        Swal.fire("Annulé", "Le rendez-vous a été retiré.", "success");
+      }
+    });
+  };
+
+  const filteredAppointments = appointments.filter((rdv) => {
+    const matchStatus = filterStatus === "all" || rdv.status === filterStatus;
+    const matchSearch =
+      rdv.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rdv.reason.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchStatus && matchSearch;
+  });
+
+  const getStatusBadge = (status) => {
+    return (
+      <span className="appointment-status-badge">
+        <span className="status-dot"></span>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <>
+      <PageTitle motherMenu="Principal" activeMenu="Agenda & Rendez-vous" />
+
+      <style>{`
+        /* Badge de statut épuré et sobre (sans multi-couleurs) */
+        .appointment-status-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 5px 14px;
+          background-color: #f1f5f9;
+          color: #334155;
+          border: 1px solid #e2e8f0;
+          border-radius: 9999px;
+          font-size: 0.8125rem;
+          font-weight: 500;
+          line-height: 1.2;
+          white-space: nowrap;
+          letter-spacing: 0.2px;
+        }
+        .appointment-status-badge .status-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background-color: #64748b;
+          display: inline-block;
+          flex-shrink: 0;
+        }
+
+        /* Boutons d'actions simples et modernes */
+        .btn-action-simple {
+          width: 32px;
+          height: 32px;
+          padding: 0;
+          border-radius: 8px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #e2e8f0;
+          background-color: #ffffff;
+          color: #64748b;
+          cursor: pointer;
+          transition: all 0.15s ease-in-out;
+        }
+        .btn-action-simple:hover {
+          transform: translateY(-1px);
+        }
+        .btn-action-simple.btn-edit:hover {
+          background-color: #eff6ff;
+          border-color: #bfdbfe;
+          color: #1e60d5;
+        }
+        .btn-action-simple.btn-delete:hover {
+          background-color: #fef2f2;
+          border-color: #fecaca;
+          color: #ef4444;
+        }
+      `}</style>
+
+      {/* Barre d'action supérieure */}
+      <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <Button
+            variant={showModal && !editId ? "outline-primary" : "primary"}
+            className="btn-rounded"
+            onClick={() => {
+              if (showModal && !editId) {
+                setShowModal(false);
+              } else {
+                handleOpenAdd();
+              }
+            }}
+          >
+            <i className={showModal && !editId ? "fa fa-times me-2" : "flaticon-381-add-1 me-2"}></i>
+            {showModal && !editId ? "Fermer le formulaire" : "Prendre un Rendez-vous"}
+          </Button>
+
+          <div className="btn-group" role="group">
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === "calendar" ? "btn-primary" : "btn-outline-primary"}`}
+              onClick={() => setViewMode("calendar")}
+            >
+              <i className="flaticon-381-calendar me-1"></i> Calendrier
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === "list" ? "btn-primary" : "btn-outline-primary"}`}
+              onClick={() => setViewMode("list")}
+            >
+              <i className="flaticon-381-list me-1"></i> Liste
+            </button>
+          </div>
+        </div>
+
+        {/* Recherche et filtres */}
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <div className="input-group search-area w-auto">
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Rechercher patient / motif..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <span className="input-group-text">
+              <i className="flaticon-381-search-2"></i>
+            </span>
+          </div>
+
+          <select
+            className="form-control w-auto default-select"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="all">Tous les statuts</option>
+            <option value="Confirmé">Confirmé</option>
+            <option value="Arrivé">Arrivé</option>
+            <option value="En consultation">En consultation</option>
+            <option value="Terminé">Terminé</option>
+            <option value="Absent">Absent</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Formulaire Ajout / Modification de RDV (Intégré dans la page sans popup) */}
+      {showModal && (
+        <div className="card mb-4" id="rdv-form-card">
+          <div className="card-header border-0 pb-0 d-flex justify-content-between align-items-center">
+            <div>
+              <h4 className="card-title">
+                {editId ? "Modifier le Rendez-vous" : "Nouveau Rendez-vous Cabinet"}
+              </h4>
+              <p className="text-muted fs-13 mb-0">
+                {editId
+                  ? "Mise à jour des informations du créneau de consultation"
+                  : "Planification d'une nouvelle consultation dans l'agenda"}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-close"
+              aria-label="Fermer"
+              onClick={() => setShowModal(false)}
+            ></button>
+          </div>
+          <form onSubmit={handleSaveRdv}>
+            <div className="card-body">
+              <div className="row">
+                <div className="col-md-6 mb-3">
+                  <label className="form-label">Patient</label>
+                  <select
+                    className="form-control"
+                    value={formRdv.patientId}
+                    onChange={(e) => setFormRdv({ ...formRdv, patientId: e.target.value })}
+                  >
+                    {initialPatients.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.firstName} {p.lastName} — ({p.fileNumber})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-3 mb-3">
+                  <label className="form-label">Date</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={formRdv.date}
+                    onChange={(e) => setFormRdv({ ...formRdv, date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="col-md-3 mb-3">
+                  <label className="form-label">Heure</label>
+                  <input
+                    type="time"
+                    className="form-control"
+                    value={formRdv.time}
+                    onChange={(e) => setFormRdv({ ...formRdv, time: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="row">
+                <div className="col-md-4 mb-3">
+                  <label className="form-label">Durée</label>
+                  <select
+                    className="form-control"
+                    value={formRdv.duration}
+                    onChange={(e) => setFormRdv({ ...formRdv, duration: e.target.value })}
+                  >
+                    <option value="15 min">15 minutes</option>
+                    <option value="20 min">20 minutes</option>
+                    <option value="30 min">30 minutes</option>
+                    <option value="45 min">45 minutes</option>
+                  </select>
+                </div>
+                <div className="col-md-4 mb-3">
+                  <label className="form-label">Statut</label>
+                  <select
+                    className="form-control"
+                    value={formRdv.status}
+                    onChange={(e) => setFormRdv({ ...formRdv, status: e.target.value })}
+                  >
+                    <option value="Confirmé">Confirmé</option>
+                    <option value="Arrivé">Arrivé (Salle d'attente)</option>
+                    <option value="En consultation">En consultation</option>
+                    <option value="Terminé">Terminé</option>
+                    <option value="Absent">Absent</option>
+                    <option value="Annulé">Annulé</option>
+                  </select>
+                </div>
+                <div className="col-md-4 mb-3">
+                  <label className="form-label">Motif de la consultation</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ex: Contrôle tension, renouvellement, certificat..."
+                    value={formRdv.reason}
+                    onChange={(e) => setFormRdv({ ...formRdv, reason: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label">Notes internes</label>
+                <textarea
+                  className="form-control"
+                  rows="2"
+                  placeholder="Précisions utiles pour l'accueil ou le médecin..."
+                  value={formRdv.notes}
+                  onChange={(e) => setFormRdv({ ...formRdv, notes: e.target.value })}
+                ></textarea>
+              </div>
+            </div>
+            <div className="card-footer d-flex justify-content-end gap-2 border-0 pt-0">
+              <Button variant="danger" light onClick={() => setShowModal(false)}>
+                Fermer
+              </Button>
+              <Button variant="primary" type="submit">
+                {editId ? "Sauvegarder" : "Confirmer le RDV"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Vue Calendrier ou Vue Liste */}
+      {viewMode === "calendar" ? (
+        <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: "10px", overflow: "hidden" }}>
+          {/* Topbar supérieure : Monthly / Weekly, Navigation, Request Approval (badge 7), Refresh */}
+          <div className="cal-design-topbar px-3 px-md-4 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2 bg-white border-bottom">
+            {/* Onglets Monthly / Weekly */}
+            <div className="d-flex align-items-center cal-tabs-nav">
+              <button
+                type="button"
+                className={`cal-tab-btn ${activeView === "dayGridMonth" ? "active" : ""}`}
+                onClick={() => handleViewChange("dayGridMonth")}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                className={`cal-tab-btn ${activeView === "timeGridWeek" ? "active" : ""}`}
+                onClick={() => handleViewChange("timeGridWeek")}
+              >
+                Weekly
+              </button>
+            </div>
+
+            {/* Navigation et Titre Mois/Année */}
+            <div className="d-flex align-items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-light text-secondary border cal-nav-btn"
+                onClick={handlePrev}
+                title="Semaine précédente"
+              >
+                <i className="fa fa-chevron-left"></i>
+              </button>
+              <span className="cal-nav-title font-w600 text-dark px-1">
+                {calendarTitle}
+              </span>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-light text-secondary border cal-nav-btn"
+                onClick={handleNext}
+                title="Semaine suivante"
+              >
+                <i className="fa fa-chevron-right"></i>
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary ms-1"
+                onClick={handleToday}
+              >
+                Aujourd'hui
+              </button>
+            </div>
+
+            {/* Actions à droite : Request Approval (badge 7) & Refresh */}
+            <div className="d-flex align-items-center gap-2">
+              <button
+                type="button"
+                className="cal-btn-approval"
+                onClick={() =>
+                  Swal.fire({
+                    icon: "info",
+                    title: "Demandes d'Approbation",
+                    text: "7 demandes d'approbation de rendez-vous en attente de validation.",
+                    confirmButtonColor: "#2563eb",
+                  })
+                }
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="me-1 text-muted"
+                >
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span>Request Approval</span>
+                <span className="cal-badge-pill">7</span>
+              </button>
+
+              <button
+                type="button"
+                className="cal-btn-refresh"
+                onClick={() => {
+                  calendarRef.current?.getApi().refetchEvents();
+                  Swal.fire({
+                    icon: "success",
+                    title: "Actualisé !",
+                    timer: 800,
+                    showConfirmButton: false,
+                  });
+                }}
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="me-1"
+                >
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="card-body p-0">
+            <style>{`
+              .modern-calendar-wrapper {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                background-color: #ffffff;
+              }
+
+              /* Tabs Monthly / Weekly */
+              .cal-tabs-nav {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+              }
+              .cal-tab-btn {
+                background: none;
+                border: none;
+                padding: 10px 16px;
+                font-size: 14px;
+                font-weight: 500;
+                color: #94a3b8;
+                cursor: pointer;
+                position: relative;
+                transition: color 0.15s ease;
+              }
+              .cal-tab-btn:hover {
+                color: #64748b;
+              }
+              .cal-tab-btn.active {
+                color: #2563eb;
+                font-weight: 600;
+              }
+              .cal-tab-btn.active::after {
+                content: "";
+                position: absolute;
+                bottom: -9px;
+                left: 14px;
+                right: 14px;
+                height: 2.5px;
+                background-color: #2563eb;
+                border-radius: 2px;
+              }
+
+              .cal-nav-title {
+                font-size: 13.5px;
+                letter-spacing: -0.2px;
+              }
+              .cal-nav-btn {
+                width: 28px;
+                height: 28px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0;
+                border-radius: 5px;
+              }
+
+              /* Approval Button with Badge */
+              .cal-btn-approval {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 5px 12px;
+                font-size: 12.5px;
+                color: #475569;
+                font-weight: 500;
+                cursor: pointer;
+                position: relative;
+                transition: all 0.15s ease;
+              }
+              .cal-btn-approval:hover {
+                background: #f8fafc;
+                border-color: #cbd5e1;
+              }
+              .cal-badge-pill {
+                position: absolute;
+                top: -7px;
+                right: -6px;
+                background-color: #ef4444;
+                color: #ffffff;
+                font-size: 10px;
+                font-weight: 700;
+                min-width: 17px;
+                height: 17px;
+                border-radius: 9px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0 4px;
+                box-shadow: 0 2px 4px rgba(239, 68, 68, 0.4);
+              }
+
+              /* Refresh Button */
+              .cal-btn-refresh {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 5px 12px;
+                font-size: 12.5px;
+                color: #475569;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.15s ease;
+              }
+              .cal-btn-refresh:hover {
+                background: #f8fafc;
+                border-color: #cbd5e1;
+                color: #2563eb;
+              }
+
+              /* FullCalendar Table Styles */
+              .modern-calendar-wrapper .fc-theme-standard td,
+              .modern-calendar-wrapper .fc-theme-standard th,
+              .modern-calendar-wrapper .fc-theme-standard .fc-scrollgrid {
+                border-color: #eaedf1 !important;
+              }
+              .modern-calendar-wrapper .fc-scrollgrid {
+                border: none !important;
+              }
+              .modern-calendar-wrapper .fc-col-header {
+                border-bottom: 1px solid #eaedf1 !important;
+              }
+
+              /* Clock icon in the top-left cell above time column */
+              .modern-calendar-wrapper .fc-col-header-cell.fc-timegrid-axis {
+                vertical-align: middle !important;
+                text-align: center !important;
+                background-color: #ffffff !important;
+                border-right: 1px solid #eaedf1 !important;
+                padding: 0 !important;
+              }
+              .modern-calendar-wrapper .fc-col-header-cell.fc-timegrid-axis .fc-timegrid-axis-cushion {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 100% !important;
+                height: 100% !important;
+                padding: 10px 0 !important;
+              }
+              .modern-calendar-wrapper .fc-col-header-cell.fc-timegrid-axis .fc-timegrid-axis-cushion::before {
+                content: "";
+                display: inline-block;
+                width: 18px;
+                height: 18px;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: center;
+                background-size: contain;
+              }
+
+              /* Days Header Styling */
+              .modern-calendar-wrapper .fc-col-header-cell {
+                background-color: #ffffff !important;
+                padding: 12px 0 !important;
+              }
+              .cal-custom-day-header {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+              }
+              .cal-day-num {
+                font-size: 15.5px;
+                font-weight: 800;
+                color: #0f172a;
+              }
+              .cal-day-name {
+                font-size: 14.5px;
+                font-weight: 600;
+                color: #64748b;
+              }
+              .cal-day-pill-today {
+                background-color: #2563eb;
+                color: #ffffff !important;
+                font-size: 14.5px;
+                font-weight: 800;
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+              }
+              .cal-header-today .cal-day-name {
+                color: #2563eb;
+                font-weight: 700;
+              }
+              .cal-header-sunday .cal-day-num,
+              .cal-header-sunday .cal-day-name {
+                color: #ef4444 !important;
+              }
+
+              /* Time Column & Slots (15-min intervals) - Agrandis et bien visibles */
+              .modern-calendar-wrapper .fc-timegrid-slot-label-cushion {
+                font-size: 12.5px !important;
+                font-weight: 600 !important;
+                color: #475569 !important;
+                padding: 0 12px 0 14px !important;
+                text-align: right !important;
+                font-family: inherit !important;
+                display: inline-block !important;
+              }
+              .modern-calendar-wrapper tr:not(.fc-timegrid-slot-minor) .fc-timegrid-slot-label-cushion {
+                font-size: 14px !important;
+                font-weight: 800 !important;
+                color: #0f172a !important;
+              }
+              .modern-calendar-wrapper .fc-timegrid-slot {
+                height: 52px !important;
+              }
+              .modern-calendar-wrapper .fc-timegrid-slot-lane {
+                height: 52px !important;
+              }
+              .modern-calendar-wrapper .fc-timegrid-slot-minor {
+                border-top: 1px dashed #e2e8f0 !important;
+              }
+
+              /* Appointment Card Container with Drag & Drop styling */
+              .modern-calendar-wrapper .fc-timegrid-event-harness {
+                padding: 3px 5px !important;
+              }
+              .modern-calendar-wrapper .fc-timegrid-event,
+              .modern-calendar-wrapper .fc-v-event {
+                background: #ffffff !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 9px !important;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+                margin: 0 !important;
+                overflow: hidden !important;
+                cursor: grab !important;
+                transition: transform 0.1s ease, box-shadow 0.15s ease-in-out !important;
+              }
+              .modern-calendar-wrapper .fc-timegrid-event:active {
+                cursor: grabbing !important;
+              }
+              .modern-calendar-wrapper .fc-timegrid-event:hover {
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14) !important;
+                transform: translateY(-1px);
+              }
+              .modern-calendar-wrapper .fc-event-main {
+                padding: 0 !important;
+                height: 100% !important;
+                display: flex !important;
+                flex-direction: column !important;
+              }
+
+              .cal-card-box {
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                height: 100%;
+                position: relative;
+                background: #ffffff;
+                border-radius: 9px;
+                overflow: hidden;
+              }
+              .cal-card-top-stripe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 5px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+              }
+              .cal-card-content {
+                padding: 8px 10px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                height: 100%;
+                min-height: 0;
+                gap: 4px;
+              }
+              .cal-patient-name {
+                font-size: 14.5px;
+                font-weight: 700;
+                color: #0f172a;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                line-height: 1.25;
+                margin-top: 2px;
+                letter-spacing: -0.2px;
+              }
+              .cal-patient-reason {
+                font-size: 12.5px;
+                color: #475569;
+                font-weight: 500;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                line-height: 1.25;
+                margin-top: 2px;
+              }
+              .cal-card-footer {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-top: 4px;
+                padding-top: 3px;
+              }
+              .cal-card-time {
+                font-size: 12px;
+                color: #1e293b;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                letter-spacing: -0.1px;
+              }
+              .cal-badge-new {
+                background-color: #16a34a;
+                color: #ffffff;
+                font-size: 9.5px;
+                font-weight: 700;
+                padding: 2px 7px;
+                border-radius: 5px;
+                letter-spacing: 0.3px;
+                line-height: 1.2;
+                text-transform: uppercase;
+              }
+            `}</style>
+
+            <div className="modern-calendar-wrapper notranslate" translate="no">
+              <FullCalendar
+                ref={calendarRef}
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                initialView="timeGridWeek"
+                headerToolbar={false}
+                firstDay={1}
+                slotMinTime="08:00:00"
+                slotMaxTime="18:00:00"
+                slotDuration="00:15:00"
+                slotLabelInterval="00:15:00"
+                snapDuration="00:15:00"
+                editable={true}
+                droppable={true}
+                eventResizableFromStart={true}
+                slotLabelFormat={{
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                  omitZeroMinute: false,
+                }}
+                datesSet={handleDatesSet}
+                eventDrop={handleEventDrop}
+                eventResize={handleEventResize}
+                dayHeaderContent={(arg) => {
+                  const d = arg.date;
+                  const dayNum = d.getDate();
+                  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                  const dayName = dayNames[d.getDay()];
+                  const isSunday = d.getDay() === 0;
+                  const isToday = arg.isToday;
+
+                  return (
+                    <div
+                      className={`cal-custom-day-header ${isToday ? "cal-header-today" : ""} ${isSunday ? "cal-header-sunday" : ""}`}
+                    >
+                      {isToday ? (
+                        <span className="cal-day-pill-today">{dayNum}</span>
+                      ) : (
+                        <span className="cal-day-num">{dayNum}</span>
+                      )}
+                      <span className="cal-day-name">{dayName}</span>
+                    </div>
+                  );
+                }}
+                slotEventOverlap={false}
+                allDaySlot={false}
+                nowIndicator={false}
+                events={calendarEvents}
+                eventContent={(eventInfo) => {
+                  const rdv = eventInfo.event.extendedProps || {};
+                  const accent = rdv.accentColor || "#ef4444";
+                  const startTime = rdv.time || "09:00";
+
+                  // Calcul du format d'heure "09:00 - 10:00"
+                  const durationMin = parseInt(rdv.duration, 10) || 60;
+                  const [h, m] = startTime.split(":").map(Number);
+                  const totalMin = h * 60 + m + durationMin;
+                  const endH = Math.floor(totalMin / 60);
+                  const endM = String(totalMin % 60).padStart(2, "0");
+                  const timeRange = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} - ${String(endH).padStart(2, "0")}:${endM}`;
+
+                  return (
+                    <div className="cal-card-box">
+                      <div
+                        className="cal-card-top-stripe"
+                        style={{ backgroundColor: accent }}
+                      />
+                      <div className="cal-card-content">
+                        <div>
+                          <div className="cal-patient-name" title={rdv.patientName}>
+                            {rdv.patientName}
+                          </div>
+                          <div className="cal-patient-reason" title={rdv.reason}>
+                            {rdv.reason}
+                          </div>
+                        </div>
+                        <div className="cal-card-footer">
+                          <span className="cal-card-time">
+                            <svg
+                              width="13"
+                              height="13"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              style={{ marginRight: "3px", flexShrink: 0 }}
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                            {timeRange}
+                          </span>
+                          <span className="cal-badge-new">New</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }}
+                eventClick={(info) => {
+                  const rdv = appointments.find((a) => String(a.id) === info.event.id);
+                  if (rdv) handleOpenEdit(rdv);
+                }}
+                dateClick={(info) => {
+                  const clickedDate = info.dateStr.split("T")[0];
+                  const clickedTime = info.dateStr.split("T")[1]?.substring(0, 5) || "09:00";
+                  setEditId(null);
+                  setFormRdv({
+                    patientId: initialPatients[0]?.id || 1,
+                    date: clickedDate,
+                    time: clickedTime,
+                    duration: "60 min",
+                    reason: "Consultation générale",
+                    status: "Confirmé",
+                    notes: "",
+                  });
+                  setShowModal(true);
+                  setTimeout(() => {
+                    document.getElementById("rdv-form-card")?.scrollIntoView({ behavior: "smooth" });
+                  }, 50);
+                }}
+                height="auto"
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="card-header border-0 pb-0">
+            <h4 className="card-title">Liste des Rendez-vous programmés</h4>
+          </div>
+          <div className="card-body">
+            <div className="table-responsive">
+              <table className="table table-responsive-md table-hover">
+                <thead>
+                  <tr>
+                    <th><strong>DATE & HEURE</strong></th>
+                    <th><strong>PATIENT</strong></th>
+                    <th><strong>MOTIF</strong></th>
+                    <th><strong>DURÉE</strong></th>
+                    <th><strong>TÉLÉPHONE</strong></th>
+                    <th><strong>STATUT</strong></th>
+                    <th><strong>ACTIONS</strong></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAppointments.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="text-center py-4 text-muted">
+                        Aucun rendez-vous ne correspond aux critères.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAppointments.map((rdv) => (
+                      <tr key={rdv.id}>
+                        <td>
+                          <strong>{rdv.date}</strong> à {rdv.time}
+                        </td>
+                        <td>
+                          <span className="font-w600 text-dark">{rdv.patientName}</span>
+                        </td>
+                        <td>{rdv.reason}</td>
+                        <td>{rdv.duration}</td>
+                        <td>{rdv.phone}</td>
+                        <td>{getStatusBadge(rdv.status)}</td>
+                        <td>
+                          <div className="d-flex align-items-center gap-2">
+                            <button
+                              type="button"
+                              className="btn-action-simple btn-edit"
+                              onClick={() => handleOpenEdit(rdv)}
+                              title="Modifier"
+                            >
+                              <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-action-simple btn-delete"
+                              onClick={() => handleDeleteRdv(rdv.id)}
+                              title="Supprimer"
+                            >
+                              <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default AppointmentsPage;
