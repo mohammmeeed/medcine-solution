@@ -261,7 +261,7 @@ const Login = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} className="notranslate" translate="no">
             {/* Nom d'utilisateur */}
             <div className="mb-3">
               <label
@@ -387,11 +387,12 @@ const Login = () => {
               </span>
             </div>
 
-            {/* Bouton de Connexion */}
+            {/* Bouton de Connexion - Stabilisé contre insertBefore DOM mutations */}
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary w-100 d-flex align-items-center justify-content-center"
+              className="btn btn-primary w-100 notranslate"
+              translate="no"
               style={{
                 height: "48px",
                 borderRadius: "10px",
@@ -400,17 +401,18 @@ const Login = () => {
                 boxShadow: "0 8px 18px rgba(30, 96, 213, 0.3)",
               }}
             >
-              {loading ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                  Vérification des accès...
-                </>
-              ) : (
-                <>
+              <span className="d-flex align-items-center justify-content-center w-100">
+                {loading ? (
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                    aria-hidden="true"
+                  ></span>
+                ) : (
                   <i className="fa fa-sign-in-alt me-2"></i>
-                  Se Connecter
-                </>
-              )}
+                )}
+                <span>{loading ? "Vérification des accès..." : "Se Connecter"}</span>
+              </span>
             </button>
           </form>
 
