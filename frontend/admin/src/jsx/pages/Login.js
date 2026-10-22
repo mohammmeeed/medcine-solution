@@ -16,7 +16,7 @@ const Login = () => {
     // Si l'utilisateur est déjà connecté, redirection vers le tableau de bord
     const authUser = localStorage.getItem("cabinet_auth_user");
     if (authUser) {
-      navigate("/");
+      navigate("/dashboard");
     }
     // Pré-remplir l'identifiant mémorisé si existant
     const remembered = localStorage.getItem("cabinet_remember_user");
@@ -112,7 +112,7 @@ const Login = () => {
           showConfirmButton: false,
         });
 
-        navigate("/");
+        navigate("/dashboard");
         return;
       }
 
@@ -140,7 +140,7 @@ const Login = () => {
           showConfirmButton: false,
         });
 
-        navigate("/");
+        navigate("/dashboard");
       } else if (isSecretaryUser && isSecretaryPass) {
         const sessionUser = {
           username: cleanUser,
@@ -150,7 +150,7 @@ const Login = () => {
           loginTime: new Date().toISOString(),
         };
         localStorage.setItem("cabinet_auth_user", JSON.stringify(sessionUser));
-        navigate("/");
+        navigate("/dashboard");
       } else {
         setLoading(false);
         setErrorMsg("Identifiant ou mot de passe incorrect. Veuillez vérifier vos accès.");

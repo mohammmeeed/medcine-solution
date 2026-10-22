@@ -97,7 +97,17 @@ const Header = ({ onNote }) => {
               </div>
             </div>
 
-            <ul className="navbar-nav header-right"> 
+            <ul className="navbar-nav header-right align-items-center"> 
+                <li className="nav-item me-2 d-none d-md-block">
+                  <Link
+                    to="/"
+                    className="btn btn-outline-primary btn-sm rounded-pill d-flex align-items-center gap-1 px-3 py-1"
+                    title="Voir le site public (Prise de rendez-vous)"
+                  >
+                    <i className="fa fa-globe"></i>
+                    <span>Portail Patient</span>
+                  </Link>
+                </li>
                 <li className="nav-item dropdown notification_dropdown">
                   <Link to={"#"} className={`nav-link bell dz-theme-mode ${ background.value === "dark" ? "active": ""}`}
                     onClick={handelChangeMode}

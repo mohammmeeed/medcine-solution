@@ -15,6 +15,7 @@ import Footer from "./layouts/Footer";
 /// Pages
 import Registration from "./pages/Registration";
 import Login from "./pages/Login";
+import PatientPortal from "./pages/PatientPortal";
 
 import LockScreen from "./pages/LockScreen";
 import Error400 from "./pages/Error400";
@@ -128,7 +129,6 @@ import { ThemeContext } from "../context/ThemeContext";
 const Markup = () => {  
   const allroutes = [
     /// Cabinet Médical Individuel (Dr N. BELBACHIR OULD HENNIA)
-    { url: "", component: <DashboardCabinet /> },
     { url: "dashboard", component: <DashboardCabinet /> },
     { url: "appointments", component: <AppointmentsPage /> },
     { url: "patients", component: <PatientsPage /> },
@@ -232,8 +232,10 @@ const Markup = () => {
   return (    
     <>     
         <Routes >
+          <Route path='/' element={<PatientPortal />} />
           <Route path='page-login' element= {<Login />} />
           <Route path='login' element= {<Login />} />
+          <Route path='admin' element= {<Login />} />
           <Route path='page-register' element= {<Registration />} />
           <Route path='page-lock-screen' element= {<LockScreen />} />
           <Route path='page-error-400' element={<Error400/>} />
@@ -266,7 +268,7 @@ function MainLayout(){
   // Protection du panel administration : redirection si non connecté
   const authUser = localStorage.getItem("cabinet_auth_user");
   if (!authUser) {
-    return <Navigate to="/page-login" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return (
