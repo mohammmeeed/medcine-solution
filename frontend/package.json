@@ -1,0 +1,13 @@
+{
+  "name": "medcine-solution-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portail Frontend unifié pour Medcine Solution (Client Patient & Admin Médecin)",
+  "scripts": {
+    "dev:client": "npm --prefix client run dev",
+    "dev:admin": "npm --prefix admin start",
+    "build:client": "npm --prefix client run build",
+    "build:admin": "npm --prefix admin run build",
+    "build": "npm --prefix client run build && npm --prefix admin run build"
+  }
+}
