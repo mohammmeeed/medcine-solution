@@ -755,7 +755,7 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Grille des créneaux horaires avec blocage des heures passées et affichage des tickets */}
+              {/* Grille des créneaux horaires avec blocage des heures passées */}
               <div
                 style={{
                   display: "grid",
@@ -767,58 +767,18 @@ export default function App() {
                 {(timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).map((slot) => {
                   const isPast = isSlotPast(slot, selectedDay, selectedMonth, selectedYear);
                   const isSelected = selectedTime === slot && !isPast;
-                  const ticketNo = getTicketNumber(slot);
 
                   return (
                     <div
                       key={slot}
                       className={`time-slot-pill ${isPast ? "disabled" : isSelected ? "selected" : ""}`}
                       onClick={!isPast ? () => setSelectedTime(slot) : undefined}
-                      title={isPast ? `${slot} (Passé - non réservable)` : `Réserver pour ${slot} • Ticket N° ${ticketNo}`}
+                      title={isPast ? `${slot} (Passé - non réservable)` : `Réserver pour ${slot}`}
                     >
-                      <span className="slot-time">{slot}</span>
-                      <span className="slot-badge">N° {ticketNo}</span>
+                      {slot}
                     </div>
                   );
                 })}
-              </div>
-
-              {/* Récapitulatif dynamique du créneau sélectionné avec son Ticket N° */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: "rgba(187, 247, 208, 0.08)",
-                  border: "1px solid rgba(187, 247, 208, 0.2)",
-                  borderRadius: "10px",
-                  padding: "10px 14px",
-                  marginTop: "10px",
-                  marginBottom: "6px",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Clock size={16} color="var(--accent-mint)" />
-                  <span style={{ fontSize: "12.5px", color: "#fff" }}>
-                    Heure choisie : <strong style={{ color: "var(--accent-mint)" }}>{selectedTime}</strong>
-                  </span>
-                </div>
-                <div
-                  style={{
-                    background: "var(--accent-mint)",
-                    color: "#064e3b",
-                    padding: "4px 10px",
-                    borderRadius: "20px",
-                    fontSize: "12px",
-                    fontWeight: "800",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  <span>Ticket N°</span>
-                  <span>{getTicketNumber(selectedTime)}</span>
-                </div>
               </div>
 
               {/* Message d'alerte contextuel si tous les créneaux de la période sont passés aujourd'hui */}
@@ -914,7 +874,7 @@ export default function App() {
               </div>
 
 
-              {/* Bouton de confirmation finale avec indication du Ticket N° */}
+              {/* Bouton de confirmation finale */}
               <button
                 type="submit"
                 className="btn-primary-mint"
@@ -922,7 +882,7 @@ export default function App() {
               >
                 <CheckCircle2 size={18} />
                 <span>
-                  Confirmer pour le {selectedDay} {MONTH_NAMES[selectedMonth].slice(0, 3)}. à {selectedTime} • Ticket N° {getTicketNumber(selectedTime)}
+                  Confirmer pour le {selectedDay} {MONTH_NAMES[selectedMonth].slice(0, 3)}. à {selectedTime}
                 </span>
               </button>
             </form>
