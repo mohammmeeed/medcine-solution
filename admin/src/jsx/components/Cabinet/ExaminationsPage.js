@@ -75,14 +75,6 @@ const ExaminationsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <Button
-          variant="primary"
-          className="btn-rounded"
-          onClick={() => setShowAddModal(true)}
-        >
-          <i className="flaticon-381-add-1 me-2"></i> Relever des Constantes
-        </Button>
-
         <div className="d-flex align-items-center gap-2">
           <span className="text-muted fs-13">Filtrer par patient :</span>
           <select
@@ -98,6 +90,14 @@ const ExaminationsPage = () => {
             ))}
           </select>
         </div>
+
+        <Button
+          variant="primary"
+          className="btn-rounded"
+          onClick={() => setShowAddModal(true)}
+        >
+          <i className="flaticon-381-add-1 me-2"></i> Relever des Constantes
+        </Button>
       </div>
 
       {/* Cartes d'indicateurs moyens */}

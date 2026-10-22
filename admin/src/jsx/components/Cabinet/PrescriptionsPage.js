@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { Button } from "react-bootstrap";
+import Select from "react-select";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import PrescriptionPreviewModal from "./PrescriptionPreviewModal";
+import MedicationsModal from "./MedicationsModal";
+import { ApiService } from "../../../services/ApiService";
 import {
   initialDoctor,
   initialPatients,
   initialPrescriptions,
+  initialMedications,
 } from "../../../services/CabinetData";
 
 const PrescriptionsPage = () => {
@@ -16,12 +20,26 @@ const PrescriptionsPage = () => {
   const patientIdQuery = searchParams.get("patientId");
 
   const [prescriptions, setPrescriptions] = useState(initialPrescriptions);
+  const [medications, setMedications] = useState(initialMedications);
+  const [showMedModal, setShowMedModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [previewPrescription, setPreviewPrescription] = useState(null);
 
+  useEffect(() => {
+    ApiService.getMedications().then((data) => {
+      if (data && Array.isArray(data) && data.length > 0) {
+        setMedications(data);
+      }
+    });
+  }, []);
+
   const handleOpenCreate = () => {
     setShowCreateModal(true);
+    setFormData((prev) => ({
+      ...prev,
+      patientId: patientIdQuery ? parseInt(patientIdQuery) : "",
+    }));
     setTimeout(() => {
       document.getElementById("prescription-form-card")?.scrollIntoView({ behavior: "smooth" });
     }, 50);
@@ -38,7 +56,7 @@ const PrescriptionsPage = () => {
 
   // Formulaire d'ordonnance
   const [formData, setFormData] = useState({
-    patientId: patientIdQuery ? parseInt(patientIdQuery) : 1,
+    patientId: patientIdQuery ? parseInt(patientIdQuery) : "",
     validity: "3 mois",
     ald: false,
     items: [
@@ -52,6 +70,56 @@ const PrescriptionsPage = () => {
     ],
     notes: "Prendre les comprimés avec un grand verre d'eau. Ne pas dépasser 3g par jour.",
   });
+
+  const patientOptions = initialPatients.map((p) => ({
+    value: p.id,
+    label: `${p.lastName.toUpperCase()} ${p.firstName} — ${p.fileNumber} (Née le ${p.dob} • ${p.age} ans)`,
+  }));
+
+  const selectedPatientOption = formData.patientId
+    ? patientOptions.find((opt) => String(opt.value) === String(formData.patientId)) || null
+    : null;
+
+  const patientSelectStyles = {
+    control: (base, state) => ({
+      ...base,
+      minHeight: "45px",
+      borderRadius: "0.75rem",
+      borderColor: state.isFocused ? "#1e60d5" : "#e4e7ea",
+      boxShadow: state.isFocused ? "0 0 0 0.2rem rgba(30, 96, 213, 0.15)" : "none",
+      "&:hover": {
+        borderColor: "#1e60d5",
+      },
+    }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isSelected
+        ? "#1e60d5"
+        : state.isFocused
+        ? "rgba(30, 96, 213, 0.08)"
+        : "transparent",
+      color: state.isSelected ? "#ffffff" : "#333333",
+      fontSize: "13px",
+      cursor: "pointer",
+    }),
+    singleValue: (base) => ({
+      ...base,
+      fontSize: "14px",
+      fontWeight: "500",
+      color: "#333333",
+    }),
+    placeholder: (base) => ({
+      ...base,
+      fontSize: "13px",
+      color: "#9ca3af",
+    }),
+    menu: (base) => ({
+      ...base,
+      zIndex: 9999,
+      borderRadius: "0.75rem",
+      boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
+    }),
+  };
 
   const handleAddItem = () => {
     setFormData({
@@ -82,10 +150,33 @@ const PrescriptionsPage = () => {
     setFormData({ ...formData, items: updated });
   };
 
+  const handleSelectPredefinedMed = (index, medName) => {
+    const found = medications.find((m) => m.name.toLowerCase() === medName.toLowerCase());
+    const updated = [...formData.items];
+    if (found) {
+      updated[index].medication = found.name;
+      if (found.dosage) updated[index].dosage = found.dosage;
+      if (found.defaultPosology) updated[index].posology = found.defaultPosology;
+      if (found.defaultDuration) updated[index].duration = found.defaultDuration;
+    } else {
+      updated[index].medication = medName;
+    }
+    setFormData({ ...formData, items: updated });
+  };
+
   const handleSavePrescription = (e) => {
     e.preventDefault();
+    if (!formData.patientId) {
+      Swal.fire({
+        icon: "warning",
+        title: "Patient requis",
+        text: "Veuillez sélectionner un(e) patient(e) avant d'enregistrer l'ordonnance.",
+        confirmButtonColor: "#1e60d5",
+      });
+      return;
+    }
     const pat =
-      initialPatients.find((p) => p.id === parseInt(formData.patientId)) ||
+      initialPatients.find((p) => String(p.id) === String(formData.patientId)) ||
       initialPatients[0];
 
     const newOrd = {
@@ -129,21 +220,6 @@ const PrescriptionsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <Button
-          variant={showCreateModal ? "outline-primary" : "primary"}
-          className="btn-rounded"
-          onClick={() => {
-            if (showCreateModal) {
-              setShowCreateModal(false);
-            } else {
-              handleOpenCreate();
-            }
-          }}
-        >
-          <i className={showCreateModal ? "fa fa-times me-2" : "flaticon-381-add-1 me-2"}></i>
-          {showCreateModal ? "Fermer le formulaire" : "Rédiger une Ordonnance"}
-        </Button>
-
         <div className="input-group search-area w-auto">
           <input
             type="text"
@@ -155,6 +231,32 @@ const PrescriptionsPage = () => {
           <span className="input-group-text">
             <i className="flaticon-381-search-2"></i>
           </span>
+        </div>
+
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <Button
+            variant="outline-primary"
+            className="btn-rounded"
+            onClick={() => setShowMedModal(true)}
+            title="Base et répertoire des médicaments"
+          >
+            <i className="fa fa-pills me-2"></i> Médicaments
+          </Button>
+
+          <Button
+            variant={showCreateModal ? "outline-primary" : "primary"}
+            className="btn-rounded"
+            onClick={() => {
+              if (showCreateModal) {
+                setShowCreateModal(false);
+              } else {
+                handleOpenCreate();
+              }
+            }}
+          >
+            <i className={showCreateModal ? "fa fa-times me-2" : "flaticon-381-add-1 me-2"}></i>
+            {showCreateModal ? "Fermer le formulaire" : "Rédiger une Ordonnance"}
+          </Button>
         </div>
       </div>
 
@@ -183,18 +285,22 @@ const PrescriptionsPage = () => {
               <div className="row mb-3">
                 <div className="col-md-7">
                   <label className="form-label font-w600">Patient *</label>
-                  <select
-                    className="form-control"
-                    value={formData.patientId}
-                    onChange={(e) => setFormData({ ...formData, patientId: e.target.value })}
-                    required
-                  >
-                    {initialPatients.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.lastName.toUpperCase()} {p.firstName} ({p.fileNumber})
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    isSearchable={true}
+                    isClearable={true}
+                    placeholder="Tapez pour rechercher un(e) patient(e) (nom, prénom, dossier)..."
+                    options={patientOptions}
+                    value={selectedPatientOption}
+                    styles={patientSelectStyles}
+                    onChange={(selected) => {
+                      setFormData({ ...formData, patientId: selected ? selected.value : "" });
+                    }}
+                    noOptionsMessage={({ inputValue }) =>
+                      inputValue
+                        ? `Aucun patient trouvé pour "${inputValue}"`
+                        : "Tapez le nom, prénom ou n° dossier pour rechercher"
+                    }
+                  />
                 </div>
                 <div className="col-md-5">
                   <label className="form-label font-w600">Durée de validité</label>
@@ -235,13 +341,54 @@ const PrescriptionsPage = () => {
                   </div>
                   <div className="row mb-2">
                     <div className="col-md-12 mb-2">
-                      <label className="form-label fs-12">DCI ou Spécialité pharmaceutique *</label>
+                      <div className="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
+                        <label className="form-label fs-12 mb-0 font-w600">
+                          DCI ou Spécialité pharmaceutique *
+                        </label>
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="text-muted fs-11">Sélection directe :</span>
+                          <select
+                            className="form-select form-select-sm py-0 px-2 fs-12 text-primary"
+                            style={{ width: "auto", minWidth: "190px", height: "26px" }}
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                handleSelectPredefinedMed(index, e.target.value);
+                              }
+                            }}
+                          >
+                            <option value="">-- Choisir un médicament --</option>
+                            {medications.map((m, mIdx) => (
+                              <option key={m.id || `${m.name}-${mIdx}`} value={m.name}>
+                                {m.name} {m.dosage ? `(${m.dosage})` : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className="btn btn-link text-primary p-0 fs-11 text-decoration-none"
+                            onClick={() => setShowMedModal(true)}
+                            title="Ajouter ou gérer les médicaments"
+                          >
+                            + Nouveau
+                          </button>
+                        </div>
+                      </div>
                       <input
                         type="text"
+                        list="medications-catalog-datalist"
                         className="form-control form-control-sm"
                         placeholder="Ex: AMOXICILLINE 1g, INUVAIR 100/6, KARDEGIC 75mg..."
                         value={item.medication}
-                        onChange={(e) => handleItemChange(index, "medication", e.target.value)}
+                        onChange={(e) => {
+                          handleItemChange(index, "medication", e.target.value);
+                          const exact = medications.find(
+                            (m) => m.name.toLowerCase() === e.target.value.trim().toLowerCase()
+                          );
+                          if (exact) {
+                            handleSelectPredefinedMed(index, exact.name);
+                          }
+                        }}
                         required
                       />
                     </div>
@@ -373,6 +520,23 @@ const PrescriptionsPage = () => {
         show={!!previewPrescription}
         onHide={() => setPreviewPrescription(null)}
         prescription={previewPrescription}
+      />
+
+      {/* Datalist pour autocomplétion rapide de la saisie */}
+      <datalist id="medications-catalog-datalist">
+        {medications.map((m, mIdx) => (
+          <option key={m.id || `${m.name}-${mIdx}`} value={m.name}>
+            {m.dosage ? `${m.dosage} - ${m.defaultPosology || ""}` : ""}
+          </option>
+        ))}
+      </datalist>
+
+      {/* Modal Répertoire & Base Médicaments */}
+      <MedicationsModal
+        show={showMedModal}
+        onHide={() => setShowMedModal(false)}
+        medications={medications}
+        onMedicationsUpdated={setMedications}
       />
     </>
   );

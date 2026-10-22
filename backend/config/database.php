@@ -20,7 +20,7 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS
 
 class Database {
     private $host = "127.0.0.1";
-    private $port = "3306";
+    private $port = "3307";
     private $db_name = "medcine_solution_db";
     private $username = "root";
     private $password = "";
@@ -28,23 +28,31 @@ class Database {
 
     public function getConnection() {
         $this->conn = null;
-        try {
-            $dsn = "mysql:host=" . $this->host . ";port=" . $this->port . ";dbname=" . $this->db_name . ";charset=utf8mb4";
-            $options = [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
-            ];
-            $this->conn = new PDO($dsn, $this->username, $this->password, $options);
-        } catch (PDOException $exception) {
-            http_response_code(500);
-            echo json_encode([
-                "status" => "error",
-                "message" => "Erreur de connexion MySQL : " . $exception->getMessage()
-            ], JSON_UNESCAPED_UNICODE);
-            exit();
+        $portsToTry = array_unique([getenv('DB_PORT') ?: "3307", "3307", "3306"]);
+        $lastException = null;
+
+        foreach ($portsToTry as $port) {
+            try {
+                $dsn = "mysql:host=" . $this->host . ";port=" . $port . ";dbname=" . $this->db_name . ";charset=utf8mb4";
+                $options = [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES => false,
+                ];
+                $this->conn = new PDO($dsn, $this->username, $this->password, $options);
+                $this->port = $port;
+                return $this->conn;
+            } catch (PDOException $e) {
+                $lastException = $e;
+            }
         }
-        return $this->conn;
+
+        http_response_code(500);
+        echo json_encode([
+            "status" => "error",
+            "message" => "Erreur de connexion MySQL : " . ($lastException ? $lastException->getMessage() : "Impossible de se connecter")
+        ], JSON_UNESCAPED_UNICODE);
+        exit();
     }
 }
 

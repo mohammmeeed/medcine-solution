@@ -1,0 +1,160 @@
+<?php
+// backend/api/staff.php
+// Gestion du personnel médical, secrétaires et comptes d'accès
+
+require_once __DIR__ . '/../config/database.php';
+
+$database = new Database();
+$db = $database->getConnection();
+$method = $_SERVER['REQUEST_METHOD'];
+
+switch ($method) {
+    case 'GET':
+        handleGetStaff($db);
+        break;
+    case 'POST':
+        handleSaveStaff($db);
+        break;
+    case 'PUT':
+        handleUpdateStaff($db);
+        break;
+    case 'DELETE':
+        handleDeleteStaff($db);
+        break;
+    default:
+        sendResponse('error', null, 'Méthode non autorisée', 405);
+        break;
+}
+
+function handleGetStaff($db) {
+    try {
+        $stmt = $db->query("SELECT * FROM staff_users ORDER BY id ASC");
+        $rows = $stmt->fetchAll();
+
+        $data = array_map(function ($row) {
+            return [
+                'id' => (int)$row['id'],
+                'name' => $row['name'],
+                'email' => $row['email'],
+                'phone' => $row['phone'] ?? '',
+                'role' => $row['role'],
+                'roleId' => ($row['type'] === 'doctor') ? 'role-superadmin' : 'role-secretary',
+                'roleName' => $row['role'],
+                'type' => $row['type'],
+                'status' => $row['status'],
+                'accessLevel' => $row['access_level'] ?? '',
+                'permissions' => [
+                    'agenda' => $row['permission_agenda'],
+                    'medicalRecords' => $row['permission_medical_records'],
+                    'prescriptions' => $row['permission_prescriptions'],
+                    'billing' => $row['permission_billing'],
+                    'settings' => $row['permission_settings'],
+                ],
+                'lastLogin' => $row['last_login'],
+                'createdAt' => $row['created_at'],
+            ];
+        }, $rows);
+
+        sendResponse('success', $data, 'Membres du personnel récupérés avec succès');
+    } catch (PDOException $e) {
+        sendResponse('error', null, 'Erreur lors de la récupération du personnel : ' . $e->getMessage(), 500);
+    }
+}
+
+function handleSaveStaff($db) {
+    $input = getRequestBody();
+
+    if (empty($input['name']) || empty($input['email'])) {
+        sendResponse('error', null, 'Nom et adresse email obligatoires', 400);
+    }
+
+    try {
+        $name = trim($input['name']);
+        $email = trim($input['email']);
+        $phone = $input['phone'] ?? '';
+        $role = $input['role'] ?? ($input['roleName'] ?? 'Secrétaire Médicale');
+        $type = $input['type'] ?? 'secretary';
+        $status = $input['status'] ?? 'Actif';
+        $accessLevel = $input['accessLevel'] ?? 'Accueil & Gestion Administrative';
+        $password = !empty($input['password']) ? password_hash($input['password'], PASSWORD_DEFAULT) : null;
+
+        // Vérifier si existe déjà par ID
+        if (!empty($input['id']) && is_numeric($input['id'])) {
+            $stmt = $db->prepare("
+                UPDATE staff_users SET
+                    name = :name,
+                    email = :email,
+                    phone = :phone,
+                    role = :role,
+                    type = :type,
+                    status = :status,
+                    access_level = :access_level" . ($password ? ", password_hash = :pwd" : "") . "
+                WHERE id = :id
+            ");
+            $params = [
+                ':name' => $name,
+                ':email' => $email,
+                ':phone' => $phone,
+                ':role' => $role,
+                ':type' => $type,
+                ':status' => $status,
+                ':access_level' => $accessLevel,
+                ':id' => (int)$input['id']
+            ];
+            if ($password) $params[':pwd'] = $password;
+            $stmt->execute($params);
+        } else {
+            // Insertion
+            $pwdHash = $password ?: password_hash('123456', PASSWORD_DEFAULT);
+            $stmt = $db->prepare("
+                INSERT INTO staff_users (
+                    name, email, password_hash, phone, role, type, status, access_level
+                ) VALUES (
+                    :name, :email, :pwd, :phone, :role, :type, :status, :access_level
+                )
+            ");
+            $stmt->execute([
+                ':name' => $name,
+                ':email' => $email,
+                ':pwd' => $pwdHash,
+                ':phone' => $phone,
+                ':role' => $role,
+                ':type' => $type,
+                ':status' => $status,
+                ':access_level' => $accessLevel
+            ]);
+        }
+
+        handleGetStaff($db);
+    } catch (PDOException $e) {
+        sendResponse('error', null, 'Erreur enregistrement membre du personnel : ' . $e->getMessage(), 500);
+    }
+}
+
+function handleUpdateStaff($db) {
+    handleSaveStaff($db);
+}
+
+function handleDeleteStaff($db) {
+    $id = $_GET['id'] ?? null;
+    if (!$id) {
+        $input = getRequestBody();
+        $id = $input['id'] ?? null;
+    }
+
+    if (!$id) {
+        sendResponse('error', null, 'Identifiant membre manquant', 400);
+    }
+
+    if ((int)$id === 1) {
+        sendResponse('error', null, 'Impossible de supprimer le médecin titulaire principal', 403);
+    }
+
+    try {
+        $stmt = $db->prepare("DELETE FROM staff_users WHERE id = :id");
+        $stmt->execute([':id' => (int)$id]);
+        sendResponse('success', null, 'Membre du personnel supprimé avec succès');
+    } catch (PDOException $e) {
+        sendResponse('error', null, 'Erreur lors de la suppression : ' . $e->getMessage(), 500);
+    }
+}

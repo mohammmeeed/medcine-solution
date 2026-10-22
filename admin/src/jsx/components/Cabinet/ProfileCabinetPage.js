@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Badge } from "react-bootstrap";
+import { Button } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import profile2 from "../../../images/profile/pic1.jpg";
@@ -20,10 +20,15 @@ const ProfileCabinetPage = () => {
 
   const handleUpdate = (e) => {
     e.preventDefault();
+    if (profile.newPassword && profile.newPassword.trim()) {
+      localStorage.setItem("cabinet_admin_password", profile.newPassword.trim());
+    }
     Swal.fire({
       icon: "success",
       title: "Profil praticien mis à jour",
-      text: "Vos informations de connexion et d'exercice ont été enregistrées.",
+      text: profile.newPassword
+        ? "Vos informations et votre nouveau mot de passe ont été enregistrés avec succès."
+        : "Vos informations de connexion et d'exercice ont été enregistrées.",
       confirmButtonColor: "#1e60d5",
     });
   };
@@ -47,28 +52,6 @@ const ProfileCabinetPage = () => {
               </div>
               <h4 className="font-w600 mb-1">{profile.name}</h4>
               <p className="text-muted fs-13 mb-2">{profile.title}</p>
-              <Badge bg="primary" className="light mb-3">
-                Médecin Titulaire — Administrateur
-              </Badge>
-
-              <div className="text-start border-top pt-3 fs-13 text-muted">
-                <p className="mb-2">
-                  <i className="flaticon-381-id-card-1 me-2 text-primary"></i>
-                  N° RPPS : <strong className="text-dark">{profile.rpps}</strong>
-                </p>
-                <p className="mb-2">
-                  <i className="flaticon-381-id-card me-2 text-primary"></i>
-                  N° Adeli : <strong className="text-dark">{profile.adeli}</strong>
-                </p>
-                <p className="mb-2">
-                  <i className="flaticon-381-mail me-2 text-primary"></i>
-                  {profile.email}
-                </p>
-                <p className="mb-0">
-                  <i className="flaticon-381-smartphone me-2 text-primary"></i>
-                  {profile.phone}
-                </p>
-              </div>
             </div>
           </div>
         </div>

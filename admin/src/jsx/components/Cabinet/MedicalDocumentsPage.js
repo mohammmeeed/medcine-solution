@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Modal, Button, Badge } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
+import ApiService from "../../../services/ApiService";
 import {
   initialDocuments,
   initialPatients,
@@ -10,9 +11,13 @@ import {
 
 const MedicalDocumentsPage = () => {
   const [documents, setDocuments] = useState(initialDocuments);
+  const [patients, setPatients] = useState(initialPatients);
+  const [loading, setLoading] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
 
   const [newDoc, setNewDoc] = useState({
     patientId: 1,
@@ -22,44 +27,131 @@ const MedicalDocumentsPage = () => {
     notes: "",
   });
 
-  const handleAddDocument = (e) => {
+  // Chargement des documents et patients depuis MySQL
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [docData, patData] = await Promise.all([
+          ApiService.getDocuments(),
+          ApiService.getPatients(),
+        ]);
+        if (Array.isArray(docData) && docData.length > 0) {
+          setDocuments(docData);
+        }
+        if (Array.isArray(patData) && patData.length > 0) {
+          setPatients(patData);
+          if (!newDoc.patientId && patData[0]) {
+            setNewDoc((prev) => ({ ...prev, patientId: patData[0].id }));
+          }
+        }
+      } catch (err) {
+        console.warn("Erreur chargement documents MySQL :", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+      if (!newDoc.title) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+        setNewDoc((prev) => ({ ...prev, title: cleanName }));
+      }
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setFilePreview(event.target.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setFilePreview(null);
+      }
+    }
+  };
+
+  const handleAddDocument = async (e) => {
     e.preventDefault();
     const pat =
-      initialPatients.find((p) => p.id === parseInt(newDoc.patientId)) ||
-      initialPatients[0];
+      patients.find((p) => p.id === parseInt(newDoc.patientId)) ||
+      patients[0] || { id: 1, firstName: "Patient", lastName: "" };
+
+    const fileSizeStr = selectedFile
+      ? selectedFile.size > 1024 * 1024
+        ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} Mo`
+        : `${Math.round(selectedFile.size / 1024)} Ko`
+      : "1.2 Mo";
+
+    const isImg = selectedFile ? selectedFile.type.startsWith("image/") : false;
+    const fileExt = selectedFile ? selectedFile.name.split(".").pop().toUpperCase() : "PDF";
 
     const created = {
       id: documents.length + 1,
       patientId: pat.id,
-      patientName: `${pat.firstName} ${pat.lastName}`,
+      patientName: `${pat.firstName} ${pat.lastName}`.trim(),
       title: newDoc.title,
       category: newDoc.category,
       date: new Date().toISOString().split("T")[0],
       author: newDoc.author,
-      fileSize: "1.2 Mo",
-      type: "PDF",
+      fileSize: fileSizeStr,
+      type: fileExt,
+      isImage: isImg,
+      fileDataUrl: filePreview || null,
+      fileName: selectedFile ? selectedFile.name : null,
       status: "Validé par le médecin",
     };
 
     setDocuments([created, ...documents]);
     setShowAddModal(false);
+    setSelectedFile(null);
+    setFilePreview(null);
+
+    // Synchronisation MySQL
+    try {
+      await ApiService.saveDocument({
+        patientId: pat.id,
+        title: newDoc.title,
+        category: newDoc.category,
+        date: created.date,
+        author: newDoc.author,
+        fileSize: fileSizeStr,
+        fileType: fileExt,
+        filePath: filePreview ? "data_url" : null,
+        status: "Validé",
+      });
+    } catch (err) {
+      console.warn("Erreur synchronisation document MySQL :", err);
+    }
 
     Swal.fire({
       icon: "success",
-      title: "Document archivé",
-      text: `Document associé avec succès au dossier de ${created.patientName}.`,
+      title: "Document archivé dans la Base de Données",
+      text: `"${created.title}" a été associé avec succès au dossier de ${created.patientName}.`,
       confirmButtonColor: "#1e60d5",
     });
   };
 
   const handleDownload = (doc) => {
-    Swal.fire({
-      icon: "info",
-      title: "Téléchargement sécurisé",
-      text: `Téléchargement du document : ${doc.title} (${doc.fileSize})`,
-      timer: 1500,
-      showConfirmButton: false,
-    });
+    if (doc.fileDataUrl) {
+      const link = document.createElement("a");
+      link.href = doc.fileDataUrl;
+      link.download = doc.fileName || `${doc.title}.${(doc.type || "pdf").toLowerCase()}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      Swal.fire({
+        icon: "info",
+        title: "Téléchargement sécurisé",
+        text: `Téléchargement du document : ${doc.title} (${doc.fileSize})`,
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    }
   };
 
   const filteredDocuments = documents.filter((doc) => {
@@ -77,14 +169,6 @@ const MedicalDocumentsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <Button
-          variant="primary"
-          className="btn-rounded"
-          onClick={() => setShowAddModal(true)}
-        >
-          <i className="flaticon-381-add-1 me-2"></i> Ajouter un Document
-        </Button>
-
         <div className="d-flex align-items-center gap-2 flex-wrap">
           <div className="input-group search-area w-auto">
             <input
@@ -111,6 +195,14 @@ const MedicalDocumentsPage = () => {
             <option value="Comptes rendus spécialistes">Comptes rendus spécialistes</option>
           </select>
         </div>
+
+        <Button
+          variant="primary"
+          className="btn-rounded"
+          onClick={() => setShowAddModal(true)}
+        >
+          <i className="flaticon-381-add-1 me-2"></i> Ajouter un Document
+        </Button>
       </div>
 
       {/* Tableau des documents médicaux */}
@@ -271,9 +363,31 @@ const MedicalDocumentsPage = () => {
             </div>
 
             <div className="mb-3">
-              <label className="form-label font-w600">Fichier (PDF, Image, Scanner)</label>
-              <input type="file" className="form-control" accept=".pdf,.png,.jpg,.jpeg" />
-              <small className="text-muted">Taille max autorisée : 10 Mo. Chiffré au repos.</small>
+              <label className="form-label font-w600">Photo ou Fichier depuis l'appareil</label>
+              <input
+                type="file"
+                className="form-control"
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={handleFileChange}
+              />
+              {selectedFile && (
+                <div className="mt-2 d-flex align-items-center gap-2 p-2 bg-light rounded">
+                  {filePreview ? (
+                    <img
+                      src={filePreview}
+                      alt="Aperçu"
+                      style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "6px" }}
+                    />
+                  ) : (
+                    <i className="fa fa-file-pdf fs-24 text-danger"></i>
+                  )}
+                  <div>
+                    <strong className="d-block fs-13 text-dark">{selectedFile.name}</strong>
+                    <small className="text-muted">{(selectedFile.size / 1024).toFixed(1)} Ko</small>
+                  </div>
+                </div>
+              )}
+              <small className="text-muted">Photos (JPG, PNG, WebP), Scanners, Radios, PDF (max 25 Mo).</small>
             </div>
           </div>
           <div className="modal-footer">

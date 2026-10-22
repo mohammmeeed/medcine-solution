@@ -10,7 +10,15 @@ import {
 
 const WaitingRoomPage = () => {
   const navigate = useNavigate();
-  const [waitingList, setWaitingList] = useState(initialWaitingRoom);
+  const [waitingList, setWaitingList] = useState(() => {
+    const saved = localStorage.getItem("cabinet_waiting_list");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return initialWaitingRoom;
+  });
   const [showAddModal, setShowAddModal] = useState(false);
   const [newArrival, setNewArrival] = useState({
     patientId: 1,
@@ -18,27 +26,53 @@ const WaitingRoomPage = () => {
     reason: "Consultation générale",
   });
 
+  const broadcastWaitingList = (list) => {
+    try {
+      localStorage.setItem("cabinet_waiting_list", JSON.stringify(list));
+      const channel = new BroadcastChannel("waiting_room_display_channel");
+      channel.postMessage({ type: "UPDATE_LIST", list });
+      channel.close();
+    } catch (e) {}
+  };
+
   const handleCallPatient = (patient) => {
-    setWaitingList(
-      waitingList.map((p) =>
-        p.id === patient.id ? { ...p, status: "Appelé" } : p
-      )
+    const updated = waitingList.map((p) =>
+      p.id === patient.id ? { ...p, status: "Appelé" } : p
     );
+    setWaitingList(updated);
+    broadcastWaitingList(updated);
+
+    const callPayload = {
+      patientId: patient.patientId || patient.id,
+      patientName: patient.patientName,
+      doctorName: "Dr N. BELBACHIR OULD HENNIA",
+      room: "Cabinet de Consultation N° 1",
+      calledAt: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+      timestamp: Date.now(),
+    };
+
+    try {
+      localStorage.setItem("current_called_patient", JSON.stringify(callPayload));
+      const channel = new BroadcastChannel("waiting_room_display_channel");
+      channel.postMessage({ type: "CALL_PATIENT", data: callPayload });
+      channel.close();
+    } catch (e) {}
+
     Swal.fire({
       icon: "info",
       title: "Patient appelé !",
-      text: `${patient.patientName} a été invité(e) à entrer dans le cabinet de consultation.`,
+      text: `${patient.patientName} a été appelé(e) et affiché(e) en grand sur l'écran de la salle d'attente.`,
       timer: 2000,
       showConfirmButton: false,
     });
   };
 
   const handleStartConsultation = (patient) => {
-    setWaitingList(
-      waitingList.map((p) =>
-        p.id === patient.id ? { ...p, status: "En consultation" } : p
-      )
+    const updated = waitingList.map((p) =>
+      p.id === patient.id ? { ...p, status: "En consultation" } : p
     );
+    setWaitingList(updated);
+    broadcastWaitingList(updated);
     navigate(`/consultations?patientId=${patient.patientId}`);
   };
 
@@ -52,7 +86,9 @@ const WaitingRoomPage = () => {
       cancelButtonText: "Annuler",
     }).then((result) => {
       if (result.isConfirmed) {
-        setWaitingList(waitingList.filter((p) => p.id !== id));
+        const updated = waitingList.filter((p) => p.id !== id);
+        setWaitingList(updated);
+        broadcastWaitingList(updated);
       }
     });
   };
@@ -78,7 +114,9 @@ const WaitingRoomPage = () => {
       status: "En attente",
     };
 
-    setWaitingList([...waitingList, created]);
+    const updated = [...waitingList, created];
+    setWaitingList(updated);
+    broadcastWaitingList(updated);
     setShowAddModal(false);
     Swal.fire({
       icon: "success",
@@ -98,7 +136,28 @@ const WaitingRoomPage = () => {
 
       {/* Barre d'action */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-3">
+        <div className="d-flex align-items-center gap-3 text-muted fs-14">
+          <span>
+            <strong className="text-dark font-w600">{waitingCount}</strong> patient(s) en attente
+          </span>
+          {inConsultCount > 0 && (
+            <span>
+              • <strong className="text-primary font-w600">{inConsultCount}</strong> en consultation
+            </span>
+          )}
+        </div>
+
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <a
+            href="/affichage-salle-attente"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-outline-info btn-rounded"
+            title="Ouvrir l'affichage grand écran pour la télévision de la salle d'attente"
+          >
+            <i className="fa fa-tv me-2"></i> Affichage Salle d'attente
+          </a>
+
           <Button
             variant="primary"
             className="btn-rounded"
@@ -106,16 +165,6 @@ const WaitingRoomPage = () => {
           >
             <i className="flaticon-381-add-1 me-2"></i> Enregistrer une Arrivée
           </Button>
-          <div className="d-flex align-items-center gap-3 text-muted fs-14">
-            <span>
-              <strong className="text-dark font-w600">{waitingCount}</strong> patient(s) en attente
-            </span>
-            {inConsultCount > 0 && (
-              <span>
-                • <strong className="text-primary font-w600">{inConsultCount}</strong> en consultation
-              </span>
-            )}
-          </div>
         </div>
       </div>
 
@@ -138,7 +187,6 @@ const WaitingRoomPage = () => {
                   <th><strong>RDV PRÉVU</strong></th>
                   <th><strong>PATIENT</strong></th>
                   <th><strong>MOTIF</strong></th>
-                  <th><strong>TEMPS D'ATTENTE</strong></th>
                   <th><strong>STATUT</strong></th>
                   <th><strong>ACTIONS</strong></th>
                 </tr>
@@ -146,7 +194,7 @@ const WaitingRoomPage = () => {
               <tbody>
                 {waitingList.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-5 text-muted">
+                    <td colSpan="6" className="text-center py-5 text-muted">
                       <i className="flaticon-381-clock fs-36 d-block mb-2 text-primary"></i>
                       La salle d'attente est actuellement vide.
                     </td>
@@ -174,9 +222,6 @@ const WaitingRoomPage = () => {
                         </Link>
                       </td>
                       <td>{p.reason}</td>
-                      <td>
-                        <span className="text-muted">{p.waitTimeMinutes} min</span>
-                      </td>
                       <td>
                         <span className="appointment-status-badge">
                           <span className="status-dot"></span>

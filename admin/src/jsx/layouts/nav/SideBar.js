@@ -214,12 +214,6 @@ const SideBar = () => {
             }
           })}
         </ul>
-        <div className="plus-box">
-          <Link to="/appointments" className="text-white d-block">
-            <p className="fs-14 font-w600 mb-1">+ Nouveau Rendez-vous</p>
-            <span className="fs-12 text-white-50">Dr N. BELBACHIR OULD HENNIA</span>
-          </Link>
-        </div>
         <div className="copyright">
           <p>
             <strong>Cabinet Dr Belbachir</strong> © {date.getFullYear()}

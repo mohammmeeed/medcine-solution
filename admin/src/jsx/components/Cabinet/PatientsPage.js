@@ -170,21 +170,6 @@ const PatientsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <Button
-          variant={showModal && !editId ? "outline-primary" : "primary"}
-          className="btn-rounded"
-          onClick={() => {
-            if (showModal && !editId) {
-              setShowModal(false);
-            } else {
-              handleOpenAdd();
-            }
-          }}
-        >
-          <i className={showModal && !editId ? "fa fa-times me-2" : "flaticon-381-add-1 me-2"}></i>
-          {showModal && !editId ? "Fermer le formulaire" : "Ajouter un Patient"}
-        </Button>
-
         <div className="d-flex align-items-center gap-2 flex-wrap">
           <div className="input-group search-area w-auto">
             <input
@@ -209,6 +194,21 @@ const PatientsPage = () => {
             <option value="Actif">Actif</option>
           </select>
         </div>
+
+        <Button
+          variant={showModal && !editId ? "outline-primary" : "primary"}
+          className="btn-rounded"
+          onClick={() => {
+            if (showModal && !editId) {
+              setShowModal(false);
+            } else {
+              handleOpenAdd();
+            }
+          }}
+        >
+          <i className={showModal && !editId ? "fa fa-times me-2" : "flaticon-381-add-1 me-2"}></i>
+          {showModal && !editId ? "Fermer le formulaire" : "Ajouter un Patient"}
+        </Button>
       </div>
 
       {/* Formulaire Ajout / Modification de Patient (Intégré dans la page sans popup) */}

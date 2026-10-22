@@ -26,13 +26,6 @@ const MedicalRecordsPage = () => {
 
       {/* Barre d'action et recherche */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div>
-          <h4 className="text-primary font-w600 mb-1">Dossiers Médicaux Partagés du Cabinet</h4>
-          <p className="text-muted fs-13 mb-0">
-            Consultation intégrale de l'anamnèse, des allergies et des antécédents des patients
-          </p>
-        </div>
-
         <div className="input-group search-area w-auto">
           <input
             type="text"
@@ -45,6 +38,10 @@ const MedicalRecordsPage = () => {
             <i className="flaticon-381-search-2"></i>
           </span>
         </div>
+
+        <Link to="/patients" className="btn btn-primary btn-rounded">
+          <i className="flaticon-381-add-1 me-2"></i> Nouveau Dossier Patient
+        </Link>
       </div>
 
       <style>{`

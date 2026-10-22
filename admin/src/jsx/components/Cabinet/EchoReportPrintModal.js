@@ -105,7 +105,7 @@ const EchoReportPrintModal = ({ show, onHide, consultation }) => {
                 </td>
                 <td style={{ textAlign: "right", width: "50%", direction: "rtl", fontFamily: "Arial, sans-serif" }}>
                   <div style={{ fontSize: "16px", fontWeight: "bold", color: "#1a3a5c" }}>
-                    الحكيمة ن. بلبشير ولد هنية
+                    الدكتورة ن. بلبشير ولد هنية
                   </div>
                   <div style={{ fontSize: "13px", color: "#2d6a9f" }}>
                     طبيبة مختصة في أمراض النساء والتوليد
@@ -249,7 +249,7 @@ const EchoReportPrintModal = ({ show, onHide, consultation }) => {
 
           {/* Pied de page officiel du cabinet */}
           <div className="crecho-footer-txt">
-            Cité des 340 Logts, Bt 110, n°06 (à côté de l'assurance CIAR), Es-Seddikia — Oran &nbsp;|&nbsp; ☎ 0560 06 74 66
+            Haï Seddikia (ex-Cité Boulanger), Cité 340 Logements, Bâtiment 18/A, Oran &nbsp;|&nbsp; ☎ 041 53 97 82 / 05 50 12 34 56
           </div>
         </div>
       </div>

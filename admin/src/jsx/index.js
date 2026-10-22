@@ -43,6 +43,7 @@ import ClinicProfilePage from "./components/Cabinet/ClinicProfilePage";
 import SettingsPage from "./components/Cabinet/SettingsPage";
 import SupportPage from "./components/Cabinet/SupportPage";
 import ProfileCabinetPage from "./components/Cabinet/ProfileCabinetPage";
+import AffichageSalleAttente from "./components/Cabinet/AffichageSalleAttente";
 
 import DashboardDark from "./components/Dashboard/DashboardDark";
 import Doctors from "./components/Dashboard/Doctors";
@@ -232,6 +233,7 @@ const Markup = () => {
     <>     
         <Routes >
           <Route path='page-login' element= {<Login />} />
+          <Route path='login' element= {<Login />} />
           <Route path='page-register' element= {<Registration />} />
           <Route path='page-lock-screen' element= {<LockScreen />} />
           <Route path='page-error-400' element={<Error400/>} />
@@ -239,6 +241,7 @@ const Markup = () => {
           <Route path='page-error-404' element={<Error404/>} />
           <Route path='page-error-500' element={<Error500/>} />
           <Route path='page-error-503' element={<Error503/>} />
+          <Route path='affichage-salle-attente' element={<AffichageSalleAttente />} />
           <Route  element={<MainLayout />} > 
               {allroutes.map((data, i) => (
                 <Route
@@ -259,6 +262,13 @@ const Markup = () => {
 function MainLayout(){
   const {sidebariconHover} = useContext(ThemeContext);
   const sideMenu = useSelector(state => state.sideMenu);
+
+  // Protection du panel administration : redirection si non connecté
+  const authUser = localStorage.getItem("cabinet_auth_user");
+  if (!authUser) {
+    return <Navigate to="/page-login" replace />;
+  }
+
   return (
     <>      
         <div id="main-wrapper" className={`show ${sidebariconHover ? "icon-hover-toggle": ""} ${ sideMenu ? "menu-toggle" : ""}`}          

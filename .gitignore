@@ -1,11 +1,13 @@
 # Dependencies
 node_modules/
 admin/node_modules/
+client/node_modules/
 vendor/
 
 # Production builds
 build/
 dist/
+client/dist/
 
 # Environment and sensitive data
 .env

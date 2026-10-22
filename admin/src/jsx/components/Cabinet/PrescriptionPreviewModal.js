@@ -144,7 +144,7 @@ const PrescriptionPreviewModal = ({ show, onHide, prescription }) => {
                     lineHeight: "1.25",
                   }}
                 >
-                  الحكيمة ن. بلبشير ولد هنية
+                  الدكتورة ن. بلبشير ولد هنية
                 </div>
                 <div
                   style={{
@@ -155,7 +155,17 @@ const PrescriptionPreviewModal = ({ show, onHide, prescription }) => {
                     lineHeight: "1.3",
                   }}
                 >
-                  طبيبة مختصة في أمراض النساء
+                  طبيبة مختصة في أمراض النساء والتوليد
+                </div>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    color: "#2c5f8a",
+                    fontFamily: "'Amiri', 'Traditional Arabic', 'Cairo', 'Segoe UI', Tahoma, sans-serif",
+                    lineHeight: "1.3",
+                  }}
+                >
+                  الفحص بالصدى (إيكوغرافيا)
                 </div>
               </div>
             </div>
@@ -244,7 +254,7 @@ const PrescriptionPreviewModal = ({ show, onHide, prescription }) => {
                 right: "40px",
               }}
             >
-              Cabinet Médical de Gynécologie Obstétrique — Échographie • Tél : 05 50 12 34 56
+              Cabinet Médical de Gynécologie Obstétrique — Échographie • Haï Seddikia, Cité 340 Logts, Bât. 18/A, Oran • Tél : 041 53 97 82 / 05 50 12 34 56
             </div>
           </div>
         </div>

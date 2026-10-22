@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Modal, Button } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
+import ApiService from "../../../services/ApiService";
 import {
   initialDoctor,
   initialPatients,
@@ -11,21 +12,44 @@ import {
 
 const InvoicesPage = () => {
   const [invoices, setInvoices] = useState(initialInvoices);
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [patients, setPatients] = useState(initialPatients);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showNewModal, setShowNewModal] = useState(false);
   const [previewInvoice, setPreviewInvoice] = useState(null);
 
   const [formInvoice, setFormInvoice] = useState({
     patientId: 1,
-    actDescription: "Consultation de médecine générale (Code G)",
-    amount: 26.50,
-    coveredAmo: 18.55,
-    coveredAmc: 7.95,
-    patientRemaining: 0.00,
-    paymentMethod: "Carte Bancaire",
-    status: "Payée",
+    actDescription: "Consultation de médecine générale",
+    amount: 2500,
   });
+
+  // Chargement des factures et patients depuis MySQL
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [invData, patData] = await Promise.all([
+          ApiService.getInvoices(),
+          ApiService.getPatients(),
+        ]);
+        if (Array.isArray(invData) && invData.length > 0) {
+          setInvoices(invData);
+        }
+        if (Array.isArray(patData) && patData.length > 0) {
+          setPatients(patData);
+          if (!formInvoice.patientId && patData[0]) {
+            setFormInvoice((prev) => ({ ...prev, patientId: patData[0].id }));
+          }
+        }
+      } catch (err) {
+        console.warn("Erreur chargement factures MySQL :", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
   const handleActChange = (act) => {
     switch (act) {
@@ -34,9 +58,6 @@ const InvoicesPage = () => {
           ...formInvoice,
           actDescription: "Consultation de médecine générale",
           amount: 2500,
-          coveredAmo: 2000,
-          coveredAmc: 500,
-          patientRemaining: 0,
         });
         break;
       case "G_MEG":
@@ -44,9 +65,6 @@ const InvoicesPage = () => {
           ...formInvoice,
           actDescription: "Consultation Enfant / Pédiatrie",
           amount: 3000,
-          coveredAmo: 2400,
-          coveredAmc: 600,
-          patientRemaining: 0,
         });
         break;
       case "G_ECG":
@@ -54,9 +72,6 @@ const InvoicesPage = () => {
           ...formInvoice,
           actDescription: "Consultation avec Électrocardiogramme (ECG)",
           amount: 3500,
-          coveredAmo: 3500,
-          coveredAmc: 0,
-          patientRemaining: 0,
         });
         break;
       case "VISITE":
@@ -64,9 +79,6 @@ const InvoicesPage = () => {
           ...formInvoice,
           actDescription: "Visite médicale à domicile",
           amount: 3500,
-          coveredAmo: 2500,
-          coveredAmc: 1000,
-          patientRemaining: 0,
         });
         break;
       default:
@@ -74,54 +86,58 @@ const InvoicesPage = () => {
     }
   };
 
-  const handleSaveInvoice = (e) => {
+  const handleSaveInvoice = async (e) => {
     e.preventDefault();
     const pat =
-      initialPatients.find((p) => p.id === parseInt(formInvoice.patientId)) ||
-      initialPatients[0];
+      patients.find((p) => p.id === parseInt(formInvoice.patientId)) ||
+      patients[0] || { id: 1, firstName: "Patient", lastName: "" };
 
     const newInv = {
       id: invoices.length + 1,
       invoiceNumber: `FAC-2024-025${invoices.length + 2}`,
       patientId: pat.id,
-      patientName: `${pat.firstName} ${pat.lastName}`,
+      patientName: `${pat.firstName} ${pat.lastName}`.trim(),
       date: new Date().toISOString().split("T")[0],
+      time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
       actDescription: formInvoice.actDescription,
       amount: parseFloat(formInvoice.amount),
-      coveredAmo: parseFloat(formInvoice.coveredAmo),
-      coveredAmc: parseFloat(formInvoice.coveredAmc),
-      patientRemaining: parseFloat(formInvoice.patientRemaining),
-      paymentMethod: formInvoice.paymentMethod,
-      status: formInvoice.status,
     };
 
     setInvoices([newInv, ...invoices]);
     setShowNewModal(false);
 
+    try {
+      await ApiService.saveInvoice({
+        patientId: pat.id,
+        invoiceNumber: newInv.invoiceNumber,
+        date: newInv.date,
+        actDescription: newInv.actDescription,
+        amount: newInv.amount,
+        status: "Payée",
+      });
+    } catch (err) {
+      console.warn("Erreur synchronisation facture MySQL :", err);
+    }
+
     Swal.fire({
       icon: "success",
-      title: "Facture créée",
+      title: "Facture enregistrée dans la Base de Données",
       text: `Facture #${newInv.invoiceNumber} enregistrée pour ${newInv.patientName}.`,
       confirmButtonColor: "#1e60d5",
     });
   };
 
   const filteredInvoices = invoices.filter((inv) => {
-    const matchStatus = filterStatus === "all" || inv.status === filterStatus;
-    const matchSearch =
-      inv.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.actDescription.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchStatus && matchSearch;
+    const search = searchTerm.toLowerCase();
+    return (
+      inv.patientName.toLowerCase().includes(search) ||
+      inv.invoiceNumber.toLowerCase().includes(search) ||
+      inv.actDescription.toLowerCase().includes(search)
+    );
   });
 
   const totalBilled = invoices.reduce((acc, curr) => acc + curr.amount, 0);
-  const totalPaid = invoices
-    .filter((i) => i.status === "Payée")
-    .reduce((acc, curr) => acc + curr.amount, 0);
-  const totalPending = invoices
-    .filter((i) => i.status !== "Payée")
-    .reduce((acc, curr) => acc + curr.amount, 0);
+  const avgAmount = Math.round(totalBilled / (invoices.length || 1));
 
   return (
     <>
@@ -129,14 +145,6 @@ const InvoicesPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <Button
-          variant="primary"
-          className="btn-rounded"
-          onClick={() => setShowNewModal(true)}
-        >
-          <i className="flaticon-381-add-1 me-2"></i> Émettre une Facture
-        </Button>
-
         <div className="d-flex align-items-center gap-2 flex-wrap">
           <div className="input-group search-area w-auto">
             <input
@@ -150,18 +158,15 @@ const InvoicesPage = () => {
               <i className="flaticon-381-search-2"></i>
             </span>
           </div>
-
-          <select
-            className="form-control w-auto default-select"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="all">Tous les états</option>
-            <option value="Payée">Payée</option>
-            <option value="Télétransmise">Télétransmise</option>
-            <option value="En attente">En attente</option>
-          </select>
         </div>
+
+        <Button
+          variant="primary"
+          className="btn-rounded"
+          onClick={() => setShowNewModal(true)}
+        >
+          <i className="flaticon-381-add-1 me-2"></i> Émettre une Facture
+        </Button>
       </div>
 
       {/* Cartes métriques de facturation */}
@@ -176,7 +181,7 @@ const InvoicesPage = () => {
                 <div className="media-body text-end">
                   <p className="mb-1 text-muted">Total Facturé</p>
                   <h3 className="text-primary font-w600 mb-0">{totalBilled.toLocaleString("fr-DZ")} DA</h3>
-                  <small className="text-muted">{invoices.length} actes réalisés</small>
+                  <small className="text-muted">{invoices.length} factures</small>
                 </div>
               </div>
             </div>
@@ -188,12 +193,12 @@ const InvoicesPage = () => {
             <div className="card-body p-4">
               <div className="media align-items-center">
                 <span className="me-3 icon-bx-lg bg-success text-white rounded-circle d-flex align-items-center justify-content-center">
-                  <i className="flaticon-381-diamond fs-24"></i>
+                  <i className="flaticon-381-notepad-1 fs-24"></i>
                 </span>
                 <div className="media-body text-end">
-                  <p className="mb-1 text-muted">Encaissé</p>
-                  <h3 className="text-success font-w600 mb-0">{totalPaid.toLocaleString("fr-DZ")} DA</h3>
-                  <small className="text-muted">Règlements patients</small>
+                  <p className="mb-1 text-muted">Nombre d'actes</p>
+                  <h3 className="text-success font-w600 mb-0">{invoices.length}</h3>
+                  <small className="text-muted">Actes médicaux enregistrés</small>
                 </div>
               </div>
             </div>
@@ -204,34 +209,19 @@ const InvoicesPage = () => {
           <div className="card widget-stat">
             <div className="card-body p-4">
               <div className="media align-items-center">
-                <span className="me-3 icon-bx-lg bg-warning text-white rounded-circle d-flex align-items-center justify-content-center">
-                  <i className="flaticon-381-clock fs-24"></i>
+                <span className="me-3 icon-bx-lg bg-info text-white rounded-circle d-flex align-items-center justify-content-center">
+                  <i className="flaticon-381-diamond fs-24"></i>
                 </span>
                 <div className="media-body text-end">
-                  <p className="mb-1 text-muted">En attente / Télétransmis</p>
-                  <h3 className="text-warning font-w600 mb-0">{totalPending.toLocaleString("fr-DZ")} DA</h3>
-                  <small className="text-muted">Tiers-payant CNAS / Mutuelle</small>
+                  <p className="mb-1 text-muted">Moyenne par acte</p>
+                  <h3 className="text-info font-w600 mb-0">{avgAmount.toLocaleString("fr-DZ")} DA</h3>
+                  <small className="text-muted">Montant moyen facturé</small>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      <style>{`
-        .invoice-clean-tag {
-          display: inline-block;
-          padding: 3px 9px;
-          background-color: #f8fafc;
-          color: #334155;
-          border: 1px solid #e2e8f0;
-          border-radius: 4px;
-          font-size: 0.8125rem;
-          font-weight: 500;
-          line-height: 1.35;
-          white-space: nowrap;
-        }
-      `}</style>
 
       {/* Tableau des factures */}
       <div className="card">
@@ -249,21 +239,17 @@ const InvoicesPage = () => {
               <thead>
                 <tr>
                   <th><strong>N° FACTURE</strong></th>
-                  <th><strong>DATE</strong></th>
+                  <th><strong>DATE & HEURE</strong></th>
                   <th><strong>PATIENT</strong></th>
-                  <th><strong>ACTE / COTATION</strong></th>
-                  <th><strong>MONTANT TOTAL</strong></th>
-                  <th><strong>PART AMO (SÉCU)</strong></th>
-                  <th><strong>RESTE PATIENT</strong></th>
-                  <th><strong>RÈGLEMENT</strong></th>
-                  <th><strong>DÉTAIL</strong></th>
+                  <th><strong>ACTE MÉDICAL</strong></th>
+                  <th><strong>MONTANT</strong></th>
                   <th><strong>ACTIONS</strong></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan="10" className="text-center py-5 text-muted">
+                    <td colSpan="6" className="text-center py-5 text-muted">
                       Aucune facture trouvée.
                     </td>
                   </tr>
@@ -273,7 +259,10 @@ const InvoicesPage = () => {
                       <td>
                         <strong className="text-primary">{inv.invoiceNumber}</strong>
                       </td>
-                      <td>{inv.date}</td>
+                      <td>
+                        <span className="text-dark font-w500">{inv.date}</span>
+                        <small className="text-muted d-block">🕒 {inv.time || "10:30"}</small>
+                      </td>
                       <td>
                         <Link
                           to={`/patient-details?id=${inv.patientId}`}
@@ -286,41 +275,17 @@ const InvoicesPage = () => {
                         <span className="text-dark fs-13">{inv.actDescription}</span>
                       </td>
                       <td>
-                        <strong className="text-dark">{inv.amount.toLocaleString("fr-DZ")} DA</strong>
-                      </td>
-                      <td>{inv.coveredAmo.toLocaleString("fr-DZ")} DA</td>
-                      <td>
-                        {inv.patientRemaining > 0 ? (
-                          <strong className="text-danger">{inv.patientRemaining.toLocaleString("fr-DZ")} DA</strong>
-                        ) : (
-                          <span className="text-success font-w600">0 DA</span>
-                        )}
-                      </td>
-                      <td>
-                        <span className="invoice-clean-tag">
-                          {inv.paymentMethod}
-                        </span>
+                        <strong className="text-success fs-15">{inv.amount.toLocaleString("fr-DZ")} DA</strong>
                       </td>
                       <td>
                         <button
                           type="button"
                           className="btn btn-outline-primary btn-xs"
                           onClick={() => setPreviewInvoice(inv)}
-                          title="Afficher les détails de la facture"
+                          title="Imprimer / Voir la facture"
                         >
-                          <i className="fa fa-eye"></i>
+                          <i className="flaticon-381-print me-1"></i> Facture
                         </button>
-                      </td>
-                      <td>
-                        <div className="d-flex gap-1">
-                          <button
-                            className="btn btn-outline-primary btn-xs"
-                            onClick={() => setPreviewInvoice(inv)}
-                            title="Imprimer la facture / reçu"
-                          >
-                            <i className="flaticon-381-print"></i>
-                          </button>
-                        </div>
                       </td>
                     </tr>
                   ))
@@ -389,7 +354,7 @@ const InvoicesPage = () => {
             </div>
 
             <div className="row mb-3">
-              <div className="col-md-4">
+              <div className="col-md-12">
                 <label className="form-label font-w600">Montant total (DA) *</label>
                 <input
                   type="number"
@@ -401,63 +366,6 @@ const InvoicesPage = () => {
                   }
                   required
                 />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label font-w600">Prise en charge CNAS (DA)</label>
-                <input
-                  type="number"
-                  step="1"
-                  className="form-control"
-                  value={formInvoice.coveredAmo}
-                  onChange={(e) =>
-                    setFormInvoice({ ...formInvoice, coveredAmo: e.target.value })
-                  }
-                />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label font-w600">Reste patient (DA)</label>
-                <input
-                  type="number"
-                  step="1"
-                  className="form-control"
-                  value={formInvoice.patientRemaining}
-                  onChange={(e) =>
-                    setFormInvoice({ ...formInvoice, patientRemaining: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="row mb-3">
-              <div className="col-md-6">
-                <label className="form-label font-w600">Mode de règlement</label>
-                <select
-                  className="form-control"
-                  value={formInvoice.paymentMethod}
-                  onChange={(e) =>
-                    setFormInvoice({ ...formInvoice, paymentMethod: e.target.value })
-                  }
-                >
-                  <option value="Carte Bancaire">Carte Bancaire</option>
-                  <option value="Espèces">Espèces</option>
-                  <option value="Chèque">Chèque</option>
-                  <option value="Tiers-Payant CPAM">Tiers-Payant CPAM</option>
-                  <option value="Virement">Virement bancaire</option>
-                </select>
-              </div>
-              <div className="col-md-6">
-                <label className="form-label font-w600">Statut de la facture</label>
-                <select
-                  className="form-control"
-                  value={formInvoice.status}
-                  onChange={(e) =>
-                    setFormInvoice({ ...formInvoice, status: e.target.value })
-                  }
-                >
-                  <option value="Payée">Payée (Règlement encaissé)</option>
-                  <option value="Télétransmise">Télétransmise (Attente virement CPAM)</option>
-                  <option value="En attente">En attente de paiement</option>
-                </select>
               </div>
             </div>
           </div>
@@ -472,73 +380,122 @@ const InvoicesPage = () => {
         </form>
       </Modal>
 
-      {/* Modal Aperçu & Impression Facture Patient */}
+      {/* Modal Aperçu & Impression Facture Patient Simple */}
       <Modal
         show={!!previewInvoice}
         onHide={() => setPreviewInvoice(null)}
         size="lg"
         centered
       >
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden !important;
+            }
+            #simple-invoice-printable,
+            #simple-invoice-printable * {
+              visibility: visible !important;
+            }
+            #simple-invoice-printable {
+              position: fixed !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              padding: 25px !important;
+              margin: 0 !important;
+              border: none !important;
+              box-shadow: none !important;
+              background: #ffffff !important;
+              color: #000000 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+          }
+        `}</style>
         <div className="modal-header">
-          <h5 className="modal-title">Note d'honoraires & Facture médicale</h5>
+          <h5 className="modal-title font-w600">Facture Médicale • فاتورة طبية</h5>
           <button type="button" className="btn-close" onClick={() => setPreviewInvoice(null)}></button>
         </div>
         <div className="modal-body p-4 bg-light">
           {previewInvoice && (
-            <div className="p-4 bg-white shadow-sm border rounded">
-              <div className="d-flex justify-content-between border-bottom pb-3 mb-4">
-                <div>
-                  <h4 className="text-primary font-w600 mb-1">{initialDoctor.name}</h4>
-                  <p className="text-muted fs-12 mb-0">{initialDoctor.title} • {initialDoctor.convention}</p>
-                  <p className="text-muted fs-12 mb-0">{initialDoctor.address}</p>
-                  <p className="text-muted fs-12 mb-0">N° RPPS : {initialDoctor.rpps} • Adeli : {initialDoctor.adeli}</p>
+            <div id="simple-invoice-printable" className="p-4 bg-white shadow-sm border rounded">
+              {/* En-tête officiel bilingue : Français (gauche) & Arabe (droite) */}
+              <div className="row pb-3 mb-3 border-bottom align-items-center">
+                <div className="col-6 text-start">
+                  <h4 className="text-primary font-w700 mb-1" style={{ fontSize: "1.2rem" }}>
+                    {initialDoctor.name}
+                  </h4>
+                  <p className="text-dark font-w500 fs-13 mb-0">
+                    {initialDoctor.title}
+                  </p>
+                  <p className="text-muted fs-12 mb-0">
+                    {initialDoctor.subSpecialty || "Échographie"} • Tél: {initialDoctor.phone}
+                  </p>
                 </div>
-                <div className="text-end">
-                  <h5 className="font-w600 text-dark mb-1">{previewInvoice.invoiceNumber}</h5>
-                  <span className="text-muted fs-13 d-block">Date : {previewInvoice.date}</span>
-                  <span className="invoice-clean-tag mt-1">
-                    {previewInvoice.status || "Payée"}
-                  </span>
+
+                <div className="col-6 text-end" dir="rtl">
+                  <h4 className="text-primary font-w700 mb-1" style={{ fontSize: "1.3rem", fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif" }}>
+                    {initialDoctor.nameAr || "الدكتورة ن. بلبشير ولد هنية"}
+                  </h4>
+                  <p className="text-dark font-w500 fs-13 mb-0" style={{ fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif" }}>
+                    {initialDoctor.titleAr || "طبيبة مختصة في أمراض النساء والتوليد"}
+                  </p>
+                  <p className="text-muted fs-12 mb-0" style={{ fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif" }}>
+                    فحص بالصدى (إيكوغرافيا)
+                  </p>
                 </div>
               </div>
 
-              <div className="mb-4">
-                <h6 className="text-muted fs-12 mb-1">FACTURÉ À :</h6>
-                <h5 className="text-dark font-w600 mb-0">{previewInvoice.patientName}</h5>
-                <span className="text-muted fs-13">Bénéficiaire des soins</span>
+              {/* Informations Essentielles : Patient, Facture N°, Date & Heure */}
+              <div className="bg-light p-3 rounded mb-4 border">
+                <div className="row g-3">
+                  <div className="col-sm-6">
+                    <span className="text-muted fs-12 d-block text-uppercase">Patient(e) / المريض(ة)</span>
+                    <strong className="fs-16 text-dark">{previewInvoice.patientName}</strong>
+                  </div>
+                  <div className="col-sm-6 text-sm-end">
+                    <span className="text-muted fs-12 d-block text-uppercase">N° Facture / رقم الفاتورة</span>
+                    <strong className="fs-15 text-primary">{previewInvoice.invoiceNumber}</strong>
+                  </div>
+                  <div className="col-12">
+                    <span className="text-muted fs-12 d-block text-uppercase">Date & Heure / التاريخ والوقت</span>
+                    <span className="fs-14 text-dark font-w600">
+                      📅 {previewInvoice.date} • 🕒 {previewInvoice.time || "10:30"}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <table className="table table-bordered mb-4">
-                <thead className="table-light">
-                  <tr>
-                    <th>Désignation de l'acte</th>
-                    <th className="text-end">Montant TTC</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{previewInvoice.actDescription}</td>
-                    <td className="text-end font-w600">{previewInvoice.amount.toLocaleString("fr-DZ")} DA</td>
-                  </tr>
-                  <tr>
-                    <td className="text-muted fs-13">Prise en charge CNAS</td>
-                    <td className="text-end text-muted fs-13">- {previewInvoice.coveredAmo.toLocaleString("fr-DZ")} DA</td>
-                  </tr>
-                  {previewInvoice.coveredAmc > 0 && (
-                    <tr>
-                      <td className="text-muted fs-13">Prise en charge complémentaire (Mutuelle)</td>
-                      <td className="text-end text-muted fs-13">- {previewInvoice.coveredAmc.toLocaleString("fr-DZ")} DA</td>
-                    </tr>
+              {/* Acte & Montant Simple (Pas de TTC, Pas de CNAS, Pas de Mutuelle) */}
+              <div className="card border mb-3 shadow-none">
+                <div className="card-body p-4 text-center bg-white rounded">
+                  {previewInvoice.actDescription && (
+                    <div className="mb-3 pb-3 border-bottom">
+                      <span className="text-muted fs-12 d-block text-uppercase">Acte médical / الفحص الطبي</span>
+                      <h6 className="text-dark font-w600 mb-0 mt-1 fs-15">{previewInvoice.actDescription}</h6>
+                    </div>
                   )}
-                  <tr className="table-primary">
-                    <td><strong>Reste à charge patient payé ({previewInvoice.paymentMethod})</strong></td>
-                    <td className="text-end font-w700 fs-16">{previewInvoice.patientRemaining.toLocaleString("fr-DZ")} DA</td>
-                  </tr>
-                </tbody>
-              </table>
 
-              <div className="text-muted fs-12 border-top pt-2">
-                Membre d'une association de gestion agréée par l'administration fiscale, acceptant à ce titre le règlement des honoraires par chèque et carte bancaire.
+                  <span className="text-muted fs-13 text-uppercase font-w600 d-block mb-1">
+                    Montant / المبلغ
+                  </span>
+                  <div className="display-5 font-w700 text-success my-2" style={{ letterSpacing: "1px" }}>
+                    {previewInvoice.amount ? previewInvoice.amount.toLocaleString("fr-DZ") : "0"} DA
+                  </div>
+                </div>
+              </div>
+
+              {/* Cachet et Signature */}
+              <div className="row pt-3 mt-2">
+                <div className="col-6">
+                  <small className="text-muted fs-11">
+                    Cabinet Médical Dr N. BELBACHIR OULD HENNIA
+                  </small>
+                </div>
+                <div className="col-6 text-end">
+                  <span className="text-muted fs-12 d-block mb-4">Cachet et Signature / الختم والإمضاء</span>
+                  <div style={{ height: "45px" }}></div>
+                </div>
               </div>
             </div>
           )}
@@ -548,7 +505,7 @@ const InvoicesPage = () => {
             Fermer
           </Button>
           <Button variant="primary" onClick={() => window.print()}>
-            <i className="flaticon-381-print me-1"></i> Imprimer la note d'honoraires
+            <i className="flaticon-381-print me-1"></i> Imprimer la facture
           </Button>
         </div>
       </Modal>

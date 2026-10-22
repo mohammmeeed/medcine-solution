@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "react-bootstrap";
+import Select from "react-select";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import PrescriptionPreviewModal from "./PrescriptionPreviewModal";
@@ -12,6 +13,7 @@ import {
   initialPatients,
   initialPrescriptions,
   initialDoctor,
+  initialMedications,
 } from "../../../services/CabinetData";
 
 const ConsultationsPage = () => {
@@ -21,6 +23,7 @@ const ConsultationsPage = () => {
 
   const [consultations, setConsultations] = useState(initialConsultations);
   const [patients, setPatients] = useState(initialPatients);
+  const [medications, setMedications] = useState(initialMedications);
   const [searchTerm, setSearchTerm] = useState("");
   const [showNewModal, setShowNewModal] = useState(!!patientIdQuery);
   const [showPrescriptionSection, setShowPrescriptionSection] = useState(false);
@@ -57,7 +60,7 @@ const ConsultationsPage = () => {
   }, []);
 
   const [formConsult, setFormConsult] = useState({
-    patientId: patientIdQuery || (initialPatients[0]?.id || 1),
+    patientId: patientIdQuery || "",
     date: new Date().toISOString().split("T")[0],
     time: `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`,
     reason: "Consultation générale de routine",
@@ -74,6 +77,56 @@ const ConsultationsPage = () => {
     echoFindings: "",
     echoConclusion: "",
   });
+
+  const patientOptions = patients.map((p) => ({
+    value: p.id,
+    label: `${p.lastName.toUpperCase()} ${p.firstName} — ${p.fileNumber} (Née le ${p.dob} • ${p.age} ans)`,
+  }));
+
+  const selectedPatientOption = formConsult.patientId
+    ? patientOptions.find((opt) => String(opt.value) === String(formConsult.patientId)) || null
+    : null;
+
+  const patientSelectStyles = {
+    control: (base, state) => ({
+      ...base,
+      minHeight: "45px",
+      borderRadius: "0.75rem",
+      borderColor: state.isFocused ? "#1e60d5" : "#e4e7ea",
+      boxShadow: state.isFocused ? "0 0 0 0.2rem rgba(30, 96, 213, 0.15)" : "none",
+      "&:hover": {
+        borderColor: "#1e60d5",
+      },
+    }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isSelected
+        ? "#1e60d5"
+        : state.isFocused
+        ? "rgba(30, 96, 213, 0.08)"
+        : "transparent",
+      color: state.isSelected ? "#ffffff" : "#333333",
+      fontSize: "13px",
+      cursor: "pointer",
+    }),
+    singleValue: (base) => ({
+      ...base,
+      fontSize: "14px",
+      fontWeight: "500",
+      color: "#333333",
+    }),
+    placeholder: (base) => ({
+      ...base,
+      fontSize: "13px",
+      color: "#9ca3af",
+    }),
+    menu: (base) => ({
+      ...base,
+      zIndex: 9999,
+      borderRadius: "0.75rem",
+      boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
+    }),
+  };
 
   const [prescriptionItems, setPrescriptionItems] = useState([
     {
@@ -104,12 +157,43 @@ const ConsultationsPage = () => {
     setPrescriptionItems(updated);
   };
 
+  useEffect(() => {
+    ApiService.getMedications().then((data) => {
+      if (data && Array.isArray(data) && data.length > 0) {
+        setMedications(data);
+      }
+    });
+  }, []);
+
+  const handleSelectPredefinedMed = (index, medName) => {
+    const found = medications.find((m) => m.name.toLowerCase() === medName.toLowerCase());
+    const updated = [...prescriptionItems];
+    if (found) {
+      updated[index].medication = found.name;
+      if (found.dosage) updated[index].dosage = found.dosage;
+      if (found.defaultPosology) updated[index].posology = found.defaultPosology;
+      if (found.defaultDuration) updated[index].duration = found.defaultDuration;
+    } else {
+      updated[index].medication = medName;
+    }
+    setPrescriptionItems(updated);
+  };
+
   // Impression directe de l'Échographie (sans enregistrer ni fermer la consultation)
   const handlePrintEchoGeneral = () => {
+    if (!formConsult.patientId) {
+      Swal.fire({
+        icon: "warning",
+        title: "Patient requis",
+        text: "Veuillez sélectionner un(e) patient(e) pour imprimer l'échographie.",
+        confirmButtonColor: "#1e60d5",
+      });
+      return;
+    }
     const selPat =
-      patients.find((p) => p.id === parseInt(formConsult.patientId)) ||
-      patients[0] ||
-      initialPatients[0];
+      patients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+      initialPatients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+      patients[0];
 
     const echoData = {
       id: Date.now(),
@@ -147,10 +231,19 @@ const ConsultationsPage = () => {
 
   // Impression directe de l'Ordonnance (sans enregistrer ni fermer la consultation)
   const handlePrintPrescriptionGeneral = () => {
+    if (!formConsult.patientId) {
+      Swal.fire({
+        icon: "warning",
+        title: "Patient requis",
+        text: "Veuillez sélectionner un(e) patient(e) pour faire l'ordonnance.",
+        confirmButtonColor: "#1e60d5",
+      });
+      return;
+    }
     const selPat =
-      patients.find((p) => p.id === parseInt(formConsult.patientId)) ||
-      patients[0] ||
-      initialPatients[0];
+      patients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+      initialPatients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+      patients[0];
 
     const validItems = prescriptionItems.filter(
       (item) => item.medication && item.medication.trim() !== ""
@@ -188,10 +281,19 @@ const ConsultationsPage = () => {
 
   const handleSaveGeneralConsultation = async (e) => {
     e.preventDefault();
+    if (!formConsult.patientId) {
+      Swal.fire({
+        icon: "warning",
+        title: "Patient requis",
+        text: "Veuillez sélectionner un(e) patient(e) avant d'enregistrer la consultation.",
+        confirmButtonColor: "#1e60d5",
+      });
+      return;
+    }
     const selPat =
-      patients.find((p) => p.id === parseInt(formConsult.patientId)) ||
-      patients[0] ||
-      initialPatients[0];
+      patients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+      initialPatients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+      patients[0];
 
     const hasPrescription = showPrescriptionSection && prescriptionItems.some((item) => item.medication.trim() !== "");
     const prescData = hasPrescription
@@ -345,21 +447,6 @@ const ConsultationsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <Button
-          variant={showNewModal ? "outline-primary" : "primary"}
-          className="btn-rounded"
-          onClick={() => {
-            setShowNewModal(!showNewModal);
-            if (!showNewModal) {
-              setSelectedConsultation(null);
-              setShowFullCREcho(false);
-            }
-          }}
-        >
-          <i className={showNewModal ? "fa fa-times me-2" : "flaticon-381-add-1 me-2"}></i>
-          {showNewModal ? "Fermer le formulaire" : "Nouvelle Consultation"}
-        </Button>
-
         <div className="input-group search-area w-auto">
           <input
             type="text"
@@ -372,6 +459,26 @@ const ConsultationsPage = () => {
             <i className="flaticon-381-search-2"></i>
           </span>
         </div>
+
+        <Button
+          variant={showNewModal ? "outline-primary" : "primary"}
+          className="btn-rounded"
+          onClick={() => {
+            const nextShow = !showNewModal;
+            setShowNewModal(nextShow);
+            if (nextShow) {
+              setSelectedConsultation(null);
+              setShowFullCREcho(false);
+              setFormConsult((prev) => ({
+                ...prev,
+                patientId: patientIdQuery || "",
+              }));
+            }
+          }}
+        >
+          <i className={showNewModal ? "fa fa-times me-2" : "flaticon-381-add-1 me-2"}></i>
+          {showNewModal ? "Fermer le formulaire" : "Nouvelle Consultation"}
+        </Button>
       </div>
 
       <style>{`
@@ -495,50 +602,34 @@ const ConsultationsPage = () => {
 
             <form onSubmit={handleSaveGeneralConsultation}>
               <div className="card-body">
-                {/* 1. Informations Patiente & Motif */}
+                {/* 1. Informations Patiente & Acte */}
                 <div className="row mb-3">
+                  <div className="col-md-7 mb-2">
+                    <label className="form-label font-w600">
+                      Patiente / Patient <span className="text-danger">*</span>
+                    </label>
+                    <Select
+                      isSearchable={true}
+                      isClearable={true}
+                      placeholder="Tapez pour rechercher un(e) patient(e) (nom, prénom, dossier)..."
+                      options={patientOptions}
+                      value={selectedPatientOption}
+                      styles={patientSelectStyles}
+                      onChange={(selected) => {
+                        setFormConsult({
+                          ...formConsult,
+                          patientId: selected ? selected.value : "",
+                        });
+                      }}
+                      noOptionsMessage={({ inputValue }) =>
+                        inputValue
+                          ? `Aucun patient trouvé pour "${inputValue}"`
+                          : "Tapez le nom, prénom ou n° dossier pour rechercher"
+                      }
+                    />
+                  </div>
+
                   <div className="col-md-5 mb-2">
-                    <label className="form-label font-w600">Patiente / Patient *</label>
-                    <select
-                      className="form-control"
-                      value={formConsult.patientId}
-                      onChange={(e) =>
-                        setFormConsult({ ...formConsult, patientId: e.target.value })
-                      }
-                      required
-                    >
-                      {patients.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.lastName.toUpperCase()} {p.firstName} — {p.fileNumber} (Née le {p.dob} • {p.age} ans)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="col-md-4 mb-2">
-                    <label className="form-label font-w600">Motif de consultation *</label>
-                    <select
-                      className="form-control"
-                      value={formConsult.reason}
-                      onChange={(e) =>
-                        setFormConsult({ ...formConsult, reason: e.target.value })
-                      }
-                      required
-                    >
-                      <option value="Consultation générale de routine">Consultation générale de routine</option>
-                      <option value="Bilan de santé & Contrôle">Bilan de santé & Contrôle</option>
-                      <option value="Douleurs abdominales / pelviennes">Douleurs abdominales / pelviennes</option>
-                      <option value="Suivi de pathologie chronique">Suivi de pathologie chronique</option>
-                      <option value="Renouvellement d'ordonnance">Renouvellement d'ordonnance</option>
-                      <option value="Suivi de grossesse (Prénatal)">Suivi de grossesse (Prénatal)</option>
-                      <option value="Échographie de contrôle">Échographie de contrôle</option>
-                      <option value="Contraception & Dépistage">Contraception & Dépistage</option>
-                      <option value="Certificat médical / Visite">Certificat médical / Visite</option>
-                      <option value="Urgence médicale">Urgence médicale</option>
-                    </select>
-                  </div>
-
-                  <div className="col-md-3 mb-2">
                     <label className="form-label font-w600">Acte & Cotation</label>
                     <select
                       className="form-control"
@@ -781,15 +872,41 @@ const ConsultationsPage = () => {
                         </div>
                         <div className="row">
                           <div className="col-md-5 mb-2">
-                            <label className="form-label fs-12">Médicament (DCI ou Spécialité) *</label>
+                            <div className="d-flex justify-content-between align-items-center mb-1">
+                              <label className="form-label fs-12 mb-0">Médicament (DCI ou Spécialité) *</label>
+                              <select
+                                className="form-select form-select-sm py-0 px-1 fs-11 text-primary border-primary"
+                                style={{ width: "auto", maxWidth: "160px", height: "24px" }}
+                                value=""
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    handleSelectPredefinedMed(index, e.target.value);
+                                  }
+                                }}
+                              >
+                                <option value="">-- Choisir --</option>
+                                {medications.map((m, mIdx) => (
+                                  <option key={m.id || `${m.name}-${mIdx}`} value={m.name}>
+                                    {m.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                             <input
                               type="text"
+                              list="consult-medications-datalist"
                               className="form-control form-control-sm"
                               placeholder="Ex: PARACÉTAMOL 1g, SPASFON, AMOXICILLINE..."
                               value={item.medication}
-                              onChange={(e) =>
-                                handleMedicationChange(index, "medication", e.target.value)
-                              }
+                              onChange={(e) => {
+                                handleMedicationChange(index, "medication", e.target.value);
+                                const exact = medications.find(
+                                  (m) => m.name.toLowerCase() === e.target.value.trim().toLowerCase()
+                                );
+                                if (exact) {
+                                  handleSelectPredefinedMed(index, exact.name);
+                                }
+                              }}
                               required={showPrescriptionSection}
                             />
                           </div>
@@ -1113,7 +1230,7 @@ const ConsultationsPage = () => {
             <table className="table table-responsive-md table-hover">
               <thead>
                 <tr>
-                  <th><strong>DATE</strong></th>
+                  <th style={{ whiteSpace: "nowrap" }}><strong>DATE & HEURE</strong></th>
                   <th><strong>PATIENT</strong></th>
                   <th><strong>MOTIF</strong></th>
                   <th><strong>DIAGNOSTIC (CIM-10)</strong></th>
@@ -1132,9 +1249,9 @@ const ConsultationsPage = () => {
                 ) : (
                   filteredConsultations.map((cs) => (
                     <tr key={cs.id} className={selectedConsultation?.id === cs.id ? "table-primary" : ""}>
-                      <td>
+                      <td style={{ whiteSpace: "nowrap" }}>
                         <strong className="text-primary">{cs.date}</strong>
-                        <div className="text-muted fs-12">à {cs.time}</div>
+                        <span className="text-muted fs-12 ms-2">à {cs.time}</span>
                       </td>
                       <td>
                         <Link
@@ -1227,6 +1344,15 @@ const ConsultationsPage = () => {
         consultation={previewEchoReport}
         doctor={initialDoctor}
       />
+
+      {/* Datalist pour saisie rapide des médicaments */}
+      <datalist id="consult-medications-datalist">
+        {medications.map((m, mIdx) => (
+          <option key={m.id || `${m.name}-${mIdx}`} value={m.name}>
+            {m.dosage ? `${m.dosage} - ${m.defaultPosology || ""}` : ""}
+          </option>
+        ))}
+      </datalist>
     </>
   );
 };

@@ -584,7 +584,7 @@ const ConsultationEchoForm = ({
                     <div className="fr-sub">Médecin Spécialiste en Gynécologie Obstétrique • Échographie</div>
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    <span className="ar-name">الحكيمة ن. بلبشير ولد هنية</span>
+                    <span className="ar-name">الدكتورة ن. بلبشير ولد هنية</span>
                     <div className="ar-sub-txt">طبيبة مختصة في أمراض النساء والتوليد • الفحص بالصدى</div>
                   </td>
                 </tr>

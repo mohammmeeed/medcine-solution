@@ -157,7 +157,20 @@ class VisitorChart extends Component {
             show: false,
           },
         },
-        colors: ["#450b5a", "#E91E63", "#9C27B0"],
+        colors: ["#2060e2"],
+        stroke: {
+          curve: "smooth",
+          width: 3,
+        },
+        fill: {
+          type: "gradient",
+          gradient: {
+            shadeIntensity: 1,
+            opacityFrom: 0.5,
+            opacityTo: 0.05,
+            stops: [0, 90, 100],
+          },
+        },
         dataLabels: {
           enabled: false,
         },

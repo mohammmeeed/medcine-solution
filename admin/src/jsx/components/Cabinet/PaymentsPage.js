@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Modal, Button, Badge } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
+import ApiService from "../../../services/ApiService";
 import {
   initialPayments,
   initialPatients,
@@ -10,6 +11,8 @@ import {
 
 const PaymentsPage = () => {
   const [payments, setPayments] = useState(initialPayments);
+  const [patients, setPatients] = useState(initialPatients);
+  const [loading, setLoading] = useState(false);
   const [methodFilter, setMethodFilter] = useState("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [previewReceipt, setPreviewReceipt] = useState(null);
@@ -17,17 +20,44 @@ const PaymentsPage = () => {
   const [formPayment, setFormPayment] = useState({
     patientId: 1,
     invoiceNumber: "FAC-2024-0250",
-    amount: 26.50,
-    method: "Carte Bancaire",
-    operator: "Sophie Vasseur",
+    amount: 2500,
+    method: "Espèces",
+    operator: initialDoctor.name,
     notes: "",
   });
 
-  const handleSavePayment = (e) => {
+  // Chargement des règlements depuis MySQL
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [payData, patData] = await Promise.all([
+          ApiService.getPayments(),
+          ApiService.getPatients(),
+        ]);
+        if (Array.isArray(payData) && payData.length > 0) {
+          setPayments(payData);
+        }
+        if (Array.isArray(patData) && patData.length > 0) {
+          setPatients(patData);
+          if (!formPayment.patientId && patData[0]) {
+            setFormPayment((prev) => ({ ...prev, patientId: patData[0].id }));
+          }
+        }
+      } catch (err) {
+        console.warn("Erreur chargement règlements MySQL :", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleSavePayment = async (e) => {
     e.preventDefault();
     const pat =
-      initialPatients.find((p) => p.id === parseInt(formPayment.patientId)) ||
-      initialPatients[0];
+      patients.find((p) => p.id === parseInt(formPayment.patientId)) ||
+      patients[0] || { id: 1, firstName: "Patient", lastName: "" };
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(
       now.getMinutes()
@@ -38,7 +68,7 @@ const PaymentsPage = () => {
       date: now.toISOString().split("T")[0],
       time: timeStr,
       receiptNumber: `REC-2024-018${payments.length + 3}`,
-      patientName: `${pat.firstName} ${pat.lastName}`,
+      patientName: `${pat.firstName} ${pat.lastName}`.trim(),
       invoiceNumber: formPayment.invoiceNumber,
       amount: parseFloat(formPayment.amount),
       method: formPayment.method,
@@ -49,9 +79,25 @@ const PaymentsPage = () => {
     setPayments([created, ...payments]);
     setShowAddModal(false);
 
+    try {
+      await ApiService.savePayment({
+        patientName: created.patientName,
+        invoiceNumber: created.invoiceNumber,
+        receiptNumber: created.receiptNumber,
+        date: created.date,
+        time: created.time,
+        amount: created.amount,
+        method: created.method,
+        operator: created.operator,
+        status: "Encaissé",
+      });
+    } catch (err) {
+      console.warn("Erreur synchronisation règlement MySQL :", err);
+    }
+
     Swal.fire({
       icon: "success",
-      title: "Règlement enregistré !",
+      title: "Règlement enregistré dans la Base de Données !",
       text: `Reçu #${created.receiptNumber} généré (${created.amount.toLocaleString("fr-DZ")} DA).`,
       confirmButtonColor: "#1e60d5",
     });
@@ -80,14 +126,6 @@ const PaymentsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <Button
-          variant="primary"
-          className="btn-rounded"
-          onClick={() => setShowAddModal(true)}
-        >
-          <i className="flaticon-381-add-1 me-2"></i> Encaisser un Règlement
-        </Button>
-
         <div className="d-flex align-items-center gap-2">
           <span className="text-muted fs-13">Filtrer par mode :</span>
           <select
@@ -102,6 +140,14 @@ const PaymentsPage = () => {
             <option value="Tiers-Payant">Tiers-Payant CPAM</option>
           </select>
         </div>
+
+        <Button
+          variant="primary"
+          className="btn-rounded"
+          onClick={() => setShowAddModal(true)}
+        >
+          <i className="flaticon-381-add-1 me-2"></i> Encaisser un Règlement
+        </Button>
       </div>
 
       {/* Cartes récapitulatives de Caisse */}

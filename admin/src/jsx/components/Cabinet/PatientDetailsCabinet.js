@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { Modal } from "react-bootstrap";
+import Swal from "sweetalert2";
 import PrescriptionPreviewModal from "./PrescriptionPreviewModal";
 import {
   initialPatients,
@@ -19,6 +21,17 @@ const PatientDetailsCabinet = () => {
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [activeTab, setActiveTab] = useState("synthese");
 
+  // État des documents du patient & formulaire d'ajout
+  const [allDocuments, setAllDocuments] = useState(initialDocuments);
+  const [showAddDocForm, setShowAddDocForm] = useState(false);
+  const [docTitle, setDocTitle] = useState("");
+  const [docCategory, setDocCategory] = useState("Imagerie & Radiologie");
+  const [docAuthor, setDocAuthor] = useState("Centre d'Imagerie / Dr N. BELBACHIR OULD HENNIA");
+  const [docDate, setDocDate] = useState(new Date().toISOString().split("T")[0]);
+  const [docFile, setDocFile] = useState(null);
+  const [docFilePreview, setDocFilePreview] = useState(null);
+  const [previewingDoc, setPreviewingDoc] = useState(null);
+
   const patient =
     initialPatients.find((p) => p.id === selectedPatientId) || initialPatients[0];
 
@@ -31,12 +44,134 @@ const PatientDetailsCabinet = () => {
   const patientExaminations = initialExaminations.filter(
     (e) => e.patientId === patient.id
   );
-  const patientDocuments = initialDocuments.filter(
+  const patientDocuments = allDocuments.filter(
     (d) => d.patientId === patient.id
   );
   const patientInvoices = initialInvoices.filter(
     (i) => i.patientId === patient.id
   );
+
+  const handleFileChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      setDocFile(file);
+      if (!docTitle) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+        setDocTitle(cleanName);
+      }
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setDocFilePreview(event.target.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setDocFilePreview(null);
+      }
+    }
+  };
+
+  const handleResetDocForm = () => {
+    setDocTitle("");
+    setDocCategory("Imagerie & Radiologie");
+    setDocAuthor("Centre d'Imagerie / Dr N. BELBACHIR OULD HENNIA");
+    setDocDate(new Date().toISOString().split("T")[0]);
+    setDocFile(null);
+    setDocFilePreview(null);
+    setShowAddDocForm(false);
+  };
+
+  const handleSaveDocument = (e) => {
+    e.preventDefault();
+    if (!docTitle.trim()) {
+      Swal.fire({
+        icon: "warning",
+        title: "Titre requis",
+        text: "Veuillez renseigner le titre du document.",
+        confirmButtonColor: "#2563eb",
+      });
+      return;
+    }
+
+    const fileSizeStr = docFile
+      ? docFile.size > 1024 * 1024
+        ? `${(docFile.size / (1024 * 1024)).toFixed(1)} Mo`
+        : `${Math.round(docFile.size / 1024)} Ko`
+      : "1.2 Mo";
+
+    const isImage = docFile ? docFile.type.startsWith("image/") : false;
+    const fileExt = docFile ? docFile.name.split(".").pop().toUpperCase() : "PDF";
+
+    const newDocument = {
+      id: Date.now(),
+      patientId: patient.id,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      title: docTitle.trim(),
+      category: docCategory,
+      date: docDate,
+      author: docAuthor.trim() || "Cabinet Médical",
+      fileSize: fileSizeStr,
+      type: fileExt,
+      isImage: isImage,
+      fileDataUrl: docFilePreview || null,
+      fileName: docFile ? docFile.name : null,
+      status: "Validé par le médecin",
+    };
+
+    setAllDocuments((prev) => [newDocument, ...prev]);
+    initialDocuments.unshift(newDocument);
+    handleResetDocForm();
+
+    Swal.fire({
+      icon: "success",
+      title: "Document rattaché avec succès",
+      text: `Le document "${newDocument.title}" a été ajouté au dossier du patient.`,
+      timer: 2000,
+      showConfirmButton: false,
+    });
+  };
+
+  const handleDeleteDocument = (docId, title) => {
+    Swal.fire({
+      title: "Supprimer ce document ?",
+      text: `Êtes-vous sûr de vouloir retirer "${title}" du dossier ?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Oui, supprimer",
+      cancelButtonText: "Annuler",
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setAllDocuments((prev) => prev.filter((d) => d.id !== docId));
+        Swal.fire({
+          icon: "success",
+          title: "Document supprimé",
+          timer: 1400,
+          showConfirmButton: false,
+        });
+      }
+    });
+  };
+
+  const handleDownloadDoc = (doc) => {
+    if (doc.fileDataUrl) {
+      const link = document.createElement("a");
+      link.href = doc.fileDataUrl;
+      link.download = doc.fileName || `${doc.title}.${(doc.type || "pdf").toLowerCase()}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      Swal.fire({
+        icon: "info",
+        title: "Téléchargement",
+        text: `Téléchargement du document : ${doc.title} (${doc.fileSize})`,
+        timer: 1800,
+        showConfirmButton: false,
+      });
+    }
+  };
 
   return (
     <div className="patient-dossier-wrapper">
@@ -920,29 +1055,7 @@ const PatientDetailsCabinet = () => {
           <span>Ordonnances ( {patientPrescriptions.length} )</span>
         </button>
 
-        {/* Tab 4: Constantes et Examens */}
-        <button
-          type="button"
-          className={`patient-tab-btn ${activeTab === "constantes" ? "active" : ""}`}
-          onClick={() => setActiveTab("constantes")}
-        >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-            <path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27" />
-          </svg>
-          <span>Constantes et Examens ( {patientExaminations.length} )</span>
-        </button>
-
-        {/* Tab 5: Documents */}
+        {/* Tab 4: Documents */}
         <button
           type="button"
           className={`patient-tab-btn ${activeTab === "documents" ? "active" : ""}`}
@@ -992,7 +1105,7 @@ const PatientDetailsCabinet = () => {
             <path d="M12 18h.01" />
             <path d="M8 18h.01" />
           </svg>
-          <span>Faits ( {patientInvoices.length} )</span>
+          <span>Factures ( {patientInvoices.length} )</span>
         </button>
       </div>
 
@@ -1289,66 +1402,265 @@ const PatientDetailsCabinet = () => {
           </div>
         )}
 
-        {/* PANEL 4: CONSTANTES ET EXAMENS */}
-        {activeTab === "constantes" && (
-          <div className="patient-panel-card">
-            <div className="patient-panel-card-header">
-              <h3 className="patient-panel-card-title">
-                Historique des constantes vitales
-              </h3>
-            </div>
-            <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
-                <thead style={{ background: "#f8fafc" }}>
-                  <tr>
-                    <th>Date</th>
-                    <th>Tension (mmHg)</th>
-                    <th>Pouls (bpm)</th>
-                    <th>Temp (°C)</th>
-                    <th>Poids (kg)</th>
-                    <th>IMC</th>
-                    <th>SpO2 (%)</th>
-                    <th>Glycémie (g/L)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {patientExaminations.map((ex) => (
-                    <tr key={ex.id}>
-                      <td>
-                        <strong>{ex.date}</strong>
-                      </td>
-                      <td>
-                        {ex.bpSystolic}/{ex.bpDiastolic}
-                      </td>
-                      <td>{ex.heartRate}</td>
-                      <td>{ex.temperature}</td>
-                      <td>{ex.weight}</td>
-                      <td>{ex.bmi}</td>
-                      <td>{ex.spo2}%</td>
-                      <td>{ex.bloodSugar}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* PANEL 5: DOCUMENTS */}
+        {/* PANEL 4: DOCUMENTS & RÉSULTATS */}
         {activeTab === "documents" && (
           <div className="patient-panel-card">
-            <div className="patient-panel-card-header">
-              <h3 className="patient-panel-card-title">
-                Documents & Résultats rattachés
-              </h3>
-              <Link
-                to="/medical-documents"
-                className="patient-btn-back"
-                style={{ padding: "6px 14px", fontSize: "11.5px" }}
+            <div className="patient-panel-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div>
+                <h3 className="patient-panel-card-title">
+                  Documents & Résultats rattachés
+                </h3>
+                <p className="text-muted fs-12 mb-0">
+                  Imageries médicales, bilans d'analyses, scanners et comptes-rendus du patient
+                </p>
+              </div>
+              <button
+                type="button"
+                className={`btn btn-sm ${showAddDocForm ? "btn-outline-secondary" : "btn-primary"} d-flex align-items-center gap-2`}
+                style={{ borderRadius: "10px", fontWeight: "600", transition: "all 0.2s" }}
+                onClick={() => setShowAddDocForm(!showAddDocForm)}
               >
-                + Ajouter un document
-              </Link>
+                <i className={showAddDocForm ? "fa fa-times" : "fa fa-cloud-upload-alt"}></i>
+                <span>{showAddDocForm ? "Fermer le formulaire" : "+ Ajouter un document"}</span>
+              </button>
             </div>
+
+            {/* FORMULAIRE INLINE D'IMPORT DE PHOTOS ET FICHIERS */}
+            {showAddDocForm && (
+              <div
+                className="p-4 mb-4"
+                style={{
+                  background: "#f8fafc",
+                  border: "1.5px solid #e2e8f0",
+                  borderRadius: "14px",
+                  boxShadow: "0 2px 10px rgba(15, 23, 42, 0.04)",
+                }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-3 border-bottom pb-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <span
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "8px",
+                        background: "#eff6ff",
+                        color: "#2563eb",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <i className="fa fa-file-upload"></i>
+                    </span>
+                    <h5 className="font-w700 text-dark mb-0 fs-15">
+                      Importer une photo ou un fichier depuis votre appareil
+                    </h5>
+                  </div>
+                  <span className="badge bg-primary text-white fs-11 px-2 py-1">
+                    Dossier {patient.fileNumber}
+                  </span>
+                </div>
+
+                <form onSubmit={handleSaveDocument}>
+                  <div className="row">
+                    {/* Zone d'import de fichier / photo */}
+                    <div className="col-12 mb-3">
+                      <label className="form-label font-w600 fs-13 text-dark">
+                        Photo ou Document depuis l'appareil
+                      </label>
+                      <div
+                        style={{
+                          border: docFile ? "2px solid #86efac" : "2px dashed #cbd5e1",
+                          borderRadius: "12px",
+                          padding: "22px 16px",
+                          textAlign: "center",
+                          background: docFile ? "#f0fdf4" : "#ffffff",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                        }}
+                        onClick={() => document.getElementById("patientDocFileInput").click()}
+                      >
+                        <input
+                          type="file"
+                          id="patientDocFileInput"
+                          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                          onChange={handleFileChange}
+                          style={{ display: "none" }}
+                        />
+
+                        {docFile ? (
+                          <div className="d-flex align-items-center justify-content-center gap-3 flex-wrap">
+                            {docFilePreview ? (
+                              <img
+                                src={docFilePreview}
+                                alt="Aperçu"
+                                style={{
+                                  maxHeight: "95px",
+                                  maxWidth: "140px",
+                                  borderRadius: "8px",
+                                  objectFit: "cover",
+                                  border: "1px solid #86efac",
+                                  boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                                }}
+                              />
+                            ) : (
+                              <span
+                                style={{
+                                  width: "52px",
+                                  height: "52px",
+                                  borderRadius: "10px",
+                                  background: "#ecfdf5",
+                                  color: "#16a34a",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "24px",
+                                }}
+                              >
+                                <i className="fa fa-file-pdf"></i>
+                              </span>
+                            )}
+                            <div className="text-start">
+                              <p className="font-w700 text-dark mb-0 fs-14">
+                                {docFile.name}
+                              </p>
+                              <small className="text-muted">
+                                {(docFile.size / 1024).toFixed(1)} Ko • {docFile.type || "Fichier sélectionné"}
+                              </small>
+                              <div className="mt-1">
+                                <span className="badge bg-success text-white fs-11">
+                                  <i className="fa fa-check me-1"></i> Prêt à être importé
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-outline-danger btn-xs ms-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDocFile(null);
+                                setDocFilePreview(null);
+                              }}
+                            >
+                              <i className="fa fa-trash me-1"></i> Changer
+                            </button>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="mb-2">
+                              <span
+                                style={{
+                                  width: "48px",
+                                  height: "48px",
+                                  borderRadius: "50%",
+                                  background: "#eff6ff",
+                                  color: "#2563eb",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "20px",
+                                }}
+                              >
+                                <i className="fa fa-camera-retro"></i>
+                              </span>
+                            </div>
+                            <p className="font-w600 text-dark mb-1 fs-14">
+                              Cliquez ici pour sélectionner une photo ou un fichier depuis votre appareil
+                            </p>
+                            <p className="text-muted fs-12 mb-0">
+                              Photos (JPEG, PNG, WebP), scanners, radiographies, PDF, analyses médicales... (max 25 Mo)
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Champ Titre du document (Requis) */}
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label font-w600 fs-13 text-dark">
+                        Titre du document <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Ex: Radiographie du thorax face/profil, Échographie abdominale, Bilan sanguin..."
+                        value={docTitle}
+                        onChange={(e) => setDocTitle(e.target.value)}
+                        required
+                      />
+                      <small className="text-muted fs-11">
+                        Titre descriptif pour identifier rapidement le document dans le dossier
+                      </small>
+                    </div>
+
+                    {/* Champ Catégorie */}
+                    <div className="col-md-3 mb-3">
+                      <label className="form-label font-w600 fs-13 text-dark">
+                        Catégorie
+                      </label>
+                      <select
+                        className="form-control"
+                        value={docCategory}
+                        onChange={(e) => setDocCategory(e.target.value)}
+                      >
+                        <option value="Imagerie & Radiologie">Imagerie & Radiologie</option>
+                        <option value="Analyses de laboratoire">Analyses de laboratoire</option>
+                        <option value="Comptes rendus spécialistes">Comptes rendus spécialistes</option>
+                        <option value="Certificats médicaux">Certificats médicaux</option>
+                        <option value="Ordonnance externe">Ordonnance externe</option>
+                        <option value="Autre document médical">Autre document médical</option>
+                      </select>
+                    </div>
+
+                    {/* Date */}
+                    <div className="col-md-3 mb-3">
+                      <label className="form-label font-w600 fs-13 text-dark">
+                        Date du document
+                      </label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={docDate}
+                        onChange={(e) => setDocDate(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Émetteur / Source */}
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label font-w600 fs-13 text-dark">
+                        Émetteur / Source
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Ex: Centre d'Imagerie, Laboratoire Pyramides, Dr Confrère..."
+                        value={docAuthor}
+                        onChange={(e) => setDocAuthor(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Boutons d'action */}
+                    <div className="col-md-6 mb-3 d-flex align-items-end justify-content-end gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-light"
+                        onClick={handleResetDocForm}
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-primary d-flex align-items-center gap-2"
+                      >
+                        <i className="fa fa-check"></i>
+                        <span>Enregistrer & Joindre au dossier</span>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            )}
+
             <div className="table-responsive">
               <table className="table table-hover align-middle mb-0">
                 <thead style={{ background: "#f8fafc" }}>
@@ -1357,30 +1669,122 @@ const PatientDetailsCabinet = () => {
                     <th>Catégorie</th>
                     <th>Date</th>
                     <th>Émetteur</th>
-                    <th>Action</th>
+                    <th className="text-end">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {patientDocuments.map((doc) => (
-                    <tr key={doc.id}>
-                      <td>
-                        <strong>{doc.title}</strong>
-                      </td>
-                      <td>
-                        <span className="patient-med-tag">{doc.category}</span>
-                      </td>
-                      <td>{doc.date}</td>
-                      <td>{doc.author}</td>
-                      <td>
-                        <button
-                          className="patient-btn-back"
-                          style={{ padding: "4px 10px", fontSize: "11px" }}
-                        >
-                          Télécharger
-                        </button>
+                  {patientDocuments.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="text-center py-5 text-muted">
+                        <i className="fa fa-folder-open fs-28 d-block mb-2 text-muted"></i>
+                        Aucun document rattaché à ce dossier pour le moment.
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => setShowAddDocForm(true)}
+                          >
+                            <i className="fa fa-plus me-1"></i> Importer le premier document
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    patientDocuments.map((doc) => (
+                      <tr key={doc.id}>
+                        <td>
+                          <div className="d-flex align-items-center gap-2">
+                            {doc.isImage || (doc.type && ["JPG", "JPEG", "PNG", "WEBP"].includes(doc.type.toUpperCase())) ? (
+                              <span
+                                style={{
+                                  width: "36px",
+                                  height: "36px",
+                                  borderRadius: "8px",
+                                  background: "#fef3c7",
+                                  color: "#d97706",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0,
+                                  cursor: doc.fileDataUrl ? "pointer" : "default",
+                                }}
+                                onClick={() => doc.fileDataUrl && setPreviewingDoc(doc)}
+                                title="Voir l'image"
+                              >
+                                {doc.fileDataUrl ? (
+                                  <img
+                                    src={doc.fileDataUrl}
+                                    alt=""
+                                    style={{ width: "36px", height: "36px", objectFit: "cover", borderRadius: "8px" }}
+                                  />
+                                ) : (
+                                  <i className="fa fa-image fs-14"></i>
+                                )}
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  width: "36px",
+                                  height: "36px",
+                                  borderRadius: "8px",
+                                  background: "#eff6ff",
+                                  color: "#2563eb",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <i className="fa fa-file-pdf fs-14"></i>
+                              </span>
+                            )}
+                            <div>
+                              <strong className="text-dark d-block">{doc.title}</strong>
+                              <small className="text-muted">
+                                {doc.fileSize || "Document"} • {doc.type || "PDF"}
+                              </small>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="patient-med-tag">{doc.category}</span>
+                        </td>
+                        <td>{doc.date}</td>
+                        <td>{doc.author}</td>
+                        <td className="text-end">
+                          <div className="d-inline-flex align-items-center gap-2">
+                            {doc.fileDataUrl && (
+                              <button
+                                type="button"
+                                className="btn btn-xs btn-outline-info"
+                                onClick={() => setPreviewingDoc(doc)}
+                                title="Aperçu du document ou de la photo"
+                              >
+                                <i className="fa fa-eye me-1"></i> Voir
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="patient-btn-back"
+                              style={{ padding: "4px 10px", fontSize: "11px" }}
+                              onClick={() => handleDownloadDoc(doc)}
+                              title="Télécharger le fichier"
+                            >
+                              <i className="fa fa-download me-1"></i> Télécharger
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-xs btn-link text-danger p-0"
+                              onClick={() => handleDeleteDocument(doc.id, doc.title)}
+                              title="Supprimer du dossier"
+                            >
+                              <i className="fa fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1392,7 +1796,7 @@ const PatientDetailsCabinet = () => {
           <div className="patient-panel-card">
             <div className="patient-panel-card-header">
               <h3 className="patient-panel-card-title">
-                Facturation & Règlements du patient
+                Facturation du patient
               </h3>
             </div>
             <div className="table-responsive">
@@ -1403,9 +1807,6 @@ const PatientDetailsCabinet = () => {
                     <th>Date</th>
                     <th>Description de l'acte</th>
                     <th>Montant</th>
-                    <th>Prise en charge Sécu</th>
-                    <th>Reste Patient</th>
-                    <th>Statut</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1414,22 +1815,9 @@ const PatientDetailsCabinet = () => {
                       <td>
                         <strong>{inv.invoiceNumber}</strong>
                       </td>
-                      <td>{inv.date}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>{inv.date}</td>
                       <td>{inv.actDescription}</td>
-                      <td>{inv.amount.toFixed(2)} €</td>
-                      <td>{inv.coveredAmo.toFixed(2)} €</td>
-                      <td>{inv.patientRemaining.toFixed(2)} €</td>
-                      <td>
-                        <span
-                          className={
-                            inv.status === "Payée"
-                              ? "patient-badge-status"
-                              : "patient-badge-blood"
-                          }
-                        >
-                          {inv.status}
-                        </span>
-                      </td>
+                      <td><strong className="text-dark">{inv.amount.toLocaleString("fr-DZ")} DA</strong></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1445,6 +1833,76 @@ const PatientDetailsCabinet = () => {
         onHide={() => setSelectedPrescription(null)}
         prescription={selectedPrescription}
       />
+
+      {/* Lightbox / Modal d'Aperçu Photo et Document */}
+      {previewingDoc && (
+        <Modal
+          show={!!previewingDoc}
+          onHide={() => setPreviewingDoc(null)}
+          centered
+          size="lg"
+        >
+          <div className="modal-header border-0 pb-0">
+            <div>
+              <h5 className="modal-title font-w700 text-dark mb-0">
+                {previewingDoc.title}
+              </h5>
+              <small className="text-muted">
+                {previewingDoc.category} • {previewingDoc.date} • {previewingDoc.author}
+              </small>
+            </div>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setPreviewingDoc(null)}
+            ></button>
+          </div>
+          <div className="modal-body text-center p-4">
+            {previewingDoc.fileDataUrl && (previewingDoc.isImage || ["JPG", "JPEG", "PNG", "WEBP"].includes((previewingDoc.type || "").toUpperCase())) ? (
+              <img
+                src={previewingDoc.fileDataUrl}
+                alt={previewingDoc.title}
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "70vh",
+                  objectFit: "contain",
+                  borderRadius: "10px",
+                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
+                }}
+              />
+            ) : (
+              <div className="p-5 bg-light rounded text-center">
+                <i className="fa fa-file-pdf fs-48 text-danger mb-3 d-block"></i>
+                <h6 className="font-w600 text-dark">{previewingDoc.title}</h6>
+                <p className="text-muted fs-13 mb-3">Fichier document {previewingDoc.type || "PDF"}</p>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => handleDownloadDoc(previewingDoc)}
+                >
+                  <i className="fa fa-download me-1"></i> Télécharger le document
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="modal-footer border-0 pt-0">
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => setPreviewingDoc(null)}
+            >
+              Fermer
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => handleDownloadDoc(previewingDoc)}
+            >
+              <i className="fa fa-download me-1"></i> Télécharger
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

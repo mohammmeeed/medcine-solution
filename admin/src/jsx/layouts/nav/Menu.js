@@ -26,6 +26,11 @@ export const MenuList = [
         to: "waiting-room",
         iconStyle: <i className="flaticon-381-clock-1" />
     },
+    {
+        title: "Écran Salle d'attente",
+        to: "affichage-salle-attente",
+        iconStyle: <i className="flaticon-381-television" />
+    },
 
     // B. Gestion médicale
     {

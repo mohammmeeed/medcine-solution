@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import { Dropdown } from "react-bootstrap";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 /// Scroll
 // import PerfectScrollbar from "react-perfect-scrollbar";
 
 /// Image
 // import profile from "../../../images/profile/17.jpg";  
 import profile2 from "../../../images/profile/pic1.jpg";
-import avatar from "../../../images/avatar/1.jpg";
 import { useContext } from "react";
 import { ThemeContext } from "../../../context/ThemeContext";
 // import { set } from "date-fns/esm";
@@ -17,6 +16,8 @@ import { ThemeContext } from "../../../context/ThemeContext";
 const Header = ({ onNote }) => {
     const [fullScreen, setFullScreen] = useState(false);
     const {background, changeBackground} = useContext(ThemeContext);
+    const location = useLocation();
+
     function handelChangeMode(){
       if(background.value==="light"){
           changeBackground({ value: "dark", label: "Dark" });  
@@ -26,32 +27,36 @@ const Header = ({ onNote }) => {
       }
     }
   
-    let path = window.location.pathname.split("/");
-    let name = path[path.length - 1].split("-");
-    let filterName = name.length >= 3 ? name.filter((n, i) => i > 0) : name;
-    let finalName = filterName.includes("app")
-      ? filterName.filter((f) => f !== "app")
-      : filterName.includes("ui")
-      ? filterName.filter((f) => f !== "ui")
-      : filterName.includes("uc")
-      ? filterName.filter((f) => f !== "uc")
-      : filterName.includes("basic")
-      ? filterName.filter((f) => f !== "basic")
-      : filterName.includes("form")
-      ? filterName.filter((f) => f !== "form")
-      : filterName.includes("table")
-      ? filterName.filter((f) => f !== "table")
-      : filterName.includes("page")
-      ? filterName.filter((f) => f !== "page")
-      : filterName.includes("email")
-      ? filterName.filter((f) => f !== "email")
-      : filterName.includes("ecom")
-      ? filterName.filter((f) => f !== "ecom")
-      : filterName.includes("chart")
-      ? filterName.filter((f) => f !== "chart")
-      : filterName.includes("editor")
-      ? filterName.filter((f) => f !== "editor")
-      : filterName;
+    // Titres en français adaptés au cabinet médical
+    const routeTitles = {
+      "": "Tableau de bord",
+      "dashboard": "Tableau de bord",
+      "appointments": "Agenda & Rendez-vous",
+      "patients": "Patients",
+      "patient-details": "Dossier Patient",
+      "waiting-room": "Salle d'attente",
+      "affichage-salle-attente": "Écran Salle d'attente",
+      "consultations": "Consultations",
+      "medical-records": "Dossiers Médicaux",
+      "prescriptions": "Ordonnances",
+      "medical-documents": "Documents Médicaux",
+      "invoices": "Factures",
+      "payments": "Règlements & Caisse",
+      "reports": "Rapports & Statistiques",
+      "staff": "Personnel & Droits",
+      "clinic": "Mon Cabinet",
+      "settings": "Paramètres",
+      "support": "Aide & Support",
+      "profile": "Profil Praticien",
+    };
+
+    const cleanPath = (location.pathname || "").toLowerCase().replace(/^\/+|\/+$/g, "");
+    const currentRouteKey = cleanPath.split("/")[0] || "";
+    const pageTitle = routeTitles[currentRouteKey] || (
+      cleanPath
+        ? cleanPath.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+        : "Tableau de bord"
+    );
      
 
   const onFullScreen = () => {
@@ -87,13 +92,8 @@ const Header = ({ onNote }) => {
             <div className="header-left">
               <div
                 className="dashboard_bar"
-                style={{ textTransform: "capitalize" }}
               >
-                {finalName.join(" ").length === 0
-                  ? "Dashboard"
-                  : finalName.join(" ") === "dashboard dark"
-                  ? "Dashboard"
-                  : finalName.join(" ")}
+                {pageTitle}
               </div>
             </div>
 
@@ -180,125 +180,8 @@ const Header = ({ onNote }) => {
                   </Link>
                 </li>
               )}
-              <li className="nav-item dropdown notification_dropdown">
-                <Link
-                  className="nav-link bell bell-link"
-                  to="#"
-                  onClick={() => onNote()}
-                >
-                  <div className="">
-                    <i className="flaticon-381-pad"></i>
-                  </div>
-                 
-                </Link>
-              </li>
               
-              <li className="nav-item dropdown notification_dropdown">
-                <Dropdown className="no-carat transparrent">
-                  <Dropdown.Toggle
-                    variant=""
-                    id="dropdown-basic"
-                    className="nav-link  ai-icon i-false"
-                  >
-                    <div className="">
-                      <i className="flaticon-381-ring"></i>
-                      <div className="pulse-css"></div>
-                    </div>
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu className="dropdown-menu dropdown-menu-right" align="end">
-                    <div className="deznav-scroll">
-                      <div
-                        id="DZ_W_Notification1"
-                        className="widget-media dz-scroll p-3"
-                        style={{ height: "380px" }}
-                      >
-                        <ul className="timeline">
-                          <li>
-                            <div className="timeline-panel">
-                              <div className="media me-2">
-                                <img src={avatar} width={50} alt />
-                              </div>
-                              <div className="media-body">
-                                <h6 className="mb-1">
-                                  Dr sultadsss Send you Photo
-                                </h6>
-                                <small className="d-block">
-                                  29 July 2023 - 02:26 PM
-                                </small>
-                              </div>
-                            </div>
-                          </li>
-                          <li>
-                            <div className="timeline-panel">
-                              <div className="media me-2 media-info">KG</div>
-                              <div className="media-body">
-                                <h6 className="mb-1">
-                                  Resport created successfully
-                                </h6>
-                                <small className="d-block">
-                                  29 July 2023 - 02:26 PM
-                                </small>
-                              </div>
-                            </div>
-                          </li>
-                          <li>
-                            <div className="timeline-panel">
-                              <div className="media me-2 media-success">
-                                <i className="fa fa-home"></i>
-                              </div>
-                              <div className="media-body">
-                                <h6 className="mb-1">Reminder : Treatment Time!</h6>
-                                <small className="d-block">
-                                  29 July 2023 - 02:26 PM
-                                </small>
-                              </div>
-                            </div>
-                          </li>
-                          <li>
-                            <div className="timeline-panel">
-                              <div className="media me-2">
-                                <img src={avatar} width={50} alt />
-                              </div>
-                              <div className="media-body">
-                                <h6 className="mb-1">Dr sultads Send you Photo</h6>
-                                <small className="d-block">
-                                  29 July 2023 - 02:26 PM
-                                </small>
-                              </div>
-                            </div>
-                          </li>
-                          <li>
-                            <div className="timeline-panel">
-                              <div className="media me-2 media-danger">KG</div>
-                              <div className="media-body">
-                                <h6 className="mb-1">
-                                  Resport created successfully
-                                </h6>
-                                <small className="d-block">
-                                  29 July 2023 - 02:26 PM
-                                </small>
-                              </div>
-                            </div>
-                          </li>
-                          <li>
-                            <div className="timeline-panel">
-                              <div className="media me-2 media-primary">
-                                <i className="fa fa-home"></i>
-                              </div>
-                              <div className="media-body">
-                                <h6 className="mb-1">Reminder : Treatment Time!</h6>
-                                <small className="d-block">
-                                  29 July 2023 - 02:26 PM
-                                </small>
-                              </div>
-                            </div>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </Dropdown.Menu>
-                </Dropdown>
-              </li>
+
               <Dropdown as="li" className="nav-item dropdown header-profile">
                 <Dropdown.Toggle
                   as={Link}
@@ -371,7 +254,13 @@ const Header = ({ onNote }) => {
                     </svg>
                     <span className="ms-2">Paramètres </span>
                   </Link>
-                  <Link to="/page-login" className="dropdown-item ai-icon">
+                  <Link
+                    to="/page-login"
+                    className="dropdown-item ai-icon"
+                    onClick={() => {
+                      localStorage.removeItem("cabinet_auth_user");
+                    }}
+                  >
                     <svg
                       id="icon-logout"
                       xmlns="http://www.w3.org/2000/svg"

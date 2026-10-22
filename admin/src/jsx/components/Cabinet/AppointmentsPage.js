@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -6,6 +6,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import { Button } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
+import ApiService from "../../../services/ApiService";
 import { initialAppointments, initialPatients } from "../../../services/CabinetData";
 
 const CARD_COLORS = [
@@ -22,6 +23,8 @@ const CARD_COLORS = [
 
 const AppointmentsPage = () => {
   const [appointments, setAppointments] = useState(initialAppointments);
+  const [patients, setPatients] = useState(initialPatients);
+  const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState("calendar"); // "calendar" | "list"
   const [activeView, setActiveView] = useState("timeGridWeek"); // "timeGridWeek" | "dayGridMonth"
   const [calendarTitle, setCalendarTitle] = useState("");
@@ -41,6 +44,33 @@ const AppointmentsPage = () => {
     status: "Confirmé",
     notes: "",
   });
+
+  // Chargement des rendez-vous et des patients depuis MySQL
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [aptData, patData] = await Promise.all([
+          ApiService.getAppointments(),
+          ApiService.getPatients(),
+        ]);
+        if (Array.isArray(aptData) && aptData.length > 0) {
+          setAppointments(aptData);
+        }
+        if (Array.isArray(patData) && patData.length > 0) {
+          setPatients(patData);
+          if (!formRdv.patientId && patData[0]) {
+            setFormRdv((prev) => ({ ...prev, patientId: patData[0].id }));
+          }
+        }
+      } catch (err) {
+        console.warn("Erreur chargement rendez-vous MySQL :", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
   // Calcul de l'heure de fin pour FullCalendar basé sur la durée réelle
   const calculateEndTime = (dateStr, timeStr, durationStr) => {
@@ -107,6 +137,14 @@ const AppointmentsPage = () => {
       )
     );
 
+    // Synchronisation MySQL
+    ApiService.updateAppointment({
+      id: info.event.id,
+      date: newDate,
+      time: newTime,
+      duration: newDuration,
+    }).catch((err) => console.warn("Erreur mise à jour rdv MySQL :", err));
+
     Swal.fire({
       icon: "success",
       title: "Rendez-vous déplacé !",
@@ -131,6 +169,12 @@ const AppointmentsPage = () => {
           : app
       )
     );
+
+    // Synchronisation MySQL
+    ApiService.updateAppointment({
+      id: info.event.id,
+      duration: newDuration,
+    }).catch((err) => console.warn("Erreur redimensionnement rdv MySQL :", err));
 
     Swal.fire({
       icon: "success",
@@ -210,7 +254,7 @@ const AppointmentsPage = () => {
       return;
     }
 
-    const patient = initialPatients.find((p) => p.id === parseInt(formRdv.patientId)) || initialPatients[0];
+    const patient = patients.find((p) => p.id === parseInt(formRdv.patientId)) || patients[0] || { id: 1, firstName: "Patient", lastName: "" };
 
     if (editId) {
       setAppointments(
@@ -231,9 +275,21 @@ const AppointmentsPage = () => {
             : a
         )
       );
+
+      // Synchronisation MySQL
+      ApiService.updateAppointment({
+        id: editId,
+        date: formRdv.date,
+        time: formRdv.time,
+        duration: formRdv.duration,
+        reason: formRdv.reason,
+        status: formRdv.status,
+        notes: formRdv.notes,
+      }).catch((err) => console.warn("Erreur mise à jour rendez-vous MySQL :", err));
+
       Swal.fire({
         icon: "success",
-        title: "Rendez-vous mis à jour",
+        title: "Rendez-vous mis à jour dans la Base de Données",
         timer: 1500,
         showConfirmButton: false,
       });
@@ -251,9 +307,21 @@ const AppointmentsPage = () => {
         notes: formRdv.notes,
       };
       setAppointments([...appointments, newAppt]);
+
+      // Synchronisation MySQL
+      ApiService.createAppointment({
+        patientId: patient.id,
+        date: formRdv.date,
+        time: formRdv.time,
+        duration: formRdv.duration,
+        reason: formRdv.reason,
+        status: formRdv.status,
+        notes: formRdv.notes,
+      }).catch((err) => console.warn("Erreur création rendez-vous MySQL :", err));
+
       Swal.fire({
         icon: "success",
-        title: "Rendez-vous créé avec succès",
+        title: "Rendez-vous créé dans la Base de Données",
         timer: 1500,
         showConfirmButton: false,
       });
@@ -265,17 +333,22 @@ const AppointmentsPage = () => {
   const handleDeleteRdv = (id) => {
     Swal.fire({
       title: "Annuler ce rendez-vous ?",
-      text: "Le créneau sera libéré dans l'agenda.",
+      text: "Le créneau sera libéré dans l'agenda et archivé dans la base de données.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#f72b50",
       cancelButtonColor: "#6e6e6e",
       confirmButtonText: "Oui, annuler",
       cancelButtonText: "Fermer",
-    }).then((result) => {
+    }).then(async (result) => {
       if (result.isConfirmed) {
         setAppointments(appointments.filter((a) => a.id !== id));
-        Swal.fire("Annulé", "Le rendez-vous a été retiré.", "success");
+        try {
+          await ApiService.deleteAppointment(id);
+        } catch (e) {
+          console.warn("Erreur suppression rdv MySQL :", e);
+        }
+        Swal.fire("Annulé", "Le rendez-vous a été retiré de la base de données.", "success");
       }
     });
   };
@@ -359,41 +432,7 @@ const AppointmentsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <Button
-            variant={showModal && !editId ? "outline-primary" : "primary"}
-            className="btn-rounded"
-            onClick={() => {
-              if (showModal && !editId) {
-                setShowModal(false);
-              } else {
-                handleOpenAdd();
-              }
-            }}
-          >
-            <i className={showModal && !editId ? "fa fa-times me-2" : "flaticon-381-add-1 me-2"}></i>
-            {showModal && !editId ? "Fermer le formulaire" : "Prendre un Rendez-vous"}
-          </Button>
-
-          <div className="btn-group" role="group">
-            <button
-              type="button"
-              className={`btn btn-sm ${viewMode === "calendar" ? "btn-primary" : "btn-outline-primary"}`}
-              onClick={() => setViewMode("calendar")}
-            >
-              <i className="flaticon-381-calendar me-1"></i> Calendrier
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${viewMode === "list" ? "btn-primary" : "btn-outline-primary"}`}
-              onClick={() => setViewMode("list")}
-            >
-              <i className="flaticon-381-list me-1"></i> Liste
-            </button>
-          </div>
-        </div>
-
-        {/* Recherche et filtres */}
+        {/* Recherche et filtres à gauche */}
         <div className="d-flex align-items-center gap-2 flex-wrap">
           <div className="input-group search-area w-auto">
             <input
@@ -420,6 +459,41 @@ const AppointmentsPage = () => {
             <option value="Terminé">Terminé</option>
             <option value="Absent">Absent</option>
           </select>
+        </div>
+
+        {/* Boutons d'action et mode à droite */}
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <div className="btn-group" role="group">
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === "calendar" ? "btn-primary" : "btn-outline-primary"}`}
+              onClick={() => setViewMode("calendar")}
+            >
+              <i className="flaticon-381-calendar me-1"></i> Calendrier
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === "list" ? "btn-primary" : "btn-outline-primary"}`}
+              onClick={() => setViewMode("list")}
+            >
+              <i className="flaticon-381-list me-1"></i> Liste
+            </button>
+          </div>
+
+          <Button
+            variant={showModal && !editId ? "outline-primary" : "primary"}
+            className="btn-rounded"
+            onClick={() => {
+              if (showModal && !editId) {
+                setShowModal(false);
+              } else {
+                handleOpenAdd();
+              }
+            }}
+          >
+            <i className={showModal && !editId ? "fa fa-times me-2" : "flaticon-381-add-1 me-2"}></i>
+            {showModal && !editId ? "Fermer le formulaire" : "Prendre un Rendez-vous"}
+          </Button>
         </div>
       </div>
 
@@ -866,8 +940,8 @@ const AppointmentsPage = () => {
 
               /* Time Column & Slots (15-min intervals) - Agrandis et bien visibles */
               .modern-calendar-wrapper .fc-timegrid-slot-label-cushion {
-                font-size: 12.5px !important;
-                font-weight: 600 !important;
+                font-size: 13px !important;
+                font-weight: 700 !important;
                 color: #475569 !important;
                 padding: 0 12px 0 14px !important;
                 text-align: right !important;
@@ -875,15 +949,19 @@ const AppointmentsPage = () => {
                 display: inline-block !important;
               }
               .modern-calendar-wrapper tr:not(.fc-timegrid-slot-minor) .fc-timegrid-slot-label-cushion {
-                font-size: 14px !important;
+                font-size: 15px !important;
                 font-weight: 800 !important;
                 color: #0f172a !important;
               }
               .modern-calendar-wrapper .fc-timegrid-slot {
-                height: 52px !important;
+                height: 85px !important;
               }
               .modern-calendar-wrapper .fc-timegrid-slot-lane {
-                height: 52px !important;
+                height: 85px !important;
+              }
+              .modern-calendar-wrapper .fc-timegrid-slot-label {
+                height: 85px !important;
+                vertical-align: middle !important;
               }
               .modern-calendar-wrapper .fc-timegrid-slot-minor {
                 border-top: 1px dashed #e2e8f0 !important;
