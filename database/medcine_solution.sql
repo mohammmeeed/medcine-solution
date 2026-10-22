@@ -134,7 +134,7 @@ CREATE TABLE `cabinet_info` (
 
 LOCK TABLES `cabinet_info` WRITE;
 /*!40000 ALTER TABLE `cabinet_info` DISABLE KEYS */;
-INSERT INTO `cabinet_info` VALUES (1,'Cabinet Médical Saint-Honoré','Dr N. BELBACHIR OULD HENNIA','الدكتورة ن. بلبشير ولد هنية','Médecin Spécialiste en Gynécologie Obstétrique','طبيبة مختصة في أمراض النساء والتوليد','Gynécologie Obstétrique & Échographie','Échographie','10104892341','751293842','482 918 274 00018','31/24891','Secteur Conventionné','dr.belbachir@cabinet-medical.dz','041 53 97 82','Haï Seddikia (ex-Cité Boulanger), Cité 340 Logements, Bâtiment 18/A, Oran','Sam - Jeu: 09:00 - 18:00 | Ven: Fermé','Membre d\'une association de gestion agréée par l\'administration fiscale, acceptant à ce titre le règlement des honoraires par chèque et carte bancaire.','2026-10-22 08:29:34','2026-10-22 14:39:06');
+INSERT INTO `cabinet_info` VALUES (1,'Cabinet Médical Saint-Honoré','Dr N. BELBACHIR OULD HENNIA','الدكتورة ن. بلبشير ولد هنية','Médecin Spécialiste en Gynécologie Obstétrique','طبيبة مختصة في أمراض النساء والتوليد','Gynécologie Obstétrique & Échographie','Échographie','10104892341','751293842','482 918 274 00018','31/24891','Secteur Conventionné','dr.belbachir@cabinet-medical.dz','0560 06 74 66','Haï Essedikia, Avenue Seghier Benali, Oran','Sam - Jeu: 09:00 - 18:00 | Ven: Fermé','Membre d\'une association de gestion agréée par l\'administration fiscale, acceptant à ce titre le règlement des honoraires par chèque et carte bancaire.','2026-10-22 08:29:34','2026-10-22 14:39:06');
 /*!40000 ALTER TABLE `cabinet_info` ENABLE KEYS */;
 UNLOCK TABLES;
 

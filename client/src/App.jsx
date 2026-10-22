@@ -54,7 +54,7 @@ export default function App() {
   });
 
   // ===================================================================
-  // GESTION DU TEMPS RÉEL (HEURE & DATE DE L'APPAREIL)
+  // GESTION DU TEMPS RÉEL (HEURE & DATE DE L'APPAREIL) & CALENDRIER DYNAMIQUE
   // ===================================================================
   const now = new Date();
   const currentDayNumber = now.getDate(); // Jour actuel de l'appareil (ex: 22)
@@ -62,84 +62,161 @@ export default function App() {
   const currentMinute = now.getMinutes();
   const currentTotalMinutes = currentHour * 60 + currentMinute;
 
-  // Vendredis du mois d'octobre 2026 (cabinet fermé)
-  const FRIDAYS = [2, 9, 16, 23, 30];
+  const MONTH_NAMES = [
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+  ];
 
-  // Vérifie si un créneau horaire ("14:30") est déjà passé pour le jour sélectionné
-  const isSlotPast = (slot, day) => {
-    if (day < currentDayNumber) return true; // Jours antérieurs : tous les créneaux sont passés
-    if (day > currentDayNumber) return false; // Jours futurs : tous les créneaux sont ouverts
-    // Aujourd'hui : on bloque les heures antérieures ou égales à l'heure actuelle de l'appareil
-    const [h, m] = slot.split(":").map(Number);
-    return (h * 60 + m) <= currentTotalMinutes;
+  // Mois & Année affichés dans la vue calendrier
+  const [calendarYear, setCalendarYear] = useState(now.getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
+
+  // Vérifie si un jour est un vendredi (cabinet fermé tous les vendredis)
+  const isFriday = (day, month = calendarMonth, year = calendarYear) => {
+    return new Date(year, month, day).getDay() === 5;
   };
 
-  // Vérifie si un jour est déjà passé
-  const isDayPast = (day) => day < currentDayNumber;
+  // Vérifie si un jour est déjà passé par rapport à aujourd'hui
+  const isDayPast = (day, month = calendarMonth, year = calendarYear) => {
+    const todayZero = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const target = new Date(year, month, day).getTime();
+    return target < todayZero;
+  };
+
+  // Date complète sélectionnée par l'utilisateur pour le RDV
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+
+  // Vérifie si un créneau horaire ("14:30") est déjà passé
+  const isSlotPast = (slot, day, month, year) => {
+    const d = day !== undefined ? day : selectedDay;
+    const m = month !== undefined ? month : selectedMonth;
+    const y = year !== undefined ? year : selectedYear;
+    if (isDayPast(d, m, y)) return true;
+    const isToday =
+      d === now.getDate() &&
+      m === now.getMonth() &&
+      y === now.getFullYear();
+    if (!isToday) return false;
+    const [h, min] = slot.split(":").map(Number);
+    return (h * 60 + min) <= currentTotalMinutes;
+  };
 
   // Vérifie s'il reste des créneaux disponibles aujourd'hui
   const hasFutureSlotsToday = [...MORNING_SLOTS, ...EVENING_SLOTS].some(
-    (s) => !isSlotPast(s, currentDayNumber)
+    (s) => !isSlotPast(s, currentDayNumber, now.getMonth(), now.getFullYear())
   );
 
   // Jour initial par défaut : aujourd'hui s'il reste des créneaux, sinon le prochain jour ouvrable
   const getInitialDay = () => {
-    if (hasFutureSlotsToday && !FRIDAYS.includes(currentDayNumber)) {
+    if (hasFutureSlotsToday && !isFriday(currentDayNumber, now.getMonth(), now.getFullYear())) {
       return currentDayNumber;
     }
     let next = currentDayNumber + 1;
-    while (FRIDAYS.includes(next) && next <= 31) {
+    const maxDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    while (isFriday(next, now.getMonth(), now.getFullYear()) && next <= maxDays) {
       next++;
     }
-    return Math.min(next, 31);
+    return Math.min(next, maxDays);
   };
 
+  const [selectedDay, setSelectedDay] = useState(getInitialDay);
+
   // Période initiale par défaut (matin ou après-midi selon l'heure de l'appareil)
-  const getInitialPeriod = (day) => {
-    if (day === currentDayNumber && currentTotalMinutes >= 12 * 60 + 30) {
+  const getInitialPeriod = (day, month = now.getMonth(), year = now.getFullYear()) => {
+    const isToday = day === now.getDate() && month === now.getMonth() && year === now.getFullYear();
+    if (isToday && currentTotalMinutes >= 12 * 60 + 30) {
       return "soir";
     }
     return "matin";
   };
 
   // Premier créneau horaire disponible
-  const getFirstAvailableSlot = (day, period) => {
+  const getFirstAvailableSlot = (day, period, month, year) => {
+    const m = month !== undefined ? month : selectedMonth;
+    const y = year !== undefined ? year : selectedYear;
     const slots = period === "matin" ? MORNING_SLOTS : EVENING_SLOTS;
-    const available = slots.filter((s) => !isSlotPast(s, day));
+    const available = slots.filter((s) => !isSlotPast(s, day, m, y));
     if (available.length > 0) return available[0];
     const otherSlots = period === "matin" ? EVENING_SLOTS : MORNING_SLOTS;
-    const otherAvailable = otherSlots.filter((s) => !isSlotPast(s, day));
+    const otherAvailable = otherSlots.filter((s) => !isSlotPast(s, day, m, y));
     return otherAvailable.length > 0 ? otherAvailable[0] : (slots[0] || "09:00");
   };
 
-  const initialDay = getInitialDay();
-  const initialPeriod = getInitialPeriod(initialDay);
-
-  // Sélection du calendrier et créneaux (initialisés sur le jour actuel et prochaine heure valide)
-  const [selectedDay, setSelectedDay] = useState(initialDay);
+  const initialPeriod = getInitialPeriod(selectedDay, selectedMonth, selectedYear);
   const [timePeriod, setTimePeriod] = useState(initialPeriod);
   const [selectedTime, setSelectedTime] = useState(() =>
-    getFirstAvailableSlot(initialDay, initialPeriod)
+    getFirstAvailableSlot(selectedDay, initialPeriod, selectedMonth, selectedYear)
   );
+
+  // Navigation entre les mois
+  const canGoPrevMonth =
+    calendarYear > now.getFullYear() ||
+    (calendarYear === now.getFullYear() && calendarMonth > now.getMonth());
+
+  const handlePrevMonth = () => {
+    if (!canGoPrevMonth) return;
+    if (calendarMonth === 0) {
+      setCalendarMonth(11);
+      setCalendarYear((y) => y - 1);
+    } else {
+      setCalendarMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (calendarMonth === 11) {
+      setCalendarMonth(0);
+      setCalendarYear((y) => y + 1);
+    } else {
+      setCalendarMonth((m) => m + 1);
+    }
+  };
+
+  // Calcul dynamique des jours du mois affiché pour la grille
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(calendarYear, calendarMonth, 1).getDay();
+  const leadingOffset = (firstDayOfWeek + 6) % 7; // Semaine commence le Lundi (0)
+  const daysInPrevMonth = new Date(calendarYear, calendarMonth, 0).getDate();
+  const leadingPaddingDays = [];
+  for (let i = leadingOffset - 1; i >= 0; i--) {
+    leadingPaddingDays.push(daysInPrevMonth - i);
+  }
+  const currentMonthDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const totalCells = leadingOffset + daysInMonth;
+  const trailingCount = (7 - (totalCells % 7)) % 7;
+  const trailingPaddingDays = Array.from({ length: trailingCount }, (_, i) => i + 1);
+
+  // Vérifie si la date sélectionnée correspond à la date d'aujourd'hui
+  const isTodaySelected =
+    selectedDay === now.getDate() &&
+    selectedMonth === now.getMonth() &&
+    selectedYear === now.getFullYear();
 
   // Gestion du clic sur un jour du calendrier
   const handleSelectDay = (day) => {
-    if (isDayPast(day) || FRIDAYS.includes(day)) return;
-    if (day === currentDayNumber && !hasFutureSlotsToday) return;
+    if (isDayPast(day, calendarMonth, calendarYear) || isFriday(day, calendarMonth, calendarYear)) return;
+    const isToday =
+      day === now.getDate() &&
+      calendarMonth === now.getMonth() &&
+      calendarYear === now.getFullYear();
+    if (isToday && !hasFutureSlotsToday) return;
 
     setSelectedDay(day);
+    setSelectedMonth(calendarMonth);
+    setSelectedYear(calendarYear);
 
     let nextPeriod = timePeriod;
-    if (day === currentDayNumber) {
-      const morningAvailable = MORNING_SLOTS.some((s) => !isSlotPast(s, day));
+    if (isToday) {
+      const morningAvailable = MORNING_SLOTS.some((s) => !isSlotPast(s, day, calendarMonth, calendarYear));
       if (!morningAvailable) {
         nextPeriod = "soir";
         setTimePeriod("soir");
       }
     }
 
-    if (isSlotPast(selectedTime, day)) {
-      const validSlot = getFirstAvailableSlot(day, nextPeriod);
+    if (isSlotPast(selectedTime, day, calendarMonth, calendarYear)) {
+      const validSlot = getFirstAvailableSlot(day, nextPeriod, calendarMonth, calendarYear);
       setSelectedTime(validSlot);
     }
   };
@@ -179,13 +256,13 @@ export default function App() {
       id: "RDV-" + Math.floor(1000 + Math.random() * 9000),
       doctorName: "Dr. N. BELBACHIR OULD HENNIA",
       specialty: "Gynécologie Obstétrique & Échographie",
-      date: `${selectedDay} Octobre 2026`,
+      date: `${selectedDay} ${MONTH_NAMES[selectedMonth]} ${selectedYear}`,
       time: selectedTime,
       patientName: patientName.trim(),
       patientPhone: patientPhone.trim(),
       reason: consultationReason,
       price: "2 500 DA",
-      location: "Haï Seddikia, Cité 340 Logts, Bât. 18/A, Oran",
+      location: "Haï Essedikia, Avenue Seghier Benali, Oran",
       createdAt: new Date().toISOString(),
     };
 
@@ -202,13 +279,14 @@ export default function App() {
     // Synchronisation en direct avec la Base de Données MySQL (table appointments & patients)
     try {
       const dayStr = String(selectedDay).padStart(2, "0");
+      const monthStr = String(selectedMonth + 1).padStart(2, "0");
       fetch("http://127.0.0.1:8000/api/appointments.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           patientName: patientName.trim(),
           patientPhone: patientPhone.trim(),
-          date: `2026-10-${dayStr}`,
+          date: `${selectedYear}-${monthStr}-${dayStr}`,
           time: selectedTime,
           duration: "30 min",
           reason: consultationReason,
@@ -254,9 +332,9 @@ export default function App() {
       if (lower.includes("tarif") || lower.includes("prix") || lower.includes("cout")) {
         reply = "La consultation de gynécologie avec examen clinique est fixée à 2 500 DA. L'échographie obstétricale morphologique 3D/4D est également disponible au cabinet.";
       } else if (lower.includes("adresse") || lower.includes("où") || lower.includes("lieu") || lower.includes("localisation")) {
-        reply = "Le cabinet est situé à Haï Seddikia (ex-Cité Boulanger), Cité 340 Logements, Bâtiment 18/A, Oran. Le secrétariat est joignable au 041 53 97 82.";
+        reply = "Le cabinet est situé à Haï Essedikia, Avenue Seghier Benali, Oran. Le secrétariat est joignable au 0560 06 74 66.";
       } else if (lower.includes("urgence") || lower.includes("douleur") || lower.includes("urgent")) {
-        reply = "En cas d'urgence obstétrique ou de saignement aigu, rendez-vous immédiatement aux urgences de la maternité la plus proche ou contactez le cabinet directement au 041 53 97 82 ou 05 50 12 34 56.";
+        reply = "En cas d'urgence obstétrique ou de saignement aigu, rendez-vous immédiatement aux urgences de la maternité la plus proche ou contactez le cabinet directement au 0560 06 74 66.";
       } else if (lower.includes("grossesse") || lower.includes("echo") || lower.includes("bébé")) {
         reply = "Le cabinet est équipé d'un appareil d'échographie haute définition avec Doppler couleur et rendu 3D/4D pour le suivi optimal de votre grossesse.";
       }
@@ -328,7 +406,7 @@ export default function App() {
                   margin: 0,
                 }}
               >
-                Cabinet médical de gynécologie obstétrique et d'échographie du Dr N. BELBACHIR OULD HENNIA, situé à Haï Seddikia à Oran.
+                Cabinet médical de gynécologie obstétrique et d'échographie du Dr N. BELBACHIR OULD HENNIA, situé à Haï Essedikia (Avenue Seghier Benali) à Oran.
                 <br /><br />
                 Dédié à la santé et au bien-être de la femme, notre cabinet assure un suivi bienveillant et personnalisé de votre grossesse, de la conception jusqu'au terme. Équipée des dernières technologies d'imagerie ultrasonore avec Doppler couleur et rendu 3D/4D HD Live, la praticienne réalise vos bilans morphologiques et diagnostics prénataux avec la plus haute précision.
                 <br /><br />
@@ -346,9 +424,6 @@ export default function App() {
               <span>Réserver un Rendez-vous</span>
               <ArrowRight size={18} style={{ marginLeft: "auto" }} />
             </button>
-            <p style={{ textAlign: "center", fontSize: "11px", color: "var(--text-muted)" }}>
-              Confirmation instantanée • Sans frais d'annulation
-            </p>
           </div>
         )}
 
@@ -399,65 +474,118 @@ export default function App() {
 
 
 
-            {/* SECTION SCHEDULE / CALENDRIER (Directement calquée sur la capture) */}
+            {/* SECTION SCHEDULE / CALENDRIER DYNAMIQUE */}
             <div className="glass-panel" style={{ padding: "18px 16px", marginBottom: "16px" }}>
               <div className="schedule-header">
-                <div className="schedule-title">Schedule</div>
-                <div className="schedule-month-nav">
-                  <span>Octobre 2026</span>
+                <div className="schedule-title">Calendrier</div>
+                <div className="schedule-month-nav" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <button
+                    type="button"
+                    onClick={handlePrevMonth}
+                    disabled={!canGoPrevMonth}
+                    title={canGoPrevMonth ? "Mois précédent" : "Impossible de réserver dans le passé"}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.06)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      borderRadius: "8px",
+                      width: "28px",
+                      height: "28px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: canGoPrevMonth ? "var(--text-primary)" : "rgba(255, 255, 255, 0.2)",
+                      cursor: canGoPrevMonth ? "pointer" : "not-allowed",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  <span style={{ minWidth: "115px", textAlign: "center", fontWeight: "700", color: "#fff", fontSize: "13px" }}>
+                    {MONTH_NAMES[calendarMonth]} {calendarYear}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleNextMonth}
+                    title="Mois suivant"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.06)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      borderRadius: "8px",
+                      width: "28px",
+                      height: "28px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--text-primary)",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
                 </div>
               </div>
 
-              {/* En-tête des jours de la semaine : S M T W T F S */}
+              {/* En-tête des jours de la semaine en français : L M M J V S D */}
               <div className="calendar-weekdays">
-                <span>S</span>
-                <span>M</span>
-                <span>T</span>
-                <span>W</span>
-                <span>T</span>
-                <span>F</span>
-                <span>S</span>
+                <span title="Lundi">L</span>
+                <span title="Mardi">M</span>
+                <span title="Mercredi">M</span>
+                <span title="Jeudi">J</span>
+                <span title="Vendredi (Fermé)" style={{ color: "rgba(239, 68, 68, 0.8)", fontWeight: "700" }}>V</span>
+                <span title="Samedi">S</span>
+                <span title="Dimanche">D</span>
               </div>
 
-              {/* Grille du calendrier avec blocage automatique des jours passés */}
+              {/* Grille dynamique du calendrier selon le mois et l'année */}
               <div className="calendar-grid">
-                {[
-                  1, 2, 3, 4, 5, 6, 7,
-                  8, 9, 10, 11, 12, 13, 14,
-                  15, 16, 17, 18, 19, 20, 21,
-                  22, 23, 24, 25, 26, 27, 28,
-                  29, 30, 31
-                ].map((d) => {
-                  const isPast = isDayPast(d);
-                  const isToday = d === currentDayNumber;
-                  const isFriday = FRIDAYS.includes(d);
-                  const isAvailable = !isPast && !isFriday && (!isToday || hasFutureSlotsToday);
-                  const isSelected = selectedDay === d;
+                {/* Jours de fin du mois précédent */}
+                {leadingPaddingDays.map((padDay) => (
+                  <div key={`prev-${padDay}`} className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>
+                    {padDay}
+                  </div>
+                ))}
+
+                {/* Jours du mois sélectionné */}
+                {currentMonthDays.map((d) => {
+                  const isPast = isDayPast(d, calendarMonth, calendarYear);
+                  const isToday =
+                    d === now.getDate() &&
+                    calendarMonth === now.getMonth() &&
+                    calendarYear === now.getFullYear();
+                  const isDayFriday = isFriday(d, calendarMonth, calendarYear);
+                  const isAvailable = !isPast && !isDayFriday && (!isToday || hasFutureSlotsToday);
+                  const isSelected =
+                    selectedDay === d &&
+                    selectedMonth === calendarMonth &&
+                    selectedYear === calendarYear;
 
                   let cellClass = "calendar-day-cell";
                   let cellTitle = "";
                   if (isSelected) {
                     cellClass += " available selected";
-                    cellTitle = `Sélectionné : ${d} Octobre 2026`;
+                    cellTitle = `Sélectionné : ${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear}`;
                   } else if (isAvailable) {
                     cellClass += " available";
                     cellTitle = isToday
-                      ? `Aujourd'hui (${d} Octobre) - Créneaux disponibles`
-                      : `${d} Octobre 2026 (Disponible)`;
+                      ? `Aujourd'hui (${d} ${MONTH_NAMES[calendarMonth]}) - Créneaux disponibles`
+                      : `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Disponible)`;
                   } else if (isPast) {
                     cellClass += " past";
-                    cellTitle = `${d} Octobre 2026 (Passé - non réservable)`;
-                  } else if (isFriday) {
+                    cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Passé - non réservable)`;
+                  } else if (isDayFriday) {
                     cellClass += " closed";
-                    cellTitle = `${d} Octobre 2026 (Vendredi - Cabinet fermé)`;
+                    cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Vendredi - Cabinet fermé)`;
                   } else if (isToday && !hasFutureSlotsToday) {
                     cellClass += " past";
-                    cellTitle = `Aujourd'hui (${d} Octobre) : Plus aucun créneau disponible`;
+                    cellTitle = `Aujourd'hui (${d} ${MONTH_NAMES[calendarMonth]}) : Plus aucun créneau disponible`;
                   }
 
                   return (
                     <div
-                      key={d}
+                      key={`curr-${d}`}
                       className={cellClass}
                       title={cellTitle}
                       onClick={isAvailable ? () => handleSelectDay(d) : undefined}
@@ -467,11 +595,12 @@ export default function App() {
                   );
                 })}
 
-                {/* Padding du mois suivant (1 à 4) */}
-                <div className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>1</div>
-                <div className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>2</div>
-                <div className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>3</div>
-                <div className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>4</div>
+                {/* Jours de début du mois suivant */}
+                {trailingPaddingDays.map((padDay) => (
+                  <div key={`next-${padDay}`} className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>
+                    {padDay}
+                  </div>
+                ))}
               </div>
 
               {/* Sélecteur Période : Matin ou Après-midi */}
@@ -586,7 +715,7 @@ export default function App() {
                     letterSpacing: "0.8px",
                   }}
                 >
-                  Créneaux ({selectedDay === currentDayNumber ? `Aujourd'hui, ${selectedDay}` : selectedDay} Octobre) :
+                  Créneaux ({isTodaySelected ? `Aujourd'hui, ${selectedDay}` : `${selectedDay} ${MONTH_NAMES[selectedMonth]}`}) :
                 </span>
                 <span
                   style={{
@@ -609,7 +738,7 @@ export default function App() {
                 }}
               >
                 {(timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).map((slot) => {
-                  const isPast = isSlotPast(slot, selectedDay);
+                  const isPast = isSlotPast(slot, selectedDay, selectedMonth, selectedYear);
                   const isSelected = selectedTime === slot && !isPast;
 
                   return (
@@ -630,7 +759,7 @@ export default function App() {
               </div>
 
               {/* Message d'alerte contextuel si tous les créneaux de la période sont passés aujourd'hui */}
-              {selectedDay === currentDayNumber && (timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).every((s) => isSlotPast(s, selectedDay)) && (
+              {isTodaySelected && (timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).every((s) => isSlotPast(s, selectedDay, selectedMonth, selectedYear)) && (
                 <div
                   style={{
                     padding: "9px 12px",
@@ -729,7 +858,7 @@ export default function App() {
                 style={{ padding: "16px", fontSize: "15px" }}
               >
                 <CheckCircle2 size={18} />
-                <span>Confirmer pour le {selectedDay} Oct à {selectedTime}</span>
+                <span>Confirmer pour le {selectedDay} {MONTH_NAMES[selectedMonth].slice(0, 3)}. à {selectedTime}</span>
               </button>
             </form>
           </div>
@@ -880,14 +1009,8 @@ export default function App() {
                 <User size={26} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "15px", fontWeight: "700", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {patientName.trim() || "Patient(e)"}
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                  {patientPhone.trim() || "Numéro de téléphone non renseigné"}
-                </div>
-                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "10.5px", color: "var(--accent-mint)", marginTop: "4px" }}>
-                  <ShieldCheck size={12} /> Dossier Médical Sécurisé
                 </div>
               </div>
             </div>
@@ -1128,60 +1251,36 @@ export default function App() {
                 </span>
               </div>
               <div style={{ fontSize: "13px", color: "#ffffff", fontWeight: "700", lineHeight: "1.4", marginBottom: "3px" }}>
-                Haï Seddikia (ex-Cité Boulanger)
+                Haï Essedikia
               </div>
               <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.5", marginBottom: "14px" }}>
-                Cité 340 Logements, Bâtiment 18/A, Oran
+                Avenue Seghier Benali, Oran
               </div>
 
-              {/* Boutons d'appel direct */}
+              {/* Bouton d'appel direct */}
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <a
-                  href="tel:041539782"
+                  href="tel:0560067466"
                   style={{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "10px 14px",
+                    padding: "12px 16px",
                     borderRadius: "12px",
-                    background: "rgba(187, 247, 208, 0.1)",
-                    border: "1px solid rgba(187, 247, 208, 0.25)",
+                    background: "rgba(187, 247, 208, 0.12)",
+                    border: "1px solid rgba(187, 247, 208, 0.3)",
                     color: "var(--accent-mint)",
                     textDecoration: "none",
-                    fontSize: "12.5px",
+                    fontSize: "13px",
                     fontWeight: "700",
                     transition: "all 0.2s ease",
                   }}
                 >
-                  <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <Phone size={15} />
-                    <span>Secrétariat Fixe</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <Phone size={16} />
+                    <span>Secrétariat & Rendez-vous</span>
                   </span>
-                  <span style={{ color: "#fff" }}>041 53 97 82</span>
-                </a>
-
-                <a
-                  href="tel:0550123456"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 14px",
-                    borderRadius: "12px",
-                    background: "rgba(255, 255, 255, 0.05)",
-                    border: "1px solid rgba(255, 255, 255, 0.1)",
-                    color: "var(--text-primary)",
-                    textDecoration: "none",
-                    fontSize: "12.5px",
-                    fontWeight: "600",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <Phone size={15} color="var(--accent-mint)" />
-                    <span>Mobile & Rendez-vous</span>
-                  </span>
-                  <span style={{ color: "var(--accent-mint)" }}>05 50 12 34 56</span>
+                  <span style={{ color: "#fff", letterSpacing: "0.5px" }}>0560 06 74 66</span>
                 </a>
               </div>
             </div>
@@ -1314,17 +1413,38 @@ export default function App() {
       {showAiModal && (
         <div
           style={{
-            position: "absolute",
+            position: "fixed",
             inset: 0,
-            background: "rgba(6, 11, 8, 0.94)",
-            backdropFilter: "blur(20px)",
-            zIndex: 100,
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(14px)",
+            zIndex: 150,
             display: "flex",
-            flexDirection: "column",
-            padding: "20px",
-            animation: "fadeInUp 0.3s ease",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+            animation: "fadeIn 0.25s ease",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAiModal(false);
           }}
         >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              height: "85vh",
+              maxHeight: "680px",
+              background: "#0d1812",
+              borderRadius: "24px",
+              border: "1px solid rgba(187, 247, 208, 0.25)",
+              boxShadow: "0 25px 60px rgba(0, 0, 0, 0.8)",
+              display: "flex",
+              flexDirection: "column",
+              padding: "20px",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
           {/* Header IA */}
           <div
             style={{
@@ -1449,6 +1569,7 @@ export default function App() {
               <Send size={18} />
             </button>
           </form>
+          </div>
         </div>
       )}
     </div>

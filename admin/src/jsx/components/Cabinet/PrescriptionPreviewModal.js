@@ -254,7 +254,7 @@ const PrescriptionPreviewModal = ({ show, onHide, prescription }) => {
                 right: "40px",
               }}
             >
-              Cabinet Médical de Gynécologie Obstétrique — Échographie • Haï Seddikia, Cité 340 Logts, Bât. 18/A, Oran • Tél : 041 53 97 82 / 05 50 12 34 56
+              Cabinet Médical de Gynécologie Obstétrique — Échographie • Haï Essedikia, Avenue Seghier Benali, Oran • Tél : 0560 06 74 66
             </div>
           </div>
         </div>

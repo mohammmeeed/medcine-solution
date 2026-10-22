@@ -46,8 +46,8 @@ function handleGetCabinetInfo($db) {
                     '31/24891',
                     'Secteur Conventionné',
                     'dr.belbachir@cabinet-medical.dz',
-                    '041 53 97 82',
-                    'Haï Seddikia (ex-Cité Boulanger), Cité 340 Logements, Bâtiment 18/A, Oran',
+                    '0560 06 74 66',
+                    'Haï Essedikia, Avenue Seghier Benali, Oran',
                     'Sam - Jeu: 09:00 - 18:00 | Ven: Fermé',
                     'Membre d\'une association de gestion agréée par l\'administration fiscale, acceptant à ce titre le règlement des honoraires par chèque et carte bancaire.'
                 )

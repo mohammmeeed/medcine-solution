@@ -249,7 +249,7 @@ const EchoReportPrintModal = ({ show, onHide, consultation }) => {
 
           {/* Pied de page officiel du cabinet */}
           <div className="crecho-footer-txt">
-            Haï Seddikia (ex-Cité Boulanger), Cité 340 Logements, Bâtiment 18/A, Oran &nbsp;|&nbsp; ☎ 041 53 97 82 / 05 50 12 34 56
+            Haï Essedikia, Avenue Seghier Benali, Oran &nbsp;|&nbsp; ☎ 0560 06 74 66
           </div>
         </div>
       </div>
