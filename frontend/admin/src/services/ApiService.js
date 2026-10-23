@@ -14,10 +14,22 @@ import {
   initialPayments,
 } from "./CabinetData";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000/api";
+// URL dynamique : s'adapte automatiquement au nom de domaine actuel en ligne (Host.dz, cPanel, etc.)
+const getApiBaseUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  if (typeof window !== "undefined") {
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "http://127.0.0.1:8000/api";
+    }
+    return `${window.location.origin}/backend/api`;
+  }
+  return "/backend/api";
+};
 
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: getApiBaseUrl(),
   headers: {
     "Content-Type": "application/json",
   },
@@ -28,7 +40,13 @@ export const ApiService = {
   // Test de connexion au backend PHP
   async checkHealth() {
     try {
-      const res = await axios.get("http://127.0.0.1:8000/", { timeout: 3000 });
+      const healthUrl =
+        typeof window !== "undefined" &&
+        window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1"
+          ? `${window.location.origin}/backend/`
+          : "http://127.0.0.1:8000/";
+      const res = await axios.get(healthUrl, { timeout: 3000 });
       return { online: true, data: res.data };
     } catch (err) {
       return { online: false, error: err.message };

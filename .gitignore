@@ -22,6 +22,9 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
+# Archives & Builds
+*.zip
+
 # OS & Editor files
 .DS_Store
 Thumbs.db
