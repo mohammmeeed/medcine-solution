@@ -278,7 +278,7 @@ export default function PatientPortal() {
   ]);
 
   // Gestion de la confirmation du RDV
-  const handleConfirmBooking = (e) => {
+  const handleConfirmBooking = async (e) => {
     e.preventDefault();
 
     if (!patientName.trim() || !patientPhone.trim()) {
@@ -308,21 +308,11 @@ export default function PatientPortal() {
       createdAt: new Date().toISOString(),
     };
 
-    // Sauvegarde locale
-    try {
-      const existing = JSON.parse(localStorage.getItem("cabinet_client_appointments") || "[]");
-      existing.unshift(bookingData);
-      localStorage.setItem("cabinet_client_appointments", JSON.stringify(existing));
-      setPatientAppointments(existing);
-    } catch (err) {
-      console.error(err);
-    }
-
     // Synchronisation en direct avec la Base de Données MySQL (table appointments & patients)
     try {
       const dayStr = String(selectedDay).padStart(2, "0");
       const monthStr = String(selectedMonth + 1).padStart(2, "0");
-      fetch(getApiUrl("appointments.php"), {
+      const resp = await fetch(getApiUrl("appointments.php"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -335,9 +325,23 @@ export default function PatientPortal() {
           status: "Confirmé",
           notes: `[Ticket N° ${ticketNumber}] Réservation en ligne depuis l'application patient`,
         }),
-      }).catch((err) => console.warn("Erreur enregistrement rendez-vous MySQL :", err));
-    } catch (e) {
-      // ignore
+      });
+      const resJson = await resp.json();
+      if (resJson && resJson.status === "success" && resJson.data?.id) {
+        bookingData.id = "RDV-" + resJson.data.id;
+      }
+    } catch (err) {
+      console.warn("Erreur enregistrement rendez-vous MySQL :", err);
+    }
+
+    // Sauvegarde locale
+    try {
+      const existing = JSON.parse(localStorage.getItem("cabinet_client_appointments") || "[]");
+      existing.unshift(bookingData);
+      localStorage.setItem("cabinet_client_appointments", JSON.stringify(existing));
+      setPatientAppointments(existing);
+    } catch (err) {
+      console.error(err);
     }
 
     // Animation Confetti festive

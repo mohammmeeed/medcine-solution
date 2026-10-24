@@ -19,6 +19,7 @@ const PrescriptionsPage = () => {
   const searchParams = new URLSearchParams(location.search);
   const patientIdQuery = searchParams.get("patientId");
 
+  const [patients, setPatients] = useState([]);
   const [prescriptions, setPrescriptions] = useState(initialPrescriptions);
   const [medications, setMedications] = useState(initialMedications);
   const [showMedModal, setShowMedModal] = useState(false);
@@ -30,6 +31,19 @@ const PrescriptionsPage = () => {
     ApiService.getMedications().then((data) => {
       if (data && Array.isArray(data) && data.length > 0) {
         setMedications(data);
+      }
+    });
+    ApiService.getPatients().then((data) => {
+      if (data && Array.isArray(data)) {
+        const clean = data.filter((p) => {
+          const last = (p.lastName || "").toLowerCase().trim();
+          const first = (p.firstName || "").toLowerCase().trim();
+          return (
+            !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+            !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+          );
+        });
+        setPatients(clean);
       }
     });
   }, []);
@@ -71,9 +85,9 @@ const PrescriptionsPage = () => {
     notes: "Prendre les comprimés avec un grand verre d'eau. Ne pas dépasser 3g par jour.",
   });
 
-  const patientOptions = initialPatients.map((p) => ({
+  const patientOptions = patients.map((p) => ({
     value: p.id,
-    label: `${p.lastName.toUpperCase()} ${p.firstName} — ${p.fileNumber} (Née le ${p.dob} • ${p.age} ans)`,
+    label: `${(p.lastName || "").toUpperCase()} ${p.firstName || ""} — ${p.fileNumber || ""} (Née le ${p.dob || ""} • ${p.age || 0} ans)`,
   }));
 
   const selectedPatientOption = formData.patientId
@@ -176,14 +190,23 @@ const PrescriptionsPage = () => {
       return;
     }
     const pat =
-      initialPatients.find((p) => String(p.id) === String(formData.patientId)) ||
-      initialPatients[0];
+      patients.find((p) => String(p.id) === String(formData.patientId)) ||
+      patients[0];
+    if (!pat) {
+      Swal.fire({
+        icon: "warning",
+        title: "Patient introuvable",
+        text: "Veuillez créer ou sélectionner un patient d'abord.",
+        confirmButtonColor: "#1e60d5",
+      });
+      return;
+    }
 
     const newOrd = {
       id: prescriptions.length + 1,
       prescriptionNumber: `ORD-2024-00${prescriptions.length + 91}`,
       patientId: pat.id,
-      patientName: `${pat.firstName} ${pat.lastName}`,
+      patientName: `${pat.firstName || ""} ${pat.lastName || ""}`.trim(),
       date: new Date().toISOString().split("T")[0],
       validity: formData.validity,
       ald: formData.ald,

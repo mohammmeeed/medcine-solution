@@ -1,20 +1,21 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Modal, Button, Badge } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
+import ApiService from "../../../services/ApiService";
 import {
   initialExaminations,
-  initialPatients,
 } from "../../../services/CabinetData";
 
 const ExaminationsPage = () => {
+  const [patients, setPatients] = useState([]);
   const [examinations, setExaminations] = useState(initialExaminations);
   const [selectedPatientId, setSelectedPatientId] = useState("all");
   const [showAddModal, setShowAddModal] = useState(false);
 
   const [formExam, setFormExam] = useState({
-    patientId: 1,
+    patientId: "",
     date: new Date().toISOString().split("T")[0],
     bpSystolic: 120,
     bpDiastolic: 80,
@@ -27,11 +28,38 @@ const ExaminationsPage = () => {
     notes: "",
   });
 
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const data = await ApiService.getPatients();
+        const clean = (Array.isArray(data) ? data : []).filter((p) => {
+          const last = (p.lastName || "").toLowerCase().trim();
+          const first = (p.firstName || "").toLowerCase().trim();
+          return (
+            !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+            !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+          );
+        });
+        setPatients(clean);
+        if (clean.length > 0) {
+          setFormExam((prev) => ({ ...prev, patientId: clean[0].id }));
+        }
+      } catch (e) {
+        console.warn("Erreur chargement patients dans examens :", e);
+      }
+    };
+    fetchPatients();
+  }, []);
+
   const handleSaveExam = (e) => {
     e.preventDefault();
     const pat =
-      initialPatients.find((p) => p.id === parseInt(formExam.patientId)) ||
-      initialPatients[0];
+      patients.find((p) => p.id === parseInt(formExam.patientId)) ||
+      patients[0];
+    if (!pat) {
+      Swal.fire("Attention", "Veuillez d'abord enregistrer un patient dans le répertoire.", "warning");
+      return;
+    }
     const bmiCalc = (
       formExam.weight / Math.pow(formExam.height / 100, 2)
     ).toFixed(1);
@@ -39,7 +67,7 @@ const ExaminationsPage = () => {
     const created = {
       id: examinations.length + 1,
       patientId: pat.id,
-      patientName: `${pat.firstName} ${pat.lastName}`,
+      patientName: `${pat.firstName || ""} ${pat.lastName || ""}`.trim(),
       date: formExam.date,
       bpSystolic: parseInt(formExam.bpSystolic),
       bpDiastolic: parseInt(formExam.bpDiastolic),
@@ -83,9 +111,9 @@ const ExaminationsPage = () => {
             onChange={(e) => setSelectedPatientId(e.target.value)}
           >
             <option value="all">Tous les patients du cabinet</option>
-            {initialPatients.map((p) => (
+            {patients.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.lastName.toUpperCase()} {p.firstName} ({p.fileNumber})
+                {(p.lastName || "").toUpperCase()} {p.firstName || ""} ({p.fileNumber || ""})
               </option>
             ))}
           </select>
@@ -276,9 +304,9 @@ const ExaminationsPage = () => {
                   onChange={(e) => setFormExam({ ...formExam, patientId: e.target.value })}
                   required
                 >
-                  {initialPatients.map((p) => (
+                  {patients.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.lastName.toUpperCase()} {p.firstName} ({p.fileNumber})
+                      {(p.lastName || "").toUpperCase()} {p.firstName || ""} ({p.fileNumber || ""})
                     </option>
                   ))}
                 </select>

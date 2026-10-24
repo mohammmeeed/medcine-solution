@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import { initialWaitingRoom, initialDoctor } from "../../../services/CabinetData";
+import ApiService from "../../../services/ApiService";
 
 const AffichageSalleAttente = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [waitingList, setWaitingList] = useState(() => {
-    const saved = localStorage.getItem("cabinet_waiting_list");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // ignore
+    try {
+      const saved = localStorage.getItem("cabinet_waiting_list");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (p) => p.patientName !== "Sophie Bernard" && p.patientName !== "Marc Lemoine"
+          );
+        }
       }
-    }
-    return initialWaitingRoom;
+    } catch (e) {}
+    return [];
   });
 
   const [calledPatient, setCalledPatient] = useState(() => {
@@ -106,6 +110,17 @@ const AffichageSalleAttente = () => {
 
   // Écoute des appels et mise à jour de la liste
   useEffect(() => {
+    // 0. Synchronisation initiale avec MySQL API
+    ApiService.getWaitingRoom().then((data) => {
+      if (Array.isArray(data)) {
+        const filtered = data.filter(
+          (p) => p.patientName !== "Sophie Bernard" && p.patientName !== "Marc Lemoine"
+        );
+        setWaitingList(filtered);
+        localStorage.setItem("cabinet_waiting_list", JSON.stringify(filtered));
+      }
+    }).catch(() => {});
+
     // 1. BroadcastChannel (Communication rapide entre onglets)
     let channel;
     try {

@@ -118,7 +118,7 @@ const Header = ({ onNote }) => {
 							  </li>
               {fullScreen ? (
                 <li
-                  className="nav-item dropdown notification_dropdown"
+                  className="nav-item dropdown notification_dropdown d-none d-sm-block"
                   onClick={() => offFullScreen()}
                 >
                   <Link className="nav-link dz-fullscreen active" to={"#"}>
@@ -153,7 +153,7 @@ const Header = ({ onNote }) => {
                   </Link>
                 </li>
               ) : (
-                <li className="nav-item dropdown notification_dropdown">
+                <li className="nav-item dropdown notification_dropdown d-none d-sm-block">
                   <Link
                     className="nav-link dz-fullscreen"
                     to="#"
@@ -199,7 +199,7 @@ const Header = ({ onNote }) => {
                   className="nav-link i-false"
                   to="#"                  
                 >
-                  <div className="header-info">
+                  <div className="header-info d-none d-lg-block">
                     <span>Dr N. BELBACHIR OULD HENNIA</span>
                     <small>Gynécologie Obstétrique</small>
                   </div>

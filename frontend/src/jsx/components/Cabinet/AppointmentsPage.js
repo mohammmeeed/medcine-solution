@@ -7,7 +7,7 @@ import { Button } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
-import { initialAppointments, initialPatients } from "../../../services/CabinetData";
+import { initialAppointments, initialPatients, initialWaitingRoom } from "../../../services/CabinetData";
 
 const CARD_COLORS = [
   "#ef4444", // Red (Preeti Sharma, Rohan Verma)
@@ -33,8 +33,8 @@ const calculateTicketNumber = (timeStr) => {
 };
 
 const AppointmentsPage = () => {
-  const [appointments, setAppointments] = useState(initialAppointments);
-  const [patients, setPatients] = useState(initialPatients);
+  const [appointments, setAppointments] = useState([]);
+  const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState("calendar"); // "calendar" | "list"
   const [activeView, setActiveView] = useState("timeGridWeek"); // "timeGridWeek" | "dayGridMonth"
@@ -57,30 +57,49 @@ const AppointmentsPage = () => {
   });
 
   // Chargement des rendez-vous et des patients depuis MySQL
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [aptData, patData] = await Promise.all([
-          ApiService.getAppointments(),
-          ApiService.getPatients(),
-        ]);
-        if (Array.isArray(aptData) && aptData.length > 0) {
-          setAppointments(aptData);
-        }
-        if (Array.isArray(patData) && patData.length > 0) {
-          setPatients(patData);
-          if (!formRdv.patientId && patData[0]) {
-            setFormRdv((prev) => ({ ...prev, patientId: patData[0].id }));
-          }
-        }
-      } catch (err) {
-        console.warn("Erreur chargement rendez-vous MySQL :", err);
-      } finally {
-        setLoading(false);
+  const fetchAppointments = async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      const [aptData, patData] = await Promise.all([
+        ApiService.getAppointments(),
+        ApiService.getPatients(),
+      ]);
+      if (Array.isArray(aptData)) {
+        setAppointments(aptData);
       }
+      if (Array.isArray(patData)) {
+        const clean = patData.filter((p) => {
+          const last = (p.lastName || "").toLowerCase().trim();
+          const first = (p.firstName || "").toLowerCase().trim();
+          return (
+            !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+            !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+          );
+        });
+        setPatients(clean);
+        if (clean.length > 0) {
+          setFormRdv((prev) => ({ ...prev, patientId: clean[0].id }));
+        }
+      }
+    } catch (err) {
+      console.warn("Erreur chargement rendez-vous MySQL :", err);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAppointments();
+
+    const onFocus = () => fetchAppointments(true);
+    window.addEventListener("focus", onFocus);
+
+    const timer = setInterval(() => fetchAppointments(true), 10000);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      clearInterval(timer);
     };
-    fetchData();
   }, []);
 
   // Calcul de l'heure de fin pour FullCalendar basé sur la durée réelle
@@ -230,6 +249,51 @@ const AppointmentsPage = () => {
     }, 50);
   };
 
+  // Synchronisation automatique vers la salle d'attente quand le statut passe à Arrivé
+  const syncArrivalToWaitingRoom = (item) => {
+    try {
+      const now = new Date();
+      const arrTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const saved = localStorage.getItem("cabinet_waiting_list");
+      const currentList = (saved ? JSON.parse(saved) : []).filter(
+        (p) => p.patientName !== "Sophie Bernard" && p.patientName !== "Marc Lemoine"
+      );
+
+      const exists = currentList.some(
+        (w) =>
+          (item.appointmentId && w.appointmentId === item.appointmentId) ||
+          (item.patientId && w.patientId === item.patientId && w.status !== "Terminé") ||
+          (w.patientName && item.patientName && w.patientName.toLowerCase() === item.patientName.toLowerCase() && w.status !== "Terminé")
+      );
+
+      if (!exists) {
+        const newArrival = {
+          id: Date.now(),
+          appointmentId: item.appointmentId,
+          patientId: item.patientId,
+          patientName: item.patientName,
+          appointmentTime: item.appointmentTime || "10:00",
+          arrivalTime: arrTime,
+          reason: item.reason || "Consultation générale",
+          waitTimeMinutes: 0,
+          status: "En attente",
+        };
+
+        const updatedList = [newArrival, ...currentList];
+        localStorage.setItem("cabinet_waiting_list", JSON.stringify(updatedList));
+
+        // Diffuser en direct aux autres onglets et à l'écran TV salle d'attente
+        try {
+          const channel = new BroadcastChannel("waiting_room_display_channel");
+          channel.postMessage({ type: "UPDATE_LIST", list: updatedList });
+          channel.close();
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.warn("Erreur synchronisation salle d'attente locale :", err);
+    }
+  };
+
   const handleSaveRdv = (e) => {
     e.preventDefault();
 
@@ -265,7 +329,15 @@ const AppointmentsPage = () => {
       return;
     }
 
-    const patient = patients.find((p) => p.id === parseInt(formRdv.patientId)) || patients[0] || { id: 1, firstName: "Patient", lastName: "" };
+    const existingApt = editId ? appointments.find((a) => a.id === editId) : null;
+    const patientList = patients && patients.length > 0 ? patients : initialPatients;
+    const patient = patientList.find((p) => p.id === parseInt(formRdv.patientId)) || {
+      id: formRdv.patientId || existingApt?.patientId || 1,
+      firstName: existingApt?.firstName || (existingApt?.patientName?.split(" ")[0] || "Patient"),
+      lastName: existingApt?.lastName || (existingApt?.patientName?.split(" ").slice(1).join(" ") || ""),
+      phone: existingApt?.phone || "",
+    };
+    const pFullName = existingApt && !formRdv.patientId ? existingApt.patientName : `${patient.firstName} ${patient.lastName}`.trim();
 
     if (editId) {
       setAppointments(
@@ -274,7 +346,7 @@ const AppointmentsPage = () => {
             ? {
                 ...a,
                 patientId: patient.id,
-                patientName: `${patient.firstName} ${patient.lastName}`,
+                patientName: pFullName,
                 phone: patient.phone,
                 date: formRdv.date,
                 time: formRdv.time,
@@ -298,17 +370,35 @@ const AppointmentsPage = () => {
         notes: formRdv.notes,
       }).catch((err) => console.warn("Erreur mise à jour rendez-vous MySQL :", err));
 
-      Swal.fire({
-        icon: "success",
-        title: "Rendez-vous mis à jour dans la Base de Données",
-        timer: 1500,
-        showConfirmButton: false,
-      });
+      if (formRdv.status === "Arrivé") {
+        syncArrivalToWaitingRoom({
+          appointmentId: editId,
+          patientId: patient.id,
+          patientName: pFullName,
+          appointmentTime: formRdv.time,
+          reason: formRdv.reason,
+        });
+
+        Swal.fire({
+          icon: "success",
+          title: "Patient marqué comme Arrivé !",
+          text: `${pFullName} a été ajouté(e) dans la Salle d'attente.`,
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      } else {
+        Swal.fire({
+          icon: "success",
+          title: "Rendez-vous mis à jour dans la Base de Données",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      }
     } else {
       const newAppt = {
         id: appointments.length + 1,
         patientId: patient.id,
-        patientName: `${patient.firstName} ${patient.lastName}`,
+        patientName: pFullName,
         phone: patient.phone,
         date: formRdv.date,
         time: formRdv.time,
@@ -330,12 +420,30 @@ const AppointmentsPage = () => {
         notes: formRdv.notes,
       }).catch((err) => console.warn("Erreur création rendez-vous MySQL :", err));
 
-      Swal.fire({
-        icon: "success",
-        title: "Rendez-vous créé dans la Base de Données",
-        timer: 1500,
-        showConfirmButton: false,
-      });
+      if (formRdv.status === "Arrivé") {
+        syncArrivalToWaitingRoom({
+          appointmentId: newAppt.id,
+          patientId: patient.id,
+          patientName: pFullName,
+          appointmentTime: formRdv.time,
+          reason: formRdv.reason,
+        });
+
+        Swal.fire({
+          icon: "success",
+          title: "Rendez-vous créé & Patient en Salle d'attente",
+          text: `${pFullName} est enregistré(e) dans la salle d'attente.`,
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      } else {
+        Swal.fire({
+          icon: "success",
+          title: "Rendez-vous créé dans la Base de Données",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      }
     }
 
     setShowModal(false);
@@ -366,10 +474,10 @@ const AppointmentsPage = () => {
 
   const filteredAppointments = appointments.filter((rdv) => {
     const matchStatus = filterStatus === "all" || rdv.status === filterStatus;
-    const matchSearch =
-      rdv.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rdv.reason.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchStatus && matchSearch;
+    const pName = (rdv.patientName || "").toLowerCase();
+    const pReason = (rdv.reason || "").toLowerCase();
+    const sTerm = (searchTerm || "").toLowerCase();
+    return matchStatus && (pName.includes(sTerm) || pReason.includes(sTerm));
   });
 
   const getStatusBadge = (status) => {
@@ -539,9 +647,14 @@ const AppointmentsPage = () => {
                     value={formRdv.patientId}
                     onChange={(e) => setFormRdv({ ...formRdv, patientId: e.target.value })}
                   >
-                    {initialPatients.map((p) => (
+                    {editId && !patients.some((p) => p.id === parseInt(formRdv.patientId)) && (
+                      <option value={formRdv.patientId}>
+                        {appointments.find((a) => a.id === editId)?.patientName || "Patient en cours"}
+                      </option>
+                    )}
+                    {(patients && patients.length > 0 ? patients : initialPatients).map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.firstName} {p.lastName} — ({p.fileNumber})
+                        {p.firstName} {p.lastName} — ({p.fileNumber || `DOS-${p.id}`})
                       </option>
                     ))}
                   </select>
@@ -721,7 +834,8 @@ const AppointmentsPage = () => {
               <button
                 type="button"
                 className="cal-btn-refresh"
-                onClick={() => {
+                onClick={async () => {
+                  await fetchAppointments();
                   calendarRef.current?.getApi().refetchEvents();
                   Swal.fire({
                     icon: "success",

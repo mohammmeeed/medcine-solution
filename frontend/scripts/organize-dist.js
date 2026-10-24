@@ -59,4 +59,27 @@ function updateBundleReferences(dir) {
 }
 updateBundleReferences(assetsDir);
 
-console.log('✓ Build organization complete: dist/assets created and linked.');
+// 4. Ensure .htaccess is generated in dist/
+const htaccessPath = path.join(distDir, '.htaccess');
+const htaccessContent = `<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. Ne pas rediriger les appels d'API PHP vers index.html
+  RewriteCond %{REQUEST_URI} ^/backend/ [NC]
+  RewriteRule .* - [L]
+
+  # 2. Servir les fichiers et dossiers réels (ex: assets/, static/, doctor.jpg, favicon)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 3. Toutes les autres routes React renvoient vers index.html
+  RewriteRule ^ index.html [L]
+</IfModule>
+`;
+fs.writeFileSync(htaccessPath, htaccessContent, 'utf8');
+console.log('✓ Verified dist/.htaccess rewrite rules for Host.dz');
+
+console.log('✓ Build organization complete: dist/ contains assets, index.html, .htaccess');
+

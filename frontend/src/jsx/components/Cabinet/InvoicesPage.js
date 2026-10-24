@@ -12,14 +12,14 @@ import {
 
 const InvoicesPage = () => {
   const [invoices, setInvoices] = useState(initialInvoices);
-  const [patients, setPatients] = useState(initialPatients);
+  const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showNewModal, setShowNewModal] = useState(false);
   const [previewInvoice, setPreviewInvoice] = useState(null);
 
   const [formInvoice, setFormInvoice] = useState({
-    patientId: 1,
+    patientId: "",
     actDescription: "Consultation de médecine générale",
     amount: 2500,
   });
@@ -36,10 +36,18 @@ const InvoicesPage = () => {
         if (Array.isArray(invData) && invData.length > 0) {
           setInvoices(invData);
         }
-        if (Array.isArray(patData) && patData.length > 0) {
-          setPatients(patData);
-          if (!formInvoice.patientId && patData[0]) {
-            setFormInvoice((prev) => ({ ...prev, patientId: patData[0].id }));
+        if (Array.isArray(patData)) {
+          const clean = patData.filter((p) => {
+            const last = (p.lastName || "").toLowerCase().trim();
+            const first = (p.firstName || "").toLowerCase().trim();
+            return (
+              !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+              !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+            );
+          });
+          setPatients(clean);
+          if (clean.length > 0) {
+            setFormInvoice((prev) => ({ ...prev, patientId: clean[0].id }));
           }
         }
       } catch (err) {
@@ -318,9 +326,9 @@ const InvoicesPage = () => {
                   }
                   required
                 >
-                  {initialPatients.map((p) => (
+                  {patients.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.lastName.toUpperCase()} {p.firstName} ({p.fileNumber})
+                      {(p.lastName || "").toUpperCase()} {p.firstName || ""} ({p.fileNumber || ""})
                     </option>
                   ))}
                 </select>

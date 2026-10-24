@@ -22,7 +22,7 @@ const ConsultationsPage = () => {
   const patientIdQuery = searchParams.get("patientId");
 
   const [consultations, setConsultations] = useState(initialConsultations);
-  const [patients, setPatients] = useState(initialPatients);
+  const [patients, setPatients] = useState([]);
   const [medications, setMedications] = useState(initialMedications);
   const [searchTerm, setSearchTerm] = useState("");
   const [showNewModal, setShowNewModal] = useState(!!patientIdQuery);
@@ -45,8 +45,16 @@ const ConsultationsPage = () => {
           if (apiConsults && apiConsults.length > 0) {
             setConsultations(apiConsults);
           }
-          if (apiPatients && apiPatients.length > 0) {
-            setPatients(apiPatients);
+          if (apiPatients) {
+            const clean = apiPatients.filter((p) => {
+              const last = (p.lastName || "").toLowerCase().trim();
+              const first = (p.firstName || "").toLowerCase().trim();
+              return (
+                !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+                !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+              );
+            });
+            setPatients(clean);
           }
         }
       } catch (err) {

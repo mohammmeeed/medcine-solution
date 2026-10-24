@@ -27,14 +27,14 @@ switch ($method) {
 function handleGetWaitingRoom($db) {
     try {
         $sql = "SELECT w.*, 
-                       CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
+                       COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))), ''), 'Patient') AS patient_name,
                        p.dob AS patient_dob,
                        p.file_number AS patient_file_number,
                        p.phone AS patient_phone
                 FROM waiting_room w
-                JOIN patients p ON w.patient_id = p.id
+                LEFT JOIN patients p ON w.patient_id = p.id
                 WHERE w.status != 'Terminé'
-                ORDER BY w.arrival_time ASC ";
+                ORDER BY w.arrival_time DESC, w.id DESC";
 
         $stmt = $db->query($sql);
         $rows = $stmt->fetchAll();
@@ -49,6 +49,7 @@ function handleGetWaitingRoom($db) {
 
             $list[] = [
                 "id" => intval($r['id']),
+                "appointmentId" => !empty($r['appointment_id']) ? intval($r['appointment_id']) : null,
                 "patientId" => intval($r['patient_id']),
                 "patientName" => $r['patient_name'],
                 "fileNumber" => $r['patient_file_number'],
@@ -77,15 +78,27 @@ function handleCreateArrival($db) {
 
     try {
         $patientId = intval($body['patientId']);
+        $appId = !empty($body['appointmentId']) ? intval($body['appointmentId']) : null;
         $appTime = $body['appointmentTime'] ?? date('H:i:s');
         $arrTime = $body['arrivalTime'] ?? date('H:i:s');
         $reason = $body['reason'] ?? "Consultation générale";
 
-        $sql = "INSERT INTO waiting_room (patient_id, appointment_time, arrival_time, reason, status) 
-                VALUES (:pid, :atime, :artime, :reason, 'En attente')";
+        if ($appId) {
+            $chk = $db->prepare("SELECT id FROM waiting_room WHERE appointment_id = :aid AND status != 'Terminé' LIMIT 1");
+            $chk->execute([':aid' => $appId]);
+            $existing = $chk->fetchColumn();
+            if ($existing) {
+                sendResponse("success", ["id" => intval($existing)], "Patient déjà en salle d'attente");
+                return;
+            }
+        }
+
+        $sql = "INSERT INTO waiting_room (patient_id, appointment_id, appointment_time, arrival_time, reason, status) 
+                VALUES (:pid, :aid, :atime, :artime, :reason, 'En attente')";
         $stmt = $db->prepare($sql);
         $stmt->execute([
             ':pid' => $patientId,
+            ':aid' => $appId,
             ':atime' => strlen($appTime) === 5 ? ($appTime . ":00") : $appTime,
             ':artime' => strlen($arrTime) === 5 ? ($arrTime . ":00") : $arrTime,
             ':reason' => $reason
@@ -118,13 +131,17 @@ function handleUpdateStatus($db) {
 function handleRemoveFromWaitingRoom($db) {
     $id = isset($_GET['id']) ? intval($_GET['id']) : null;
     if (!$id) {
+        $body = getRequestBody();
+        $id = $body['id'] ?? null;
+    }
+    if (!$id) {
         sendResponse("error", null, "ID requis", 400);
     }
 
     try {
-        $stmt = $db->prepare("UPDATE waiting_room SET status = 'Terminé' WHERE id = :id");
-        $stmt->execute([':id' => $id]);
-        sendResponse("success", null, "Patient retiré de la salle d'attente");
+        $stmt = $db->prepare("DELETE FROM waiting_room WHERE id = :id");
+        $stmt->execute([':id' => (int)$id]);
+        sendResponse("success", null, "Patient supprimé de la base de données");
     } catch (Exception $e) {
         sendResponse("error", null, "Erreur suppression : " . $e->getMessage(), 500);
     }

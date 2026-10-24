@@ -1,13 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
-import { initialPatients } from "../../../services/CabinetData";
+import ApiService from "../../../services/ApiService";
 
 const PatientsPage = () => {
   const navigate = useNavigate();
-  const [patients, setPatients] = useState(initialPatients);
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -26,6 +27,30 @@ const PatientsPage = () => {
     allergies: "",
     chronicDiseases: "",
   });
+
+  const loadPatients = async () => {
+    try {
+      setLoading(true);
+      const data = await ApiService.getPatients();
+      const cleanData = (Array.isArray(data) ? data : []).filter((p) => {
+        const last = (p.lastName || "").toLowerCase().trim();
+        const first = (p.firstName || "").toLowerCase().trim();
+        return (
+          !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+          !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+        );
+      });
+      setPatients(cleanData);
+    } catch (err) {
+      console.error("Erreur chargement patients MySQL:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPatients();
+  }, []);
 
   const handleOpenAdd = () => {
     setEditId(null);
@@ -52,15 +77,15 @@ const PatientsPage = () => {
   const handleOpenEdit = (p) => {
     setEditId(p.id);
     setFormData({
-      firstName: p.firstName,
-      lastName: p.lastName,
-      dob: p.dob,
-      gender: p.gender,
-      phone: p.phone,
-      email: p.email,
-      address: p.address,
-      secuNumber: p.secuNumber,
-      bloodGroup: p.bloodGroup,
+      firstName: p.firstName || "",
+      lastName: p.lastName || "",
+      dob: p.dob || "",
+      gender: p.gender || "Féminin",
+      phone: p.phone || "",
+      email: p.email || "",
+      address: p.address || "",
+      secuNumber: p.secuNumber || "",
+      bloodGroup: p.bloodGroup || "A+",
       allergies: Array.isArray(p.allergies) ? p.allergies.join(", ") : p.allergies || "",
       chronicDiseases: Array.isArray(p.chronicDiseases) ? p.chronicDiseases.join(", ") : p.chronicDiseases || "",
     });
@@ -71,95 +96,110 @@ const PatientsPage = () => {
     }, 50);
   };
 
-  const handleSavePatient = (e) => {
+  const handleSavePatient = async (e) => {
     e.preventDefault();
-    if (editId) {
-      setPatients(
-        patients.map((p) =>
-          p.id === editId
-            ? {
-                ...p,
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                dob: formData.dob,
-                gender: formData.gender,
-                phone: formData.phone,
-                email: formData.email,
-                address: formData.address,
-                secuNumber: formData.secuNumber,
-                bloodGroup: formData.bloodGroup,
-                allergies: formData.allergies ? formData.allergies.split(",").map((s) => s.trim()) : [],
-                chronicDiseases: formData.chronicDiseases
-                  ? formData.chronicDiseases.split(",").map((s) => s.trim())
-                  : [],
-              }
-            : p
-        )
-      );
+    try {
+      const allergiesArr = formData.allergies
+        ? formData.allergies.split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
+      const chronicArr = formData.chronicDiseases
+        ? formData.chronicDiseases.split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
+
+      if (editId) {
+        await ApiService.updatePatient({
+          id: editId,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          dob: formData.dob,
+          gender: formData.gender,
+          phone: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          secuNumber: formData.secuNumber,
+          bloodGroup: formData.bloodGroup,
+          allergies: allergiesArr,
+          chronicDiseases: chronicArr,
+        });
+
+        await loadPatients();
+        setShowModal(false);
+        Swal.fire({
+          icon: "success",
+          title: "Dossier patient mis à jour",
+          text: "Les modifications ont été enregistrées dans la base de données.",
+          timer: 1800,
+          showConfirmButton: false,
+        });
+      } else {
+        await ApiService.createPatient({
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          dob: formData.dob,
+          gender: formData.gender,
+          phone: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          secuNumber: formData.secuNumber,
+          bloodGroup: formData.bloodGroup,
+          allergies: allergiesArr,
+          chronicDiseases: chronicArr,
+        });
+
+        await loadPatients();
+        setShowModal(false);
+        Swal.fire({
+          icon: "success",
+          title: "Patient enregistré avec succès",
+          text: "Le nouveau patient a été enregistré dans la base de données MySQL.",
+          timer: 1800,
+          showConfirmButton: false,
+        });
+      }
+    } catch (err) {
+      console.error("Erreur enregistrement patient:", err);
       Swal.fire({
-        icon: "success",
-        title: "Dossier patient mis à jour",
-        timer: 1500,
-        showConfirmButton: false,
-      });
-    } else {
-      const nextId = patients.length + 1;
-      const newPatient = {
-        id: nextId,
-        fileNumber: `DOS-2024-00${nextId}`,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        dob: formData.dob,
-        age: new Date().getFullYear() - new Date(formData.dob).getFullYear(),
-        gender: formData.gender,
-        phone: formData.phone,
-        email: formData.email,
-        address: formData.address,
-        secuNumber: formData.secuNumber,
-        bloodGroup: formData.bloodGroup,
-        allergies: formData.allergies ? formData.allergies.split(",").map((s) => s.trim()) : [],
-        chronicDiseases: formData.chronicDiseases
-          ? formData.chronicDiseases.split(",").map((s) => s.trim())
-          : [],
-        regularTreatments: [],
-        lastVisit: new Date().toISOString().split("T")[0],
-        status: "Actif",
-      };
-      setPatients([...patients, newPatient]);
-      Swal.fire({
-        icon: "success",
-        title: "Patient enregistré avec succès",
-        timer: 1500,
-        showConfirmButton: false,
+        icon: "error",
+        title: "Erreur d'enregistrement",
+        text: err?.response?.data?.message || "Impossible de sauvegarder le patient dans la base de données.",
       });
     }
-    setShowModal(false);
   };
 
   const handleDeletePatient = (id) => {
     Swal.fire({
       title: "Supprimer ce patient ?",
-      text: "Le dossier sera retiré du répertoire.",
+      text: "Le dossier sera définitivement supprimé de la base de données.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#f72b50",
       cancelButtonColor: "#6e6e6e",
-      confirmButtonText: "Oui, supprimer",
+      confirmButtonText: "Oui, supprimer définitivement",
       cancelButtonText: "Annuler",
-    }).then((result) => {
+    }).then(async (result) => {
       if (result.isConfirmed) {
-        setPatients(patients.filter((p) => p.id !== id));
-        Swal.fire("Supprimé", "Le dossier patient a été retiré.", "success");
+        try {
+          await ApiService.deletePatient(id);
+          await loadPatients();
+          Swal.fire("Supprimé", "Le dossier patient a été retiré de la base de données.", "success");
+        } catch (err) {
+          console.error("Erreur suppression patient:", err);
+          Swal.fire("Erreur", "Impossible de supprimer le patient de la base de données.", "error");
+        }
       }
     });
   };
 
   const filteredPatients = patients.filter((p) => {
-    const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
+    const fullName = `${p.firstName || ""} ${p.lastName || ""}`.toLowerCase();
+    const fileNum = (p.fileNumber || "").toLowerCase();
+    const phoneNum = p.phone || "";
+    const term = searchTerm.toLowerCase();
+
     const matchSearch =
-      fullName.includes(searchTerm.toLowerCase()) ||
-      p.fileNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.phone.includes(searchTerm);
+      fullName.includes(term) ||
+      fileNum.includes(term) ||
+      phoneNum.includes(term);
     const matchStatus = filterStatus === "all" || p.status === filterStatus;
     return matchSearch && matchStatus;
   });
@@ -391,7 +431,13 @@ const PatientsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredPatients.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="5" className="text-center py-4 text-muted">
+                      <i className="fa fa-spinner fa-spin me-2"></i> Chargement des patients depuis la base de données...
+                    </td>
+                  </tr>
+                ) : filteredPatients.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="text-center py-4 text-muted">
                       Aucun patient trouvé.
@@ -405,13 +451,13 @@ const PatientsPage = () => {
                           to={`/patient-details?id=${p.id}`}
                           className="font-w600 text-dark hover-primary"
                         >
-                          {p.lastName.toUpperCase()} {p.firstName}
+                          {(p.lastName || "").toUpperCase()} {p.firstName || ""}
                         </Link>
-                        <span className="d-block text-muted fs-12">{p.gender}</span>
+                        <span className="d-block text-muted fs-12">{p.gender || "—"}</span>
                       </td>
                       <td>
-                        {p.dob}{" "}
-                        <span className="text-muted fs-12">({p.age || 35} ans)</span>
+                        {p.dob || "—"}{" "}
+                        <span className="text-muted fs-12">({p.age || 0} ans)</span>
                       </td>
                       <td>{p.phone}</td>
                       <td>

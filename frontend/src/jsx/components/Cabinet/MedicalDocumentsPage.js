@@ -11,7 +11,7 @@ import {
 
 const MedicalDocumentsPage = () => {
   const [documents, setDocuments] = useState(initialDocuments);
-  const [patients, setPatients] = useState(initialPatients);
+  const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,7 +20,7 @@ const MedicalDocumentsPage = () => {
   const [filePreview, setFilePreview] = useState(null);
 
   const [newDoc, setNewDoc] = useState({
-    patientId: 1,
+    patientId: "",
     title: "",
     category: "Analyses de laboratoire",
     author: "Laboratoire d'analyses médicales",
@@ -39,10 +39,18 @@ const MedicalDocumentsPage = () => {
         if (Array.isArray(docData) && docData.length > 0) {
           setDocuments(docData);
         }
-        if (Array.isArray(patData) && patData.length > 0) {
-          setPatients(patData);
-          if (!newDoc.patientId && patData[0]) {
-            setNewDoc((prev) => ({ ...prev, patientId: patData[0].id }));
+        if (Array.isArray(patData)) {
+          const clean = patData.filter((p) => {
+            const last = (p.lastName || "").toLowerCase().trim();
+            const first = (p.firstName || "").toLowerCase().trim();
+            return (
+              !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+              !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+            );
+          });
+          setPatients(clean);
+          if (clean.length > 0) {
+            setNewDoc((prev) => ({ ...prev, patientId: clean[0].id }));
           }
         }
       } catch (err) {
@@ -316,9 +324,9 @@ const MedicalDocumentsPage = () => {
                 onChange={(e) => setNewDoc({ ...newDoc, patientId: e.target.value })}
                 required
               >
-                {initialPatients.map((p) => (
+                {patients.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.lastName.toUpperCase()} {p.firstName} ({p.fileNumber})
+                    {(p.lastName || "").toUpperCase()} {p.firstName || ""} ({p.fileNumber || ""})
                   </option>
                 ))}
               </select>

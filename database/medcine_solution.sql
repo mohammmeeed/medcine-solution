@@ -55,7 +55,6 @@ CREATE TABLE `appointments` (
 
 LOCK TABLES `appointments` WRITE;
 /*!40000 ALTER TABLE `appointments` DISABLE KEYS */;
-INSERT INTO `appointments` VALUES (1,1,1,'2026-10-22','09:00:00','20 min','Suivi asthme et renouvellement','Terminé','Examen clinique normal, DEP à 450 L/min.','2026-10-22 08:29:34','2026-10-22 08:29:34'),(2,2,1,'2026-10-22','09:30:00','25 min','Bilan trimestriel HTA et diabète','En consultation','Constantes à contrôler, ajustement posologique.','2026-10-22 08:29:34','2026-10-22 08:29:34'),(3,3,1,'2026-10-22','10:15:00','20 min','Céphalées et fatigue persistante','Arrivé','Patient en salle d\'attente.','2026-10-22 08:29:34','2026-10-22 08:29:34'),(4,4,1,'2026-10-22','11:00:00','20 min','Poussée d\'eczéma et certificat de sport','Confirmé','Rendez-vous confirmé par SMS.','2026-10-22 08:29:34','2026-10-22 08:29:34'),(5,5,1,'2026-10-22','14:30:00','20 min','Contrôle TSH et ordonnance','Confirmé','Apporter le bilan biologique récent.','2026-10-22 08:29:34','2026-10-22 08:29:34');
 /*!40000 ALTER TABLE `appointments` ENABLE KEYS */;
 UNLOCK TABLES;
 

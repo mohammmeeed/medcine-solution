@@ -1,22 +1,45 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
 import PageTitle from "../../layouts/PageTitle";
+import ApiService from "../../../services/ApiService";
 import {
-  initialPatients,
   initialConsultations,
 } from "../../../services/CabinetData";
 
 const MedicalRecordsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [patients] = useState(initialPatients);
+  const [patients, setPatients] = useState([]);
+
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const data = await ApiService.getPatients();
+        const clean = (Array.isArray(data) ? data : []).filter((p) => {
+          const last = (p.lastName || "").toLowerCase().trim();
+          const first = (p.firstName || "").toLowerCase().trim();
+          return (
+            !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+            !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+          );
+        });
+        setPatients(clean);
+      } catch (err) {
+        console.warn("Erreur chargement dossiers médicaux :", err);
+      }
+    };
+    fetchPatients();
+  }, []);
 
   const filteredPatients = patients.filter((p) => {
-    const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
+    const fullName = `${p.firstName || ""} ${p.lastName || ""}`.toLowerCase();
+    const fileNum = (p.fileNumber || "").toLowerCase();
+    const secu = p.secuNumber || "";
+    const term = searchTerm.toLowerCase();
     return (
-      fullName.includes(searchTerm.toLowerCase()) ||
-      p.fileNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.secuNumber.includes(searchTerm)
+      fullName.includes(term) ||
+      fileNum.includes(term) ||
+      secu.includes(term)
     );
   });
 

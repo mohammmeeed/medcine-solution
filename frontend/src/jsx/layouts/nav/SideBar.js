@@ -1,9 +1,11 @@
 import React, { useContext, useEffect, useReducer, useState, useCallback } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { Collapse } from 'react-bootstrap';
 import { Link, useLocation } from "react-router-dom";
 import { MenuList } from './Menu';
 import { ThemeContext } from "../../../context/ThemeContext";
 import { useScrollPosition } from "@n8tb1t/use-scroll-position";
+import { navtoggle } from "../../../store/actions/AuthActions";
 
 const reducer = (previousState, updatedState) => ({
   ...previousState,
@@ -16,6 +18,8 @@ const initialState = {
 };
 
 const SideBar = () => {
+  const dispatch = useDispatch();
+  const sideMenu = useSelector((state) => state.sideMenu);
   const {
     iconHover,
     sidebarposition,
@@ -26,6 +30,12 @@ const SideBar = () => {
   const date = new Date();
   const location = useLocation();
   const [state, setState] = useReducer(reducer, initialState);
+
+  const handleMobileNavClick = () => {
+    if (window.innerWidth <= 768 && sideMenu) {
+      dispatch(navtoggle());
+    }
+  };
 
   const handleMenuActive = (status) => {		
     setState({ active: status });			
@@ -170,6 +180,7 @@ const SideBar = () => {
                                               <Link
                                                 className={isDeepActive ? "mm-active" : ""}
                                                 to={deepTargetUrl}
+                                                onClick={handleMobileNavClick}
                                               >
                                                 {deepItem.title}
                                               </Link>
@@ -183,6 +194,7 @@ const SideBar = () => {
                                   <Link
                                     to={subTargetUrl}
                                     className={isSubActive ? 'mm-active' : ''}
+                                    onClick={handleMobileNavClick}
                                   >
                                     {subItem.title}
                                   </Link>
@@ -197,6 +209,7 @@ const SideBar = () => {
                     <Link
                       to={targetUrl}
                       className={isItemActive ? 'mm-active' : ''}
+                      onClick={handleMobileNavClick}
                     >
                       {data.iconStyle}{" "}
                       <span className="nav-text">

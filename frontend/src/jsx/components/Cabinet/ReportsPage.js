@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import loadable from "@loadable/component";
 import pMinDelay from "p-min-delay";
 import PageTitle from "../../layouts/PageTitle";
-import { initialPatients } from "../../../services/CabinetData";
+import ApiService from "../../../services/ApiService";
 
 const RevenueChart = loadable(() =>
   pMinDelay(import("../Dashboard/charts/home/RevenueChart"), 600)
@@ -15,7 +15,24 @@ const ChartCircle = loadable(() =>
 );
 
 const ReportsPage = () => {
-  const totalPatients = initialPatients.length + 185;
+  const [totalPatients, setTotalPatients] = useState(0);
+
+  useEffect(() => {
+    ApiService.getPatients().then((data) => {
+      if (Array.isArray(data)) {
+        const clean = data.filter((p) => {
+          const last = (p.lastName || "").toLowerCase().trim();
+          const first = (p.firstName || "").toLowerCase().trim();
+          return (
+            !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+            !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+          );
+        });
+        setTotalPatients(clean.length);
+      }
+    }).catch(() => {});
+  }, []);
+
   const totalConsultations = 482; // Annuel
   const completedRate = "94%";
   const missedRate = "6%";

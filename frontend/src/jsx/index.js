@@ -1,6 +1,7 @@
 import React, { useContext } from "react";
-import {useSelector} from 'react-redux';
-import {Routes, Route, Outlet, Navigate } from 'react-router-dom'
+import { useSelector, useDispatch } from 'react-redux';
+import { Routes, Route, Outlet, Navigate } from 'react-router-dom';
+import { navtoggle } from "../store/actions/AuthActions";
 
 /// Css
 import "./index.css";
@@ -264,6 +265,7 @@ const Markup = () => {
 function MainLayout(){
   const {sidebariconHover} = useContext(ThemeContext);
   const sideMenu = useSelector(state => state.sideMenu);
+  const dispatch = useDispatch();
 
   // Protection du panel administration : redirection si non connecté
   const authUser = localStorage.getItem("cabinet_auth_user");
@@ -273,9 +275,15 @@ function MainLayout(){
 
   return (
     <>      
-        <div id="main-wrapper" className={`show ${sidebariconHover ? "icon-hover-toggle": ""} ${ sideMenu ? "menu-toggle" : ""}`}          
-        >  
+        <div id="main-wrapper" className={`show ${sidebariconHover ? "icon-hover-toggle": ""} ${ sideMenu ? "menu-toggle" : ""}`}>  
           <Nav />
+          {sideMenu && (
+            <div
+              className="deznav-backdrop"
+              onClick={() => dispatch(navtoggle())}
+              aria-hidden="true"
+            />
+          )}
           <div className="content-body" style={{ minHeight: window.screen.height - 60 }}>
               <div className="container-fluid">
                 <Outlet />                
@@ -285,7 +293,6 @@ function MainLayout(){
         </div>      
     </>
   )
-
 };
 
 export default Markup;

@@ -11,14 +11,14 @@ import {
 
 const PaymentsPage = () => {
   const [payments, setPayments] = useState(initialPayments);
-  const [patients, setPatients] = useState(initialPatients);
+  const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [methodFilter, setMethodFilter] = useState("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [previewReceipt, setPreviewReceipt] = useState(null);
 
   const [formPayment, setFormPayment] = useState({
-    patientId: 1,
+    patientId: "",
     invoiceNumber: "FAC-2024-0250",
     amount: 2500,
     method: "Espèces",
@@ -38,10 +38,18 @@ const PaymentsPage = () => {
         if (Array.isArray(payData) && payData.length > 0) {
           setPayments(payData);
         }
-        if (Array.isArray(patData) && patData.length > 0) {
-          setPatients(patData);
-          if (!formPayment.patientId && patData[0]) {
-            setFormPayment((prev) => ({ ...prev, patientId: patData[0].id }));
+        if (Array.isArray(patData)) {
+          const clean = patData.filter((p) => {
+            const last = (p.lastName || "").toLowerCase().trim();
+            const first = (p.firstName || "").toLowerCase().trim();
+            return (
+              !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+              !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+            );
+          });
+          setPatients(clean);
+          if (clean.length > 0) {
+            setFormPayment((prev) => ({ ...prev, patientId: clean[0].id }));
           }
         }
       } catch (err) {
@@ -320,9 +328,9 @@ const PaymentsPage = () => {
                 }
                 required
               >
-                {initialPatients.map((p) => (
+                {patients.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.lastName.toUpperCase()} {p.firstName} ({p.fileNumber})
+                    {(p.lastName || "").toUpperCase()} {p.firstName || ""} ({p.fileNumber || ""})
                   </option>
                 ))}
               </select>

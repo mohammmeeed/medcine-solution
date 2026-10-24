@@ -697,3 +697,496 @@ rect#chart_ChartBorder {
   border-color: #fecaca;
   color: #ef4444;
 }
+
+/* ==========================================================================
+   OPTIMISATIONS RESPONSIVES MODERNES POUR TÉLÉPHONES & SMARTPHONES (ADMIN)
+   ========================================================================== */
+
+/* 1. Backdrop sombre lors de l'ouverture du menu latéral sur mobile */
+.deznav-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .deznav-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    z-index: 998;
+    animation: mobileBackdropFadeIn 0.2s ease-out;
+  }
+
+  @keyframes mobileBackdropFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* 2. Menu latéral mobile (Tiroir overlay fluide et z-index supérieur) */
+  [data-sidebar-style="overlay"] .deznav {
+    z-index: 999 !important;
+    width: min(290px, 85vw) !important;
+    box-shadow: 4px 0 25px rgba(0, 0, 0, 0.25) !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-sidebar-style="overlay"] .deznav-scroll {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    height: 100%;
+  }
+
+  /* 3. En-tête mobile (Header & Brand & Hamburger unifiés) */
+  .nav-header {
+    height: 60px !important;
+    width: auto !important;
+    min-width: 80px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 1002 !important;
+    background: transparent !important;
+    padding: 0 4px 0 10px !important;
+  }
+
+  .nav-control {
+    position: relative !important;
+    right: auto !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    width: 40px !important;
+    height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    margin-left: 4px !important;
+    z-index: 1003 !important;
+  }
+
+  .nav-control .hamburger {
+    display: inline-block !important;
+    position: static !important;
+    width: 24px !important;
+    padding: 4px !important;
+  }
+
+  .nav-control .hamburger .line {
+    display: block !important;
+    background: #1e60d5 !important;
+  }
+
+  .header {
+    height: 60px !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    padding-left: 88px !important;
+    z-index: 1000 !important;
+    background: #ffffff !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+  }
+
+  .header .header-content {
+    padding-left: 6px !important;
+    padding-right: 12px !important;
+    height: 60px !important;
+  }
+
+  .dashboard_bar {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 160px !important;
+    line-height: 1.2 !important;
+  }
+
+  .header-info {
+    display: none !important;
+  }
+
+  .header-profile img {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+  }
+
+  .header-right .nav-item {
+    margin-left: 8px !important;
+  }
+
+  /* 4. Corps de page et conteneur compact sur smartphone */
+  .content-body {
+    padding-top: 65px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 24px !important;
+    margin-left: 0 !important;
+  }
+
+  .container-fluid {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  .page-titles {
+    margin-bottom: 12px !important;
+    padding: 8px 12px !important;
+    border-radius: 10px !important;
+  }
+
+  .page-titles h4 {
+    font-size: 15px !important;
+  }
+
+  /* 5. Barres d'action supérieures (.form-head) empilées et 100% largeur */
+  .form-head {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .form-head > div {
+    width: 100% !important;
+    justify-content: stretch !important;
+    gap: 8px !important;
+  }
+
+  .form-head .search-area,
+  .form-head .search-area.w-auto {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .form-head .search-area .form-control {
+    width: 100% !important;
+    height: 42px !important;
+  }
+
+  .form-head select,
+  .form-head .default-select,
+  .form-head select.w-auto {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 42px !important;
+  }
+
+  .form-head .btn,
+  .form-head .btn-rounded {
+    width: 100% !important;
+    min-height: 42px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 13.5px !important;
+  }
+
+  .form-head .btn-group {
+    width: 100% !important;
+    display: flex !important;
+  }
+
+  .form-head .btn-group .btn {
+    flex: 1 1 0 !important;
+    min-height: 40px !important;
+  }
+
+  /* 6. Cartes et panneaux */
+  .card {
+    margin-bottom: 14px !important;
+    border-radius: 12px !important;
+    border: 1px solid #f1f5f9 !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05) !important;
+  }
+
+  .card-header {
+    padding: 12px 14px 8px 14px !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .card-header .card-title {
+    font-size: 15px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .card-body {
+    padding: 12px 14px !important;
+  }
+
+  .card-footer {
+    padding: 10px 14px !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .card-footer .btn {
+    width: 100% !important;
+    min-height: 42px !important;
+  }
+
+  /* 7. Tableaux fluides avec défilement tactile naturel */
+  .table-responsive {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 8px !important;
+    margin-bottom: 8px !important;
+    border: 1px solid #f1f5f9;
+  }
+
+  .table {
+    margin-bottom: 0 !important;
+    min-width: 580px; /* Assure que les colonnes ne se compressent pas illisiblement */
+  }
+
+  .table th {
+    padding: 9px 8px !important;
+    font-size: 11.5px !important;
+    letter-spacing: 0.3px;
+    white-space: nowrap !important;
+    background-color: #f8fafc !important;
+  }
+
+  .table td {
+    padding: 10px 8px !important;
+    font-size: 13px !important;
+    vertical-align: middle !important;
+  }
+
+  /* 8. Boutons d'action optimisés pour le toucher (Doigt / Pouce) */
+  .btn-xs.sharp,
+  .btn-action-simple {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-right: 4px !important;
+  }
+
+  /* 9. Prévention du zoom automatique iOS et confort de saisie */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="tel"],
+  select,
+  textarea {
+    font-size: 16px !important; /* Empêche Safari iOS de zoomer inopportunément */
+    min-height: 42px !important;
+    border-radius: 8px !important;
+  }
+
+  /* 10. Modals & Dialogs SweetAlert2 sur smartphone */
+  .modal-dialog {
+    margin: 12px auto !important;
+    max-width: calc(100% - 24px) !important;
+  }
+
+  .modal-content {
+    border-radius: 14px !important;
+  }
+
+  .modal-body {
+    padding: 16px !important;
+  }
+
+  .swal2-popup {
+    width: 92vw !important;
+    padding: 16px !important;
+    border-radius: 16px !important;
+  }
+
+  .swal2-title {
+    font-size: 1.15rem !important;
+  }
+
+  .swal2-actions {
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .swal2-actions button {
+    width: 100% !important;
+    margin: 0 !important;
+    min-height: 42px !important;
+  }
+
+  /* 11. Onglets du Dossier Patient (Défilement horizontal tactile) */
+  .patient-tabs-nav-bar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    gap: 6px !important;
+    padding-bottom: 8px !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+  }
+
+  .patient-tabs-nav-bar::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .patient-tab-btn {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    padding: 9px 14px !important;
+    font-size: 13px !important;
+    border-radius: 8px !important;
+  }
+
+  .patient-toolbar-box {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .patient-toolbar-left,
+  .patient-toolbar-right {
+    width: 100% !important;
+    justify-content: stretch !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .patient-btn-primary,
+  .patient-btn-emerald,
+  .patient-btn-back {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 42px !important;
+  }
+
+  .patient-selector-box {
+    width: 100% !important;
+    justify-content: space-between !important;
+    padding: 8px 12px !important;
+  }
+
+  .patient-select-wrapper {
+    flex-grow: 1;
+  }
+
+  .patient-select-native {
+    width: 100% !important;
+    height: 38px !important;
+  }
+
+  .patient-header-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .patient-demographics-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .patient-alerts-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* 12. FullCalendar (Agenda) sur smartphone */
+  .fc .fc-toolbar {
+    flex-direction: column !important;
+    gap: 8px !important;
+    align-items: center !important;
+    margin-bottom: 12px !important;
+  }
+
+  .fc .fc-toolbar-title {
+    font-size: 1rem !important;
+    text-align: center !important;
+  }
+
+  .fc .fc-toolbar-chunk {
+    display: flex !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+
+  .fc .fc-button {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+
+  .fc-view-harness {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* 13. Statistiques du Tableau de bord (Cartes 1 ou 2 colonnes bien proportionnées) */
+  .widget-stat .card-body {
+    padding: 12px !important;
+  }
+
+  .widget-stat .icon-bx-lg {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    font-size: 20px !important;
+  }
+
+  .widget-stat .media-body h3 {
+    font-size: 1.25rem !important;
+  }
+
+  .widget-stat .media-body p {
+    font-size: 11.5px !important;
+  }
+
+  /* 14. Footer compact */
+  .footer {
+    padding: 15px 10px !important;
+    font-size: 12px !important;
+    text-align: center !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard_bar {
+    font-size: 14px !important;
+    max-width: 130px !important;
+  }
+
+  .container-fluid {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  .card-body {
+    padding: 10px 10px !important;
+  }
+
+  .table td,
+  .table th {
+    padding: 8px 6px !important;
+  }
+}
+

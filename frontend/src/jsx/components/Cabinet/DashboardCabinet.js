@@ -4,6 +4,8 @@ import pMinDelay from "p-min-delay";
 import { Modal, Button, Badge } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import { ThemeContext } from "../../../context/ThemeContext";
+import Swal from "sweetalert2";
+import ApiService from "../../../services/ApiService";
 
 import {
   initialDoctor,
@@ -23,22 +25,83 @@ const DashboardCabinet = () => {
   const navigate = useNavigate();
   const { changeBackground } = useContext(ThemeContext);
 
+  const [patients, setPatients] = useState([]);
   const [appointments, setAppointments] = useState(initialAppointments);
-  const [waitingRoom] = useState(initialWaitingRoom);
+  const [waitingRoom, setWaitingRoom] = useState(() => {
+    try {
+      const saved = localStorage.getItem("cabinet_waiting_list");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (p) => p.patientName !== "Sophie Bernard" && p.patientName !== "Marc Lemoine"
+          );
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  });
   const [showRdvModal, setShowRdvModal] = useState(false);
   const [newRdv, setNewRdv] = useState({
-    patientId: 1,
+    patientId: "",
     time: "15:00",
     reason: "Consultation générale",
   });
 
   useEffect(() => {
     changeBackground({ value: "light", label: "Light" });
+
+    const fetchPatients = async () => {
+      try {
+        const data = await ApiService.getPatients();
+        const clean = (Array.isArray(data) ? data : []).filter((p) => {
+          const last = (p.lastName || "").toLowerCase().trim();
+          const first = (p.firstName || "").toLowerCase().trim();
+          return (
+            !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+            !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+          );
+        });
+        setPatients(clean);
+        if (clean.length > 0) {
+          setNewRdv((prev) => ({ ...prev, patientId: clean[0].id }));
+        }
+      } catch (e) {
+        console.warn("Erreur chargement patients dans dashboard :", e);
+      }
+    };
+    fetchPatients();
+
+    let channel;
+    try {
+      channel = new BroadcastChannel("waiting_room_display_channel");
+      channel.onmessage = (event) => {
+        if (event.data?.type === "UPDATE_LIST" && Array.isArray(event.data.list)) {
+          setWaitingRoom(event.data.list);
+        }
+      };
+    } catch (e) {}
+
+    const handleStorage = (e) => {
+      if (e.key === "cabinet_waiting_list" && e.newValue) {
+        try {
+          setWaitingRoom(JSON.parse(e.newValue));
+        } catch (err) {}
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      if (channel) channel.close();
+      window.removeEventListener("storage", handleStorage);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Statistiques calculées du cabinet
-  const totalPatientsCount = initialPatients.length + 185; // Base patientèle active
+  const totalPatientsCount = patients.length; // Nombre réel de patients en DB
   const todayAppointments = appointments.length;
   const waitingCount = waitingRoom.filter((w) => w.status === "En attente").length;
   const completedToday = appointments.filter((a) => a.status === "Terminé").length;
@@ -51,12 +114,16 @@ const DashboardCabinet = () => {
 
   const handleCreateRdv = (e) => {
     e.preventDefault();
-    const pat = initialPatients.find((p) => p.id === parseInt(newRdv.patientId)) || initialPatients[0];
+    const pat = patients.find((p) => p.id === parseInt(newRdv.patientId)) || patients[0];
+    if (!pat) {
+      Swal.fire("Attention", "Veuillez d'abord enregistrer un patient dans le répertoire.", "warning");
+      return;
+    }
     const created = {
       id: appointments.length + 1,
       patientId: pat.id,
-      patientName: `${pat.firstName} ${pat.lastName}`,
-      phone: pat.phone,
+      patientName: `${pat.firstName || ""} ${pat.lastName || ""}`.trim(),
+      phone: pat.phone || "",
       date: new Date().toISOString().split("T")[0],
       time: newRdv.time,
       duration: "20 min",
@@ -445,9 +512,9 @@ const DashboardCabinet = () => {
                 value={newRdv.patientId}
                 onChange={(e) => setNewRdv({ ...newRdv, patientId: e.target.value })}
               >
-                {initialPatients.map((p) => (
+                {patients.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.firstName} {p.lastName} ({p.fileNumber})
+                    {(p.firstName || "")} {(p.lastName || "").toUpperCase()} ({p.fileNumber || ""})
                   </option>
                 ))}
               </select>

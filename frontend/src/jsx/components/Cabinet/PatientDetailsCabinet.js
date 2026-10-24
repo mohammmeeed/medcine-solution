@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PrescriptionPreviewModal from "./PrescriptionPreviewModal";
+import ApiService from "../../../services/ApiService";
 import {
-  initialPatients,
   initialConsultations,
   initialPrescriptions,
   initialExaminations,
@@ -15,8 +15,9 @@ import {
 const PatientDetailsCabinet = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
-  const patientIdParam = parseInt(searchParams.get("id")) || 1;
+  const patientIdParam = parseInt(searchParams.get("id")) || null;
 
+  const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(patientIdParam);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [activeTab, setActiveTab] = useState("synthese");
@@ -32,24 +33,47 @@ const PatientDetailsCabinet = () => {
   const [docFilePreview, setDocFilePreview] = useState(null);
   const [previewingDoc, setPreviewingDoc] = useState(null);
 
-  const patient =
-    initialPatients.find((p) => p.id === selectedPatientId) || initialPatients[0];
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const data = await ApiService.getPatients();
+        const clean = (Array.isArray(data) ? data : []).filter((p) => {
+          const last = (p.lastName || "").toLowerCase().trim();
+          const first = (p.firstName || "").toLowerCase().trim();
+          return (
+            !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+            !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+          );
+        });
+        setPatients(clean);
+        if (!selectedPatientId && clean.length > 0) {
+          setSelectedPatientId(clean[0].id);
+        }
+      } catch (err) {
+        console.warn("Erreur chargement patients dans détails :", err);
+      }
+    };
+    fetchPatients();
+  }, [selectedPatientId]);
 
-  const patientConsultations = initialConsultations.filter(
-    (c) => c.patientId === patient.id
-  );
-  const patientPrescriptions = initialPrescriptions.filter(
-    (p) => p.patientId === patient.id
-  );
-  const patientExaminations = initialExaminations.filter(
-    (e) => e.patientId === patient.id
-  );
-  const patientDocuments = allDocuments.filter(
-    (d) => d.patientId === patient.id
-  );
-  const patientInvoices = initialInvoices.filter(
-    (i) => i.patientId === patient.id
-  );
+  const patient =
+    patients.find((p) => p.id === selectedPatientId) || patients[0] || null;
+
+  const patientConsultations = patient
+    ? initialConsultations.filter((c) => c.patientId === patient.id)
+    : [];
+  const patientPrescriptions = patient
+    ? initialPrescriptions.filter((p) => p.patientId === patient.id)
+    : [];
+  const patientExaminations = patient
+    ? initialExaminations.filter((e) => e.patientId === patient.id)
+    : [];
+  const patientDocuments = patient
+    ? allDocuments.filter((d) => d.patientId === patient.id)
+    : [];
+  const patientInvoices = patient
+    ? initialInvoices.filter((i) => i.patientId === patient.id)
+    : [];
 
   const handleFileChange = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -172,6 +196,20 @@ const PatientDetailsCabinet = () => {
       });
     }
   };
+
+  if (!patient) {
+    return (
+      <div className="card text-center p-5 mt-4">
+        <h4 className="text-muted">Aucun dossier patient sélectionné</h4>
+        <p>Veuillez sélectionner ou créer un patient depuis le répertoire des patients.</p>
+        <div>
+          <Link to="/patients" className="btn btn-primary">
+            <i className="fa fa-arrow-left me-2"></i> Aller au répertoire des patients
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="patient-dossier-wrapper">
@@ -753,12 +791,12 @@ const PatientDetailsCabinet = () => {
               <select
                 id="patientSelectQuick"
                 className="patient-select-native"
-                value={patient.id}
+                value={patient?.id || ""}
                 onChange={(e) => setSelectedPatientId(parseInt(e.target.value))}
               >
-                {initialPatients.map((p) => (
+                {patients.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.lastName.toUpperCase()} {p.firstName} ( {p.fileNumber} )
+                    {(p.lastName || "").toUpperCase()} {p.firstName || ""} ( {p.fileNumber || ""} )
                   </option>
                 ))}
               </select>

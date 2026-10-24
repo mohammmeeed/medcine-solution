@@ -4,9 +4,7 @@
 import axios from "axios";
 import {
   initialConsultations,
-  initialPatients,
   initialPrescriptions,
-  initialWaitingRoom,
   initialMedications,
   initialDoctor,
   initialStaff,
@@ -216,10 +214,10 @@ export const ApiService = {
       if (res.data && res.data.status === "success" && Array.isArray(res.data.data)) {
         return res.data.data;
       }
-      return initialPatients;
+      return [];
     } catch (err) {
       console.warn("Backend PHP non disponible pour patients :", err.message);
-      return initialPatients;
+      return [];
     }
   },
 
@@ -229,6 +227,26 @@ export const ApiService = {
       return res.data;
     } catch (err) {
       console.error("Erreur création patient vers MySQL :", err.message);
+      throw err;
+    }
+  },
+
+  async updatePatient(patientData) {
+    try {
+      const res = await apiClient.put("/patients.php", patientData);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur mise à jour patient vers MySQL :", err.message);
+      throw err;
+    }
+  },
+
+  async deletePatient(id) {
+    try {
+      const res = await apiClient.delete(`/patients.php?id=${id}`);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur suppression patient dans MySQL :", err.message);
       throw err;
     }
   },
@@ -312,10 +330,10 @@ export const ApiService = {
       if (res.data && res.data.status === "success" && Array.isArray(res.data.data)) {
         return res.data.data;
       }
-      return initialWaitingRoom || [];
+      return [];
     } catch (err) {
       console.warn("Backend PHP non disponible pour salle d'attente :", err.message);
-      return initialWaitingRoom || [];
+      return [];
     }
   },
 
@@ -325,6 +343,25 @@ export const ApiService = {
       return res.data;
     } catch (err) {
       console.error("Erreur mise à jour statut salle d'attente :", err.message);
+      throw err;
+    }
+  },
+
+  async createWaitingArrival(data) {
+    try {
+      const res = await apiClient.post("/waiting_room.php", data);
+      return res.data;
+    } catch (err) {
+      console.warn("Erreur ajout arrivée salle d'attente MySQL :", err.message);
+    }
+  },
+
+  async deleteWaitingPatient(id) {
+    try {
+      const res = await apiClient.delete(`/waiting_room.php?id=${id}`);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur suppression patient salle d'attente MySQL :", err.message);
       throw err;
     }
   },

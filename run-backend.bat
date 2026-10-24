@@ -14,5 +14,5 @@ IF EXIST "C:\xamppp\php\php.exe" (
 )
 
 echo Demarrage avec : %PHP_CMD%
-%PHP_CMD% -S 127.0.0.1:8000 -t backend
+%PHP_CMD% -S 127.0.0.1:8000 -t backend backend/router.php
 pause

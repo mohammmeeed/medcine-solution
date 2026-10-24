@@ -177,11 +177,13 @@ const ThemeContextProvider = (props) => {
     let resizeWindow = () => {
       setWindowWidth(window.innerWidth);
       setWindowHeight(window.innerHeight);
-      window.innerWidth >= 768 && window.innerWidth < 1351
-      ? body.setAttribute("data-sidebar-style", "mini")
-      : window.innerWidth <= 768
-      ? body.setAttribute("data-sidebar-style", "overlay")
-      : body.setAttribute("data-sidebar-style", "full");
+      if (window.innerWidth <= 991) {
+        body.setAttribute("data-sidebar-style", "overlay");
+      } else if (window.innerWidth < 1351) {
+        body.setAttribute("data-sidebar-style", "mini");
+      } else {
+        body.setAttribute("data-sidebar-style", "full");
+      }
     };
     resizeWindow();
     window.addEventListener("resize", resizeWindow);

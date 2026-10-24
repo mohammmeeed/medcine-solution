@@ -17,6 +17,9 @@ switch ($method) {
     case 'PUT':
         handleUpdatePatient($db);
         break;
+    case 'DELETE':
+        handleDeletePatient($db);
+        break;
     default:
         sendResponse("error", null, "Méthode non autorisée", 405);
 }
@@ -108,9 +111,9 @@ function handleCreatePatient($db) {
 
     try {
         $year = date('Y');
-        $countStmt = $db->query("SELECT COUNT(*) FROM patients");
-        $count = $countStmt->fetchColumn() + 1;
-        $fileNumber = !empty($body['fileNumber']) ? $body['fileNumber'] : sprintf("DOS-%s-%03d", $year, $count);
+        $maxStmt = $db->query("SELECT COALESCE(MAX(id), 0) + 1 FROM patients");
+        $nextNum = $maxStmt->fetchColumn();
+        $fileNumber = !empty($body['fileNumber']) ? $body['fileNumber'] : sprintf("DOS-%s-%03d", $year, $nextNum);
 
         $dob = !empty($body['dob']) ? $body['dob'] : null;
         $age = null;
@@ -143,11 +146,44 @@ function handleCreatePatient($db) {
 
         $newId = intval($db->lastInsertId());
 
+        // Sauvegarder allergies si spécifiées
+        if (!empty($body['allergies']) && is_array($body['allergies'])) {
+            $aStmt = $db->prepare("INSERT INTO patient_allergies (patient_id, allergy) VALUES (:pid, :allergy)");
+            foreach ($body['allergies'] as $allergy) {
+                if (trim($allergy) && trim($allergy) !== 'Aucune allergie connue') {
+                    $aStmt->execute([':pid' => $newId, ':allergy' => trim($allergy)]);
+                }
+            }
+        }
+
+        // Sauvegarder antécédents / maladies chroniques
+        if (!empty($body['chronicDiseases']) && is_array($body['chronicDiseases'])) {
+            $dStmt = $db->prepare("INSERT INTO patient_chronic_diseases (patient_id, disease) VALUES (:pid, :disease)");
+            foreach ($body['chronicDiseases'] as $disease) {
+                if (trim($disease)) {
+                    $dStmt->execute([':pid' => $newId, ':disease' => trim($disease)]);
+                }
+            }
+        }
+
         sendResponse("success", [
             "id" => $newId,
             "fileNumber" => $fileNumber,
             "firstName" => trim($body['firstName']),
-            "lastName" => trim($body['lastName'])
+            "lastName" => trim($body['lastName']),
+            "dob" => $dob,
+            "age" => $age,
+            "gender" => $body['gender'] ?? 'Féminin',
+            "phone" => $body['phone'] ?? null,
+            "email" => $body['email'] ?? null,
+            "address" => $body['address'] ?? null,
+            "secuNumber" => $body['secuNumber'] ?? null,
+            "bloodGroup" => $body['bloodGroup'] ?? 'O+',
+            "allergies" => $body['allergies'] ?? ["Aucune allergie connue"],
+            "chronicDiseases" => $body['chronicDiseases'] ?? [],
+            "regularTreatments" => [],
+            "lastVisit" => null,
+            "status" => "Actif"
         ], "Patient créé avec succès dans MySQL", 201);
     } catch (Exception $e) {
         sendResponse("error", null, "Erreur création patient : " . $e->getMessage(), 500);
@@ -156,34 +192,85 @@ function handleCreatePatient($db) {
 
 function handleUpdatePatient($db) {
     $body = getRequestBody();
-    $id = isset($_GET['id']) ? intval($_GET['id']) : ($body['id'] ?? null);
+    $id = isset($_GET['id']) ? intval($_GET['id']) : (isset($body['id']) ? intval($body['id']) : null);
 
     if (!$id) {
         sendResponse("error", null, "ID patient requis pour la mise à jour", 400);
     }
 
     try {
+        $dob = !empty($body['dob']) ? $body['dob'] : null;
+        $age = null;
+        if ($dob) {
+            $dobDate = new DateTime($dob);
+            $age = (new DateTime())->diff($dobDate)->y;
+        } elseif (!empty($body['age'])) {
+            $age = intval($body['age']);
+        }
+
         $sql = "UPDATE patients SET 
                     first_name = :fname,
                     last_name = :lname,
+                    dob = :dob,
+                    age = :age,
+                    gender = :gender,
                     phone = :phone,
                     email = :email,
                     address = :addr,
+                    secu_number = :secu,
                     blood_group = :bg
                 WHERE id = :id";
         $stmt = $db->prepare($sql);
         $stmt->execute([
-            ':fname' => $body['firstName'],
-            ':lname' => $body['lastName'],
+            ':fname' => trim($body['firstName']),
+            ':lname' => trim($body['lastName']),
+            ':dob' => $dob,
+            ':age' => $age,
+            ':gender' => $body['gender'] ?? 'Féminin',
             ':phone' => $body['phone'] ?? null,
             ':email' => $body['email'] ?? null,
             ':addr' => $body['address'] ?? null,
+            ':secu' => $body['secuNumber'] ?? null,
             ':bg' => $body['bloodGroup'] ?? null,
             ':id' => $id
         ]);
 
-        sendResponse("success", null, "Patient mis à jour avec succès");
+        sendResponse("success", [
+            "id" => $id,
+            "firstName" => trim($body['firstName']),
+            "lastName" => trim($body['lastName']),
+            "dob" => $dob,
+            "age" => $age,
+            "gender" => $body['gender'] ?? 'Féminin',
+            "phone" => $body['phone'] ?? null,
+            "email" => $body['email'] ?? null,
+            "address" => $body['address'] ?? null,
+            "secuNumber" => $body['secuNumber'] ?? null,
+            "bloodGroup" => $body['bloodGroup'] ?? null
+        ], "Patient mis à jour avec succès");
     } catch (Exception $e) {
         sendResponse("error", null, "Erreur mise à jour patient : " . $e->getMessage(), 500);
+    }
+}
+
+function handleDeletePatient($db) {
+    $body = getRequestBody();
+    $id = isset($_GET['id']) ? intval($_GET['id']) : (isset($body['id']) ? intval($body['id']) : null);
+
+    if (!$id) {
+        sendResponse("error", null, "ID patient requis pour la suppression", 400);
+    }
+
+    try {
+        $stmt = $db->prepare("DELETE FROM patients WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+
+        if ($stmt->rowCount() > 0) {
+            sendResponse("success", ["id" => $id], "Patient supprimé de la base de données");
+        } else {
+            sendResponse("error", null, "Patient introuvable ou déjà supprimé", 404);
+        }
+    } catch (Exception $e) {
+        sendResponse("error", null, "Erreur suppression patient : " . $e->getMessage(), 500);
     }
 }

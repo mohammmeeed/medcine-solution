@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Modal, Button } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
+import ApiService from "../../../services/ApiService";
 import {
   initialWaitingRoom,
   initialPatients,
@@ -11,17 +12,23 @@ import {
 const WaitingRoomPage = () => {
   const navigate = useNavigate();
   const [waitingList, setWaitingList] = useState(() => {
-    const saved = localStorage.getItem("cabinet_waiting_list");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return initialWaitingRoom;
+    try {
+      const saved = localStorage.getItem("cabinet_waiting_list");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (p) => p.patientName !== "Sophie Bernard" && p.patientName !== "Marc Lemoine"
+          );
+        }
+      }
+    } catch (e) {}
+    return [];
   });
+  const [patients, setPatients] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newArrival, setNewArrival] = useState({
-    patientId: 1,
+    patientId: "",
     appointmentTime: "11:30",
     reason: "Consultation générale",
   });
@@ -35,12 +42,85 @@ const WaitingRoomPage = () => {
     } catch (e) {}
   };
 
+  useEffect(() => {
+    // 1. Synchroniser depuis MySQL API uniquement (données réelles)
+    const loadWaitingFromApi = async () => {
+      try {
+        const data = await ApiService.getWaitingRoom();
+        if (Array.isArray(data)) {
+          const filtered = data.filter(
+            (p) => p.patientName !== "Sophie Bernard" && p.patientName !== "Marc Lemoine"
+          );
+          setWaitingList(filtered);
+          localStorage.setItem("cabinet_waiting_list", JSON.stringify(filtered));
+        }
+      } catch (err) {
+        console.warn("Erreur chargement salle d'attente MySQL :", err);
+      }
+
+      try {
+        const pData = await ApiService.getPatients();
+        const clean = (Array.isArray(pData) ? pData : []).filter((p) => {
+          const last = (p.lastName || "").toLowerCase().trim();
+          const first = (p.firstName || "").toLowerCase().trim();
+          return (
+            !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+            !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+          );
+        });
+        setPatients(clean);
+        if (clean.length > 0) {
+          setNewArrival((prev) => ({ ...prev, patientId: clean[0].id }));
+        }
+      } catch (err) {
+        console.warn("Erreur chargement patients dans salle d'attente :", err);
+      }
+    };
+    loadWaitingFromApi();
+
+    // 2. Écouter le BroadcastChannel pour les arrivées en direct (ex: depuis l'agenda)
+    let channel;
+    try {
+      channel = new BroadcastChannel("waiting_room_display_channel");
+      channel.onmessage = (event) => {
+        if (event.data?.type === "UPDATE_LIST" && Array.isArray(event.data.list)) {
+          setWaitingList(event.data.list);
+        }
+      };
+    } catch (e) {}
+
+    // 3. Écouter les modifications du localStorage (depuis l'agenda dans le même navigateur)
+    const handleStorage = (e) => {
+      if (e.key === "cabinet_waiting_list" && e.newValue) {
+        try {
+          setWaitingList(JSON.parse(e.newValue));
+        } catch (err) {}
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    // 4. Polling périodique léger toutes les 10 secondes
+    const interval = setInterval(() => {
+      loadWaitingFromApi();
+    }, 10000);
+
+    return () => {
+      if (channel) channel.close();
+      window.removeEventListener("storage", handleStorage);
+      clearInterval(interval);
+    };
+  }, []);
+
   const handleCallPatient = (patient) => {
     const updated = waitingList.map((p) =>
       p.id === patient.id ? { ...p, status: "Appelé" } : p
     );
     setWaitingList(updated);
     broadcastWaitingList(updated);
+
+    ApiService.updateWaitingStatus(patient.id, "Appelé").catch((e) =>
+      console.warn("Erreur mise à jour statut MySQL :", e)
+    );
 
     const callPayload = {
       patientId: patient.patientId || patient.id,
@@ -73,58 +153,98 @@ const WaitingRoomPage = () => {
     );
     setWaitingList(updated);
     broadcastWaitingList(updated);
+
+    ApiService.updateWaitingStatus(patient.id, "En consultation").catch((e) =>
+      console.warn("Erreur mise à jour statut MySQL :", e)
+    );
+
     navigate(`/consultations?patientId=${patient.patientId}`);
   };
 
   const handleRemovePatient = (id) => {
     Swal.fire({
-      title: "Retirer de la salle d'attente ?",
-      text: "Le patient sera marqué comme ayant quitté la salle.",
+      title: "Supprimer de la salle d'attente ?",
+      text: "Le patient sera définitivement supprimé de la base de données.",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Oui, retirer",
+      confirmButtonText: "Oui, supprimer",
       cancelButtonText: "Annuler",
-    }).then((result) => {
+      confirmButtonColor: "#f72b50",
+      cancelButtonColor: "#6c757d",
+    }).then(async (result) => {
       if (result.isConfirmed) {
         const updated = waitingList.filter((p) => p.id !== id);
         setWaitingList(updated);
         broadcastWaitingList(updated);
+
+        // Suppression directe dans la base de données MySQL
+        try {
+          await ApiService.deleteWaitingPatient(id);
+        } catch (err) {
+          console.warn("Erreur suppression patient MySQL :", err);
+        }
+
+        Swal.fire({
+          icon: "success",
+          title: "Supprimé !",
+          text: "Le patient a été supprimé de la salle d'attente et de la base de données.",
+          timer: 1500,
+          showConfirmButton: false,
+        });
       }
     });
   };
 
-  const handleRegisterArrival = (e) => {
+  const handleRegisterArrival = async (e) => {
     e.preventDefault();
     const pat =
-      initialPatients.find((p) => p.id === parseInt(newArrival.patientId)) ||
-      initialPatients[0];
+      patients.find((p) => p.id === parseInt(newArrival.patientId)) ||
+      patients[0];
+    if (!pat) {
+      Swal.fire("Attention", "Veuillez d'abord enregistrer un patient dans le répertoire.", "warning");
+      return;
+    }
     const now = new Date();
     const arrivalTime = `${String(now.getHours()).padStart(2, "0")}:${String(
       now.getMinutes()
     ).padStart(2, "0")}`;
 
-    const created = {
-      id: waitingList.length + 1,
-      patientId: pat.id,
-      patientName: `${pat.firstName} ${pat.lastName}`,
-      appointmentTime: newArrival.appointmentTime,
-      arrivalTime: arrivalTime,
-      reason: newArrival.reason,
-      waitTimeMinutes: 0,
-      status: "En attente",
-    };
+    try {
+      const res = await ApiService.createWaitingArrival({
+        patientId: pat.id,
+        appointmentTime: newArrival.appointmentTime,
+        arrivalTime: arrivalTime,
+        reason: newArrival.reason,
+      });
 
-    const updated = [...waitingList, created];
-    setWaitingList(updated);
-    broadcastWaitingList(updated);
-    setShowAddModal(false);
-    Swal.fire({
-      icon: "success",
-      title: "Arrivée enregistrée",
-      text: `${created.patientName} a été ajouté(e) en salle d'attente.`,
-      timer: 1500,
-      showConfirmButton: false,
-    });
+      const newId = res?.data?.id || Date.now();
+
+      const created = {
+        id: newId,
+        patientId: pat.id,
+        patientName: `${pat.firstName} ${pat.lastName}`,
+        fileNumber: pat.fileNumber || `DOS-${pat.id}`,
+        appointmentTime: newArrival.appointmentTime,
+        arrivalTime: arrivalTime,
+        reason: newArrival.reason,
+        waitTimeMinutes: 0,
+        status: "En attente",
+      };
+
+      const updated = [created, ...waitingList];
+      setWaitingList(updated);
+      broadcastWaitingList(updated);
+      setShowAddModal(false);
+      Swal.fire({
+        icon: "success",
+        title: "Arrivée enregistrée",
+        text: `${created.patientName} a été ajouté(e) en salle d'attente et sauvegardé(e) dans la base.`,
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      console.warn("Erreur enregistrement arrivée :", err);
+    }
   };
 
   const waitingCount = waitingList.filter((p) => p.status === "En attente").length;
@@ -288,9 +408,9 @@ const WaitingRoomPage = () => {
                   setNewArrival({ ...newArrival, patientId: e.target.value })
                 }
               >
-                {initialPatients.map((p) => (
+                {patients.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.firstName} {p.lastName} ({p.fileNumber})
+                    {(p.firstName || "")} {(p.lastName || "").toUpperCase()} ({p.fileNumber || ""})
                   </option>
                 ))}
               </select>
