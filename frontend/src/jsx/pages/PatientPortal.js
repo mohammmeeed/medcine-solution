@@ -564,6 +564,17 @@ export default function PatientPortal() {
                 Nous assurons également les consultations de gynécologie générale, le dépistage précoce, les bilans de fertilité et la contraception, dans un cadre serein privilégiant l'écoute attentive, le respect du secret médical et la ponctualité.
               </p>
             </div>
+
+            {/* GRAND BOUTON POUR RÉSERVER (Demandé explicitement par l'utilisateur) */}
+            <button
+              className="btn-primary-mint"
+              onClick={() => setView("schedule")}
+              style={{ padding: "18px 24px", fontSize: "16px", marginBottom: "10px" }}
+            >
+              <Calendar size={20} />
+              <span>Réserver un Rendez-vous</span>
+              <ArrowRight size={18} style={{ marginLeft: "auto" }} />
+            </button>
           </div>
         )}
 
@@ -1583,23 +1594,6 @@ export default function PatientPortal() {
           </div>
         )}
       </div>
-
-      {/* =================================================================== */}
-      {/* BOUTON FIXE DE RÉSERVATION (Vue Accueil - Ancré au-dessus du menu)  */}
-      {/* =================================================================== */}
-      {view === "doctor" && (
-        <div className="fixed-cta-bar">
-          <button
-            className="btn-primary-mint"
-            onClick={() => setView("schedule")}
-            style={{ padding: "15px 22px", fontSize: "15px" }}
-          >
-            <Calendar size={19} />
-            <span>Réserver un Rendez-vous</span>
-            <ArrowRight size={18} style={{ marginLeft: "auto" }} />
-          </button>
-        </div>
-      )}
 
       {/* =================================================================== */}
       {/* BARRE FLOTTANTE INFÉRIEURE (Home, Agenda, Profil, À propos)        */}

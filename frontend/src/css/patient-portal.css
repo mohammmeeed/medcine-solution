@@ -85,7 +85,7 @@
   max-width: 640px;
   margin: 0 auto;
   overflow-y: visible;
-  padding: 28px 20px 175px;
+  padding: 28px 20px 120px;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -94,7 +94,7 @@
 @media (min-width: 768px) {
   .screen-scroll {
     max-width: 700px;
-    padding: 38px 24px 180px;
+    padding: 38px 24px 130px;
   }
 }
 
@@ -494,25 +494,6 @@
   border-radius: 999px;
   background: var(--accent-mint);
   box-shadow: 0 0 10px var(--accent-mint);
-}
-
-/* Bouton Fixe Réserver un Rendez-vous (Directement au-dessus de la barre de navigation) */
-.fixed-cta-bar {
-  position: fixed;
-  bottom: 94px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 32px);
-  max-width: 460px;
-  z-index: 89;
-  display: flex;
-  justify-content: center;
-  pointer-events: auto;
-  animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.fixed-cta-bar .btn-primary-mint {
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7), 0 0 25px rgba(187, 247, 208, 0.45);
 }
 
 /* Bottom Floating Navigation Bar (Centrée et fixe) */
