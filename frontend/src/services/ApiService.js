@@ -254,9 +254,10 @@ export const ApiService = {
   // ----------------------------------------------------
   // ORDONNANCES (PRESCRIPTIONS)
   // ----------------------------------------------------
-  async getPrescriptions() {
+  async getPrescriptions(patientId = null) {
     try {
-      const res = await apiClient.get("/prescriptions.php");
+      const url = patientId ? `/prescriptions.php?patient_id=${patientId}` : "/prescriptions.php";
+      const res = await apiClient.get(url);
       if (res.data && res.data.status === "success" && Array.isArray(res.data.data)) {
         return res.data.data;
       }
@@ -273,6 +274,16 @@ export const ApiService = {
       return res.data;
     } catch (err) {
       console.error("Erreur enregistrement ordonnance :", err.message);
+      throw err;
+    }
+  },
+
+  async deletePrescription(id) {
+    try {
+      const res = await apiClient.delete(`/prescriptions.php?id=${id}`);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur suppression ordonnance dans MySQL :", err.message);
       throw err;
     }
   },
@@ -416,9 +427,10 @@ export const ApiService = {
   // ----------------------------------------------------
   // FACTURES (INVOICES)
   // ----------------------------------------------------
-  async getInvoices() {
+  async getInvoices(patientId = null) {
     try {
-      const res = await apiClient.get("/invoices.php");
+      const url = patientId ? `/invoices.php?patient_id=${patientId}` : "/invoices.php";
+      const res = await apiClient.get(url);
       if (res.data && res.data.status === "success" && Array.isArray(res.data.data)) {
         return res.data.data;
       }

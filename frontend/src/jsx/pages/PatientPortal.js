@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useRef } from "react";
 import confetti from "canvas-confetti";
 import "../../css/patient-portal.css";
 import {
@@ -14,7 +13,6 @@ import {
   CheckCircle2,
   Phone,
   User,
-  ShieldCheck,
   Send,
   X,
   ArrowRight,
@@ -78,8 +76,6 @@ const getApiUrl = (endpoint) => {
 };
 
 export default function PatientPortal() {
-  const navigate = useNavigate();
-
   // Navigation entre vues: 'doctor' (présentation) | 'schedule' (agenda) | 'profile' (profil) | 'about' (à propos) | 'confirmed' (succès)
   const [view, setView] = useState("doctor");
 
@@ -188,13 +184,68 @@ export default function PatientPortal() {
     getFirstAvailableSlot(selectedDay, initialPeriod, selectedMonth, selectedYear)
   );
 
+  // Direction de l'animation de slide ('left' ou 'right')
+  const [slideDirection, setSlideDirection] = useState("right");
+
+  // Changement de période avec sélection automatique du premier créneau valide
+  const handleSwitchPeriod = (newPeriod) => {
+    if (newPeriod === timePeriod) return;
+    setSlideDirection(newPeriod === "soir" ? "left" : "right");
+    setTimePeriod(newPeriod);
+    const slots = newPeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS;
+    const available = slots.filter((s) => !isSlotPast(s, selectedDay, selectedMonth, selectedYear));
+    if (available.length > 0 && (!slots.includes(selectedTime) || isSlotPast(selectedTime, selectedDay, selectedMonth, selectedYear))) {
+      setSelectedTime(available[0]);
+    }
+  };
+
+  // Gestion des gestes Swipe (Touch & Mouse Drag) entre Matin et Soir
+  const touchStartXRef = useRef(null);
+  const touchStartYRef = useRef(null);
+  const isDraggingRef = useRef(false);
+
+  const handleTouchStart = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    touchStartXRef.current = clientX;
+    touchStartYRef.current = clientY;
+    isDraggingRef.current = true;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!isDraggingRef.current || touchStartXRef.current === null) return;
+    const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+    const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+    const diffX = clientX - touchStartXRef.current;
+    const diffY = clientY - touchStartYRef.current;
+
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    isDraggingRef.current = false;
+
+    // Détection du swipe horizontal (seuil minimum 35px et plus horizontal que vertical)
+    if (Math.abs(diffX) > 35 && Math.abs(diffX) > Math.abs(diffY) * 1.1) {
+      if (diffX < 0) {
+        // Swipe vers la gauche (doigt glissé vers la gauche) -> Après-midi / Soir
+        handleSwitchPeriod("soir");
+      } else {
+        // Swipe vers la droite (doigt glissé vers la droite) -> Matin
+        handleSwitchPeriod("matin");
+      }
+    }
+  };
+
   // Navigation entre les mois
   const canGoPrevMonth =
     calendarYear > now.getFullYear() ||
     (calendarYear === now.getFullYear() && calendarMonth > now.getMonth());
 
+  // Direction de l'animation des mois ('left' ou 'right')
+  const [monthSlideDirection, setMonthSlideDirection] = useState("left");
+
   const handlePrevMonth = () => {
     if (!canGoPrevMonth) return;
+    setMonthSlideDirection("right");
     if (calendarMonth === 0) {
       setCalendarMonth(11);
       setCalendarYear((y) => y - 1);
@@ -204,11 +255,50 @@ export default function PatientPortal() {
   };
 
   const handleNextMonth = () => {
+    setMonthSlideDirection("left");
     if (calendarMonth === 11) {
       setCalendarMonth(0);
       setCalendarYear((y) => y + 1);
     } else {
       setCalendarMonth((m) => m + 1);
+    }
+  };
+
+  // Gestion du swipe (tactile & souris) pour changer de mois
+  const monthTouchStartXRef = useRef(null);
+  const monthTouchStartYRef = useRef(null);
+  const monthIsDraggingRef = useRef(false);
+
+  const handleMonthTouchStart = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    monthTouchStartXRef.current = clientX;
+    monthTouchStartYRef.current = clientY;
+    monthIsDraggingRef.current = true;
+  };
+
+  const handleMonthTouchEnd = (e) => {
+    if (!monthIsDraggingRef.current || monthTouchStartXRef.current === null) return;
+    const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+    const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+    const diffX = clientX - monthTouchStartXRef.current;
+    const diffY = clientY - monthTouchStartYRef.current;
+
+    monthTouchStartXRef.current = null;
+    monthTouchStartYRef.current = null;
+    monthIsDraggingRef.current = false;
+
+    // Détection du swipe horizontal (seuil minimum 35px, plus horizontal que vertical)
+    if (Math.abs(diffX) > 35 && Math.abs(diffX) > Math.abs(diffY) * 1.1) {
+      if (diffX < 0) {
+        // Glisser vers la gauche -> Mois suivant
+        handleNextMonth();
+      } else {
+        // Glisser vers la droite -> Mois précédent
+        if (canGoPrevMonth) {
+          handlePrevMonth();
+        }
+      }
     }
   };
 
@@ -401,56 +491,44 @@ export default function PatientPortal() {
         {view === "doctor" && (
           <div className="fade-in-up">
 
-            {/* Titre Principal avec bouton Accès Médecin */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-              <div>
-                <h2
-                  style={{
-                    fontSize: "24px",
-                    fontWeight: "800",
-                    letterSpacing: "-0.5px",
-                    lineHeight: "1.15",
-                    color: "#ffffff",
-                  }}
-                >
-                  Dr. N. BELBACHIR
-                  <br />
-                  <span style={{ color: "var(--text-secondary)", fontWeight: "600", fontSize: "20px" }}>
-                    OULD HENNIA
-                  </span>
-                </h2>
-                <p style={{ color: "var(--accent-mint)", fontSize: "13px", fontWeight: "600", marginTop: "4px" }}>
-                  Spécialiste Gynécologie Obstétrique & Échographie
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => navigate("/login")}
-                title="Accès Médecin & Secrétariat"
+            {/* Titre Principal centré */}
+            <div style={{ textAlign: "center", marginBottom: "18px" }}>
+              <h2
                 style={{
-                  background: "rgba(255, 255, 255, 0.08)",
-                  border: "1px solid rgba(187, 247, 208, 0.35)",
-                  borderRadius: "10px",
-                  color: "var(--accent-mint)",
-                  fontSize: "11.5px",
-                  fontWeight: "700",
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  whiteSpace: "nowrap",
-                  transition: "all 0.2s ease",
+                  fontSize: "24px",
+                  fontWeight: "800",
+                  letterSpacing: "-0.5px",
+                  lineHeight: "1.2",
+                  color: "#ffffff",
+                  margin: 0,
                 }}
               >
-                <ShieldCheck size={14} color="var(--accent-mint)" />
-                <span>Espace Médecin</span>
-              </button>
+                Dr. N. BELBACHIR
+                <br />
+                <span style={{ color: "var(--text-secondary)", fontWeight: "600", fontSize: "20px" }}>
+                  OULD HENNIA
+                </span>
+              </h2>
+              <p style={{ color: "var(--accent-mint)", fontSize: "13px", fontWeight: "600", marginTop: "6px", marginBottom: 0 }}>
+                Spécialiste Gynécologie Obstétrique & Échographie
+              </p>
             </div>
 
-            {/* Carte Portrait du Médecin (Directement inspirée de la capture) */}
-            <div className="doctor-hero-card">
+            {/* Carte Portrait du Médecin (Cliquable pour ouvrir le calendrier de réservation) */}
+            <div
+              className="doctor-hero-card"
+              onClick={() => setView("schedule")}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setView("schedule");
+                }
+              }}
+              title="Cliquer pour afficher le calendrier de réservation"
+              style={{ cursor: "pointer" }}
+            >
               <div className="doctor-img-container">
                 <img
                   src="/doctor.jpg"
@@ -486,17 +564,6 @@ export default function PatientPortal() {
                 Nous assurons également les consultations de gynécologie générale, le dépistage précoce, les bilans de fertilité et la contraception, dans un cadre serein privilégiant l'écoute attentive, le respect du secret médical et la ponctualité.
               </p>
             </div>
-
-            {/* GRAND BOUTON POUR RÉSERVER (Demandé explicitement par l'utilisateur) */}
-            <button
-              className="btn-primary-mint"
-              onClick={() => setView("schedule")}
-              style={{ padding: "18px 24px", fontSize: "16px", marginBottom: "10px" }}
-            >
-              <Calendar size={20} />
-              <span>Réserver un Rendez-vous</span>
-              <ArrowRight size={18} style={{ marginLeft: "auto" }} />
-            </button>
           </div>
         )}
 
@@ -549,330 +616,350 @@ export default function PatientPortal() {
 
             {/* SECTION SCHEDULE / CALENDRIER DYNAMIQUE */}
             <div className="glass-panel" style={{ padding: "18px 16px", marginBottom: "16px" }}>
-              <div className="schedule-header">
-                <div className="schedule-title">Calendrier</div>
-                <div className="schedule-month-nav" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <button
-                    type="button"
-                    onClick={handlePrevMonth}
-                    disabled={!canGoPrevMonth}
-                    title={canGoPrevMonth ? "Mois précédent" : "Impossible de réserver dans le passé"}
-                    style={{
-                      background: "rgba(255, 255, 255, 0.06)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                      borderRadius: "8px",
-                      width: "28px",
-                      height: "28px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: canGoPrevMonth ? "var(--text-primary)" : "rgba(255, 255, 255, 0.2)",
-                      cursor: canGoPrevMonth ? "pointer" : "not-allowed",
-                      transition: "all 0.2s ease",
-                    }}
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-
-                  <span style={{ minWidth: "115px", textAlign: "center", fontWeight: "700", color: "#fff", fontSize: "13px" }}>
-                    {MONTH_NAMES[calendarMonth]} {calendarYear}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={handleNextMonth}
-                    title="Mois suivant"
-                    style={{
-                      background: "rgba(255, 255, 255, 0.06)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                      borderRadius: "8px",
-                      width: "28px",
-                      height: "28px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "var(--text-primary)",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-
-              {/* En-tête des jours de la semaine en français : L M M J V S D */}
-              <div className="calendar-weekdays">
-                <span title="Lundi">L</span>
-                <span title="Mardi">M</span>
-                <span title="Mercredi">M</span>
-                <span title="Jeudi">J</span>
-                <span title="Vendredi (Fermé)" style={{ color: "rgba(239, 68, 68, 0.8)", fontWeight: "700" }}>V</span>
-                <span title="Samedi">S</span>
-                <span title="Dimanche">D</span>
-              </div>
-
-              {/* Grille dynamique du calendrier selon le mois et l'année */}
-              <div className="calendar-grid">
-                {/* Jours de fin du mois précédent */}
-                {leadingPaddingDays.map((padDay) => (
-                  <div key={`prev-${padDay}`} className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>
-                    {padDay}
-                  </div>
-                ))}
-
-                {/* Jours du mois sélectionné */}
-                {currentMonthDays.map((d) => {
-                  const isPast = isDayPast(d, calendarMonth, calendarYear);
-                  const isToday =
-                    d === now.getDate() &&
-                    calendarMonth === now.getMonth() &&
-                    calendarYear === now.getFullYear();
-                  const isDayFriday = isFriday(d, calendarMonth, calendarYear);
-                  const isAvailable = !isPast && !isDayFriday && (!isToday || hasFutureSlotsToday);
-                  const isSelected =
-                    selectedDay === d &&
-                    selectedMonth === calendarMonth &&
-                    selectedYear === calendarYear;
-
-                  let cellClass = "calendar-day-cell";
-                  let cellTitle = "";
-                  if (isSelected) {
-                    cellClass += " available selected";
-                    cellTitle = `Sélectionné : ${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear}`;
-                  } else if (isAvailable) {
-                    cellClass += " available";
-                    cellTitle = isToday
-                      ? `Aujourd'hui (${d} ${MONTH_NAMES[calendarMonth]}) - Créneaux disponibles`
-                      : `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Disponible)`;
-                  } else if (isPast) {
-                    cellClass += " past";
-                    cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Passé - non réservable)`;
-                  } else if (isDayFriday) {
-                    cellClass += " closed";
-                    cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Vendredi - Cabinet fermé)`;
-                  } else if (isToday && !hasFutureSlotsToday) {
-                    cellClass += " past";
-                    cellTitle = `Aujourd'hui (${d} ${MONTH_NAMES[calendarMonth]}) : Plus aucun créneau disponible`;
-                  }
-
-                  return (
-                    <div
-                      key={`curr-${d}`}
-                      className={cellClass}
-                      title={cellTitle}
-                      onClick={isAvailable ? () => handleSelectDay(d) : undefined}
-                    >
-                      {d}
-                    </div>
-                  );
-                })}
-
-                {/* Jours de début du mois suivant */}
-                {trailingPaddingDays.map((padDay) => (
-                  <div key={`next-${padDay}`} className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>
-                    {padDay}
-                  </div>
-                ))}
-              </div>
-
-              {/* Sélecteur Période : Matin ou Après-midi */}
+              {/* Zone Swipeable entre les mois */}
               <div
-                style={{
-                  display: "flex",
-                  background: "rgba(255, 255, 255, 0.04)",
-                  borderRadius: "14px",
-                  padding: "4px",
-                  marginTop: "16px",
-                  marginBottom: "14px",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                  gap: "6px",
-                }}
+                className="calendar-month-swipe-wrapper"
+                onTouchStart={handleMonthTouchStart}
+                onTouchEnd={handleMonthTouchEnd}
+                onMouseDown={handleMonthTouchStart}
+                onMouseUp={handleMonthTouchEnd}
+                title="Glissez vers la gauche ou la droite pour changer de mois"
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTimePeriod("matin");
-                    const available = MORNING_SLOTS.filter((s) => !isSlotPast(s, selectedDay));
-                    if (available.length > 0 && (!MORNING_SLOTS.includes(selectedTime) || isSlotPast(selectedTime, selectedDay))) {
-                      setSelectedTime(available[0]);
-                    }
-                  }}
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    padding: "10px 8px",
-                    borderRadius: "10px",
-                    border: "none",
-                    cursor: "pointer",
-                    fontWeight: timePeriod === "matin" ? "800" : "600",
-                    fontSize: "12.5px",
-                    transition: "all 0.25s ease",
-                    background: timePeriod === "matin" ? "#bbf7d0" : "transparent",
-                    color: timePeriod === "matin" ? "#0d2315" : "var(--text-secondary)",
-                    boxShadow: timePeriod === "matin" ? "0 4px 15px rgba(187, 247, 208, 0.35)" : "none",
-                  }}
-                >
-                  <Sun size={15} color={timePeriod === "matin" ? "#0d2315" : "#eab308"} />
-                  <span>Matin</span>
-                  <span
-                    style={{
-                      fontSize: "9.5px",
-                      opacity: timePeriod === "matin" ? 0.75 : 0.6,
-                      marginLeft: "1px",
-                    }}
-                  >
-                    (09h - 12h30)
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTimePeriod("soir");
-                    const available = EVENING_SLOTS.filter((s) => !isSlotPast(s, selectedDay));
-                    if (available.length > 0 && (!EVENING_SLOTS.includes(selectedTime) || isSlotPast(selectedTime, selectedDay))) {
-                      setSelectedTime(available[0]);
-                    }
-                  }}
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    padding: "10px 8px",
-                    borderRadius: "10px",
-                    border: "none",
-                    cursor: "pointer",
-                    fontWeight: timePeriod === "soir" ? "800" : "600",
-                    fontSize: "12.5px",
-                    transition: "all 0.25s ease",
-                    background: timePeriod === "soir" ? "#bbf7d0" : "transparent",
-                    color: timePeriod === "soir" ? "#0d2315" : "var(--text-secondary)",
-                    boxShadow: timePeriod === "soir" ? "0 4px 15px rgba(187, 247, 208, 0.35)" : "none",
-                  }}
-                >
-                  <Sunset size={15} color={timePeriod === "soir" ? "#0d2315" : "#f59e0b"} />
-                  <span>Après-midi</span>
-                  <span
-                    style={{
-                      fontSize: "9.5px",
-                      opacity: timePeriod === "soir" ? 0.75 : 0.6,
-                      marginLeft: "1px",
-                    }}
-                  >
-                    (13h - 17h30)
-                  </span>
-                </button>
-              </div>
-
-              {/* Titre des Créneaux du Matin ou du Soir */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "12px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: "700",
-                    color: "var(--text-muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.8px",
-                  }}
-                >
-                  Créneaux ({isTodaySelected ? `Aujourd'hui, ${selectedDay}` : `${selectedDay} ${MONTH_NAMES[selectedMonth]}`}) :
-                </span>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: "var(--accent-mint)",
-                    fontWeight: "700",
-                  }}
-                >
-                  {timePeriod === "matin" ? "Matinée (09:00 - 12:30)" : "Après-midi (13:00 - 17:30)"}
-                </span>
-              </div>
-
-              {/* Grille des créneaux horaires avec blocage des heures passées */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, 1fr)",
-                  gap: "8px",
-                  marginBottom: "8px",
-                }}
-              >
-                {(timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).map((slot) => {
-                  const isPast = isSlotPast(slot, selectedDay, selectedMonth, selectedYear);
-                  const isSelected = selectedTime === slot && !isPast;
-
-                  return (
-                    <div
-                      key={slot}
-                      className={`time-slot-pill ${isPast ? "disabled" : isSelected ? "selected" : ""}`}
-                      onClick={!isPast ? () => setSelectedTime(slot) : undefined}
-                      title={isPast ? `${slot} (Passé - non réservable)` : `Réserver pour ${slot}`}
-                    >
-                      {slot}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Message d'alerte contextuel si tous les créneaux de la période sont passés aujourd'hui */}
-              {isTodaySelected && (timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).every((s) => isSlotPast(s, selectedDay, selectedMonth, selectedYear)) && (
-                <div
-                  style={{
-                    padding: "9px 12px",
-                    borderRadius: "10px",
-                    background: "rgba(234, 179, 8, 0.1)",
-                    border: "1px solid rgba(234, 179, 8, 0.25)",
-                    color: "#fef08a",
-                    fontSize: "11px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "8px",
-                    marginTop: "6px",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span>
-                    ⚠️ Créneaux {timePeriod === "matin" ? "du matin" : "de l'après-midi"} passés pour aujourd'hui.
-                  </span>
-                  {timePeriod === "matin" && EVENING_SLOTS.some((s) => !isSlotPast(s, selectedDay)) && (
+                <div className="schedule-header">
+                  <div className="schedule-title">Calendrier</div>
+                  <div className="schedule-month-nav" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <button
                       type="button"
-                      onClick={() => {
-                        setTimePeriod("soir");
-                        const available = EVENING_SLOTS.filter((s) => !isSlotPast(s, selectedDay));
-                        if (available.length > 0) setSelectedTime(available[0]);
-                      }}
+                      onClick={handlePrevMonth}
+                      disabled={!canGoPrevMonth}
+                      title={canGoPrevMonth ? "Mois précédent" : "Impossible de réserver dans le passé"}
                       style={{
-                        background: "rgba(234, 179, 8, 0.3)",
-                        border: "none",
-                        color: "#fff",
-                        padding: "3px 8px",
-                        borderRadius: "6px",
-                        fontSize: "11px",
-                        fontWeight: "700",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
+                        background: "rgba(255, 255, 255, 0.06)",
+                        border: "1px solid rgba(255, 255, 255, 0.12)",
+                        borderRadius: "8px",
+                        width: "28px",
+                        height: "28px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: canGoPrevMonth ? "var(--text-primary)" : "rgba(255, 255, 255, 0.2)",
+                        cursor: canGoPrevMonth ? "pointer" : "not-allowed",
+                        transition: "all 0.2s ease",
                       }}
                     >
-                      Après-midi →
+                      <ChevronLeft size={16} />
                     </button>
+
+                    <span style={{ minWidth: "115px", textAlign: "center", fontWeight: "700", color: "#fff", fontSize: "13px" }}>
+                      {MONTH_NAMES[calendarMonth]} {calendarYear}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={handleNextMonth}
+                      title="Mois suivant"
+                      style={{
+                        background: "rgba(255, 255, 255, 0.06)",
+                        border: "1px solid rgba(255, 255, 255, 0.12)",
+                        borderRadius: "8px",
+                        width: "28px",
+                        height: "28px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--text-primary)",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* En-tête des jours de la semaine en français : L M M J V S D */}
+                <div className="calendar-weekdays">
+                  <span title="Lundi">L</span>
+                  <span title="Mardi">M</span>
+                  <span title="Mercredi">M</span>
+                  <span title="Jeudi">J</span>
+                  <span title="Vendredi (Fermé)" style={{ color: "rgba(239, 68, 68, 0.8)", fontWeight: "700" }}>V</span>
+                  <span title="Samedi">S</span>
+                  <span title="Dimanche">D</span>
+                </div>
+
+                {/* Grille dynamique du calendrier selon le mois et l'année avec animation fluide */}
+                <div
+                  key={`${calendarYear}-${calendarMonth}`}
+                  className={`calendar-grid ${monthSlideDirection === "left" ? "slots-slide-from-right" : "slots-slide-from-left"}`}
+                >
+                  {/* Jours de fin du mois précédent */}
+                  {leadingPaddingDays.map((padDay) => (
+                    <div key={`prev-${padDay}`} className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>
+                      {padDay}
+                    </div>
+                  ))}
+
+                  {/* Jours du mois sélectionné */}
+                  {currentMonthDays.map((d) => {
+                    const isPast = isDayPast(d, calendarMonth, calendarYear);
+                    const isToday =
+                      d === now.getDate() &&
+                      calendarMonth === now.getMonth() &&
+                      calendarYear === now.getFullYear();
+                    const isDayFriday = isFriday(d, calendarMonth, calendarYear);
+                    const isAvailable = !isPast && !isDayFriday && (!isToday || hasFutureSlotsToday);
+                    const isSelected =
+                      selectedDay === d &&
+                      selectedMonth === calendarMonth &&
+                      selectedYear === calendarYear;
+
+                    let cellClass = "calendar-day-cell";
+                    let cellTitle = "";
+                    if (isSelected) {
+                      cellClass += " available selected";
+                      cellTitle = `Sélectionné : ${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear}`;
+                    } else if (isAvailable) {
+                      cellClass += " available";
+                      cellTitle = isToday
+                        ? `Aujourd'hui (${d} ${MONTH_NAMES[calendarMonth]}) - Créneaux disponibles`
+                        : `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Disponible)`;
+                    } else if (isPast) {
+                      cellClass += " past";
+                      cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Passé - non réservable)`;
+                    } else if (isDayFriday) {
+                      cellClass += " closed";
+                      cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Vendredi - Cabinet fermé)`;
+                    } else if (isToday && !hasFutureSlotsToday) {
+                      cellClass += " past";
+                      cellTitle = `Aujourd'hui (${d} ${MONTH_NAMES[calendarMonth]}) : Plus aucun créneau disponible`;
+                    }
+
+                    return (
+                      <div
+                        key={`curr-${d}`}
+                        className={cellClass}
+                        title={cellTitle}
+                        onClick={isAvailable ? () => handleSelectDay(d) : undefined}
+                      >
+                        {d}
+                      </div>
+                    );
+                  })}
+
+                  {/* Jours de début du mois suivant */}
+                  {trailingPaddingDays.map((padDay) => (
+                    <div key={`next-${padDay}`} className="calendar-day-cell" style={{ opacity: 0.15, cursor: "not-allowed" }}>
+                      {padDay}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Zone Swipeable entre Matin et Après-midi */}
+              <div
+                className="slots-swipe-wrapper"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={handleTouchStart}
+                onMouseUp={handleTouchEnd}
+                title="Glissez vers la gauche ou la droite pour basculer entre Matin et Après-midi"
+              >
+                {/* Sélecteur Période : Matin ou Après-midi */}
+                <div
+                  style={{
+                    display: "flex",
+                    background: "rgba(255, 255, 255, 0.04)",
+                    borderRadius: "14px",
+                    padding: "4px",
+                    marginTop: "16px",
+                    marginBottom: "14px",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    gap: "6px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchPeriod("matin")}
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      padding: "10px 8px",
+                      borderRadius: "10px",
+                      border: "none",
+                      cursor: "pointer",
+                      fontWeight: timePeriod === "matin" ? "800" : "600",
+                      fontSize: "12.5px",
+                      transition: "all 0.25s ease",
+                      background: timePeriod === "matin" ? "#bbf7d0" : "transparent",
+                      color: timePeriod === "matin" ? "#0d2315" : "var(--text-secondary)",
+                      boxShadow: timePeriod === "matin" ? "0 4px 15px rgba(187, 247, 208, 0.35)" : "none",
+                    }}
+                  >
+                    <Sun size={15} color={timePeriod === "matin" ? "#0d2315" : "#eab308"} />
+                    <span>Matin</span>
+                    <span
+                      style={{
+                        fontSize: "9.5px",
+                        opacity: timePeriod === "matin" ? 0.75 : 0.6,
+                        marginLeft: "1px",
+                      }}
+                    >
+                      (09h - 12h30)
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchPeriod("soir")}
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      padding: "10px 8px",
+                      borderRadius: "10px",
+                      border: "none",
+                      cursor: "pointer",
+                      fontWeight: timePeriod === "soir" ? "800" : "600",
+                      fontSize: "12.5px",
+                      transition: "all 0.25s ease",
+                      background: timePeriod === "soir" ? "#bbf7d0" : "transparent",
+                      color: timePeriod === "soir" ? "#0d2315" : "var(--text-secondary)",
+                      boxShadow: timePeriod === "soir" ? "0 4px 15px rgba(187, 247, 208, 0.35)" : "none",
+                    }}
+                  >
+                    <Sunset size={15} color={timePeriod === "soir" ? "#0d2315" : "#f59e0b"} />
+                    <span>Après-midi</span>
+                    <span
+                      style={{
+                        fontSize: "9.5px",
+                        opacity: timePeriod === "soir" ? 0.75 : 0.6,
+                        marginLeft: "1px",
+                      }}
+                    >
+                      (13h - 17h30)
+                    </span>
+                  </button>
+                </div>
+
+                {/* Contenu animé lors du Swipe */}
+                <div
+                  key={timePeriod}
+                  className={slideDirection === "left" ? "slots-slide-from-right" : "slots-slide-from-left"}
+                >
+                  {/* Titre des Créneaux du Matin ou du Soir */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.8px",
+                      }}
+                    >
+                      Créneaux ({isTodaySelected ? `Aujourd'hui, ${selectedDay}` : `${selectedDay} ${MONTH_NAMES[selectedMonth]}`}) :
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--accent-mint)",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {timePeriod === "matin" ? "Matinée (09:00 - 12:30)" : "Après-midi (13:00 - 17:30)"}
+                    </span>
+                  </div>
+
+                  {/* Grille des créneaux horaires avec blocage des heures passées */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, 1fr)",
+                      gap: "8px",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    {(timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).map((slot) => {
+                      const isPast = isSlotPast(slot, selectedDay, selectedMonth, selectedYear);
+                      const isSelected = selectedTime === slot && !isPast;
+
+                      return (
+                        <div
+                          key={slot}
+                          className={`time-slot-pill ${isPast ? "disabled" : isSelected ? "selected" : ""}`}
+                          onClick={!isPast ? () => setSelectedTime(slot) : undefined}
+                          title={isPast ? `${slot} (Passé - non réservable)` : `Réserver pour ${slot}`}
+                        >
+                          {slot}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Message d'alerte contextuel si tous les créneaux de la période sont passés aujourd'hui */}
+                  {isTodaySelected && (timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).every((s) => isSlotPast(s, selectedDay, selectedMonth, selectedYear)) && (
+                    <div
+                      style={{
+                        padding: "9px 12px",
+                        borderRadius: "10px",
+                        background: "rgba(234, 179, 8, 0.1)",
+                        border: "1px solid rgba(234, 179, 8, 0.25)",
+                        color: "#fef08a",
+                        fontSize: "11px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                        marginTop: "6px",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <span>
+                        ⚠️ Créneaux {timePeriod === "matin" ? "du matin" : "de l'après-midi"} passés pour aujourd'hui.
+                      </span>
+                      {timePeriod === "matin" && EVENING_SLOTS.some((s) => !isSlotPast(s, selectedDay)) && (
+                        <button
+                          type="button"
+                          onClick={() => handleSwitchPeriod("soir")}
+                          style={{
+                            background: "rgba(234, 179, 8, 0.3)",
+                            border: "none",
+                            color: "#fff",
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                            fontSize: "11px",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Après-midi →
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
+
+                {/* Indicateur visuel élégant de Swipe */}
+                <div className="slots-swipe-hint">
+                  <ChevronLeft size={12} />
+                  <span>Glisser (swipe) pour alterner Matin / Après-midi</span>
+                  <ChevronRight size={12} />
+                </div>
+              </div>
 
             </div>
 
@@ -1274,9 +1361,6 @@ export default function PatientPortal() {
                           Confirmé
                         </span>
                       </div>
-                      <div style={{ fontSize: "14px", fontWeight: "700", color: "#fff", marginBottom: "4px" }}>
-                        {apt.reason || "Consultation"}
-                      </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "var(--text-secondary)" }}>
                         <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                           <Calendar size={13} color="var(--accent-mint)" />
@@ -1499,6 +1583,23 @@ export default function PatientPortal() {
           </div>
         )}
       </div>
+
+      {/* =================================================================== */}
+      {/* BOUTON FIXE DE RÉSERVATION (Vue Accueil - Ancré au-dessus du menu)  */}
+      {/* =================================================================== */}
+      {view === "doctor" && (
+        <div className="fixed-cta-bar">
+          <button
+            className="btn-primary-mint"
+            onClick={() => setView("schedule")}
+            style={{ padding: "15px 22px", fontSize: "15px" }}
+          >
+            <Calendar size={19} />
+            <span>Réserver un Rendez-vous</span>
+            <ArrowRight size={18} style={{ marginLeft: "auto" }} />
+          </button>
+        </div>
+      )}
 
       {/* =================================================================== */}
       {/* BARRE FLOTTANTE INFÉRIEURE (Home, Agenda, Profil, À propos)        */}

@@ -3,7 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PrescriptionPreviewModal from "./PrescriptionPreviewModal";
+import EchoReportPrintModal from "./EchoReportPrintModal";
 import ApiService from "../../../services/ApiService";
+import { jsPDF } from "jspdf";
 import {
   initialConsultations,
   initialPrescriptions,
@@ -20,6 +22,10 @@ const PatientDetailsCabinet = () => {
   const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(patientIdParam);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
+  const [selectedEchoConsultation, setSelectedEchoConsultation] = useState(null);
+  const [consultations, setConsultations] = useState([]);
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [activeTab, setActiveTab] = useState("synthese");
 
   // État des documents du patient & formulaire d'ajout
@@ -34,6 +40,7 @@ const PatientDetailsCabinet = () => {
   const [previewingDoc, setPreviewingDoc] = useState(null);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchPatients = async () => {
       try {
         const data = await ApiService.getPatients();
@@ -45,35 +52,95 @@ const PatientDetailsCabinet = () => {
             !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
           );
         });
-        setPatients(clean);
-        if (!selectedPatientId && clean.length > 0) {
-          setSelectedPatientId(clean[0].id);
+        if (isMounted) {
+          setPatients(clean);
+          if (!selectedPatientId && clean.length > 0) {
+            setSelectedPatientId(clean[0].id);
+          }
         }
       } catch (err) {
         console.warn("Erreur chargement patients dans détails :", err);
       }
     };
     fetchPatients();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedPatientId]);
+
+  useEffect(() => {
+    if (!selectedPatientId) return;
+    let isMounted = true;
+    const fetchMedicalRecord = async () => {
+      try {
+        const [cData, prData, docData, invData] = await Promise.all([
+          ApiService.getConsultations(selectedPatientId),
+          ApiService.getPrescriptions(),
+          ApiService.getDocuments(selectedPatientId),
+          ApiService.getInvoices(selectedPatientId),
+        ]);
+        if (isMounted) {
+          if (Array.isArray(cData)) {
+            setConsultations(cData);
+          }
+          if (Array.isArray(prData)) {
+            setPrescriptions(prData);
+          }
+          if (Array.isArray(docData) && docData.length > 0) {
+            setAllDocuments((prev) => {
+              const prevIds = new Set(prev.map((d) => d.id));
+              const newDocs = docData.filter((d) => !prevIds.has(d.id));
+              return [...newDocs, ...prev];
+            });
+          }
+          if (Array.isArray(invData)) {
+            setInvoices(invData);
+          }
+        }
+      } catch (err) {
+        console.warn("Erreur chargement dossier médical :", err);
+      }
+    };
+    fetchMedicalRecord();
+    return () => {
+      isMounted = false;
+    };
   }, [selectedPatientId]);
 
   const patient =
     patients.find((p) => p.id === selectedPatientId) || patients[0] || null;
 
-  const patientConsultations = patient
-    ? initialConsultations.filter((c) => c.patientId === patient.id)
-    : [];
-  const patientPrescriptions = patient
-    ? initialPrescriptions.filter((p) => p.patientId === patient.id)
-    : [];
+  const patientConsultations = (
+    consultations.length > 0 ? consultations : initialConsultations
+  ).filter((c) => String(c.patientId) === String(patient?.id));
+
+  const basePrescriptions = (
+    prescriptions.length > 0 ? prescriptions : initialPrescriptions
+  ).filter((p) => String(p.patientId) === String(patient?.id));
+
+  const consultPrescriptions = patientConsultations
+    .filter(
+      (c) =>
+        c.prescriptionData &&
+        !basePrescriptions.some(
+          (p) =>
+            p.id === c.prescriptionData.id ||
+            p.prescriptionNumber === c.prescriptionData.prescriptionNumber
+        )
+    )
+    .map((c) => c.prescriptionData);
+
+  const patientPrescriptions = [...basePrescriptions, ...consultPrescriptions];
+
   const patientExaminations = patient
     ? initialExaminations.filter((e) => e.patientId === patient.id)
     : [];
   const patientDocuments = patient
     ? allDocuments.filter((d) => d.patientId === patient.id)
     : [];
-  const patientInvoices = patient
-    ? initialInvoices.filter((i) => i.patientId === patient.id)
-    : [];
+  const patientInvoices = (
+    invoices.length > 0 ? invoices : initialInvoices
+  ).filter((i) => String(i.patientId) === String(patient?.id));
 
   const handleFileChange = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -178,21 +245,406 @@ const PatientDetailsCabinet = () => {
     });
   };
 
+  const handleViewDoc = (doc) => {
+    if (doc.fileDataUrl) {
+      setPreviewingDoc(doc);
+      return;
+    }
+    const titleLower = (doc.title || "").toLowerCase();
+    const isEcho =
+      titleLower.includes("écho") ||
+      titleLower.includes("echo") ||
+      doc.category === "Imagerie & Radiologie";
+    const isPresc =
+      titleLower.includes("ordonnance") ||
+      doc.category === "Prescription" ||
+      doc.fileType === "Prescription";
+
+    if (isEcho) {
+      const matchCs =
+        (doc.consultationId &&
+          patientConsultations.find((c) => c.id === doc.consultationId)) ||
+        patientConsultations.find(
+          (c) =>
+            c.date === doc.date &&
+            (c.echoData || c.echoFindings || c.ultrasoundReport)
+        ) ||
+        patientConsultations[0];
+      if (matchCs) {
+        setSelectedEchoConsultation(matchCs);
+        return;
+      }
+    }
+
+    if (isPresc) {
+      const matchPresc =
+        patientPrescriptions.find(
+          (p) =>
+            p.prescriptionNumber && doc.title.includes(p.prescriptionNumber)
+        ) ||
+        patientPrescriptions.find((p) => p.date === doc.date) ||
+        patientPrescriptions[0];
+      if (matchPresc) {
+        setSelectedPrescription(matchPresc);
+        return;
+      }
+    }
+
+    setPreviewingDoc(doc);
+  };
+
   const handleDownloadDoc = (doc) => {
     if (doc.fileDataUrl) {
       const link = document.createElement("a");
       link.href = doc.fileDataUrl;
-      link.download = doc.fileName || `${doc.title}.${(doc.type || "pdf").toLowerCase()}`;
+      link.download =
+        doc.fileName || `${doc.title}.${(doc.type || "pdf").toLowerCase()}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } else {
+      return;
+    }
+
+    try {
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const titleLower = (doc.title || "").toLowerCase();
+      const isEcho =
+        titleLower.includes("écho") ||
+        titleLower.includes("echo") ||
+        doc.category === "Imagerie & Radiologie";
+      const isPresc =
+        titleLower.includes("ordonnance") ||
+        doc.category === "Prescription" ||
+        doc.fileType === "Prescription";
+
+      const matchCs =
+        (doc.consultationId &&
+          patientConsultations.find((c) => c.id === doc.consultationId)) ||
+        patientConsultations.find((c) => c.date === doc.date) ||
+        patientConsultations[0];
+
+      const matchPresc =
+        patientPrescriptions.find(
+          (p) =>
+            p.prescriptionNumber && doc.title.includes(p.prescriptionNumber)
+        ) ||
+        patientPrescriptions.find((p) => p.date === doc.date) ||
+        patientPrescriptions[0];
+
+      // En-tête officiel Cabinet
+      pdf.setDrawColor(26, 58, 92);
+      pdf.setLineWidth(0.8);
+      pdf.line(15, 28, 195, 28);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(14);
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("CABINET DE GYNECOLOGIE OBSTETRIQUE", 15, 14);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.setTextColor(45, 106, 159);
+      pdf.text("Dr N. BELBACHIR OULD HENNIA", 15, 19);
+
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(9);
+      pdf.setTextColor(80, 80, 80);
+      pdf.text(
+        "Medecin Specialiste en Gynecologie Obstetrique - Echographie",
+        15,
+        23
+      );
+      pdf.text(
+        "Cite 500 Logements, Bloc A, Es-Senia, Oran | Tel : 0550 50 50 25",
+        15,
+        27
+      );
+
+      // Titre Document Box
+      pdf.setFillColor(245, 249, 255);
+      pdf.setDrawColor(192, 211, 232);
+      pdf.roundedRect(15, 33, 180, 11, 2, 2, "FD");
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.setTextColor(26, 58, 92);
+      const displayTitle = isEcho
+        ? "COMPTE-RENDU D'EXAMEN ECHOGRAPHIQUE"
+        : isPresc
+        ? "ORDONNANCE MEDICALE"
+        : (doc.title || "DOCUMENT MEDICAL").toUpperCase();
+      pdf.text(displayTitle, 105, 40, { align: "center" });
+
+      // Bloc Informations Patient
+      pdf.setFillColor(250, 250, 250);
+      pdf.setDrawColor(220, 225, 230);
+      pdf.roundedRect(15, 48, 180, 26, 1, 1, "FD");
+
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("Nom & Prenom :", 20, 55);
+      pdf.text("N Dossier :", 20, 62);
+      pdf.text("Date de naissance :", 20, 69);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(30, 30, 30);
+      pdf.text(
+        `${(patient?.lastName || "").toUpperCase()} ${patient?.firstName || ""}`,
+        55,
+        55
+      );
+      pdf.text(`${patient?.fileNumber || "DOS-" + (patient?.id || "")}`, 55, 62);
+      pdf.text(
+        `${patient?.dob || "-"} (${patient?.age || "-"} ans)`,
+        55,
+        69
+      );
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("Date d'examen :", 115, 55);
+      pdf.text("DDR :", 115, 62);
+      pdf.text("Terme actuel :", 115, 69);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(30, 30, 30);
+      pdf.text(`${doc.date || matchCs?.date || "-"}`, 145, 55);
+      pdf.text(`${patient?.ddr || matchCs?.vitals?.ddr || "-"}`, 145, 62);
+      pdf.text(`${patient?.terme || matchCs?.vitals?.terme || "-"}`, 145, 69);
+
+      let curY = 82;
+
+      // Section Biométrie & Echographie
+      if (isEcho) {
+        const echoData = matchCs?.echoData || {};
+        const ultra = matchCs?.ultrasoundReport || {};
+
+        pdf.setFillColor(248, 251, 255);
+        pdf.setDrawColor(192, 211, 232);
+        pdf.roundedRect(15, curY, 180, 8, 1, 1, "FD");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(26, 58, 92);
+        pdf.text(
+          `BIOMETRIE FOETALE & MESURES (${matchCs?.echoType || "Echographie OB3"})`,
+          20,
+          curY + 5.5
+        );
+        curY += 12;
+
+        pdf.setFontSize(8.5);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(26, 58, 92);
+        pdf.text("BIP :", 20, curY);
+        pdf.text("PC :", 65, curY);
+        pdf.text("CA :", 110, curY);
+        pdf.text("LF :", 155, curY);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(20, 20, 20);
+        pdf.text(
+          `${echoData.ob2_bip || echoData.ob3_bip || ultra.bip_mm || "-"} mm`,
+          32,
+          curY
+        );
+        pdf.text(
+          `${echoData.ob2_pc || echoData.ob3_pc || ultra.pc_mm || "-"} mm`,
+          75,
+          curY
+        );
+        pdf.text(
+          `${echoData.ob2_ca || echoData.ob3_ca || ultra.ca_mm || "-"} mm`,
+          120,
+          curY
+        );
+        pdf.text(
+          `${echoData.ob2_lf || echoData.ob3_lf || ultra.lf_mm || "-"} mm`,
+          165,
+          curY
+        );
+        curY += 8;
+
+        const epf =
+          matchCs?.calculated?.ob2Poids ||
+          matchCs?.calculated?.ob3Poids ||
+          ultra.epf_hadlock_g;
+        if (epf) {
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(125, 60, 152);
+          pdf.text(`Estimation du Poids Foetal (Hadlock) : ${epf} g`, 20, curY);
+          curY += 8;
+        }
+
+        // Observations morphologiques
+        pdf.setFillColor(248, 251, 255);
+        pdf.setDrawColor(192, 211, 232);
+        pdf.roundedRect(15, curY, 180, 8, 1, 1, "FD");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(26, 58, 92);
+        pdf.text("OBSERVATIONS MORPHOLOGIQUES", 20, curY + 5.5);
+        curY += 13;
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(30, 30, 30);
+        const obs =
+          matchCs?.examFindings ||
+          matchCs?.echoFindings ||
+          ultra.findings ||
+          "Examen echographique sans anomalie morphologique decelable. Activite cardiaque et mouvements foetaux presents. Liquide amniotique en quantite normale.";
+        const obsLines = pdf.splitTextToSize(obs, 170);
+        pdf.text(obsLines, 20, curY);
+        curY += obsLines.length * 5 + 6;
+
+        // Conclusion
+        pdf.setFillColor(248, 251, 255);
+        pdf.setDrawColor(192, 211, 232);
+        pdf.roundedRect(15, curY, 180, 8, 1, 1, "FD");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(26, 58, 92);
+        pdf.text("CONCLUSION MEDICALE", 20, curY + 5.5);
+        curY += 13;
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.setTextColor(26, 58, 92);
+        const concl =
+          matchCs?.diagnosis ||
+          matchCs?.echoConclusion ||
+          ultra.conclusion ||
+          "Grossesse intra-uterine monofoetale evolutive sans anomalie morphologique decelable.";
+        const conclLines = pdf.splitTextToSize(concl, 170);
+        pdf.text(conclLines, 20, curY);
+        curY += conclLines.length * 5 + 6;
+      } else if (isPresc && matchPresc?.items) {
+        // Section Ordonnance
+        pdf.setFillColor(248, 251, 255);
+        pdf.setDrawColor(192, 211, 232);
+        pdf.roundedRect(15, curY, 180, 8, 1, 1, "FD");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(26, 58, 92);
+        pdf.text("PRESCRIPTIONS MEDICAMENTEUSES", 20, curY + 5.5);
+        curY += 14;
+
+        (matchPresc.items || []).forEach((item, idx) => {
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(9);
+          pdf.setTextColor(26, 58, 92);
+          pdf.text(
+            `${idx + 1}. ${item.medication || item.nom} ${item.dosage || ""}`,
+            22,
+            curY
+          );
+          curY += 5;
+
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(60, 60, 60);
+          pdf.text(
+            `- Posologie : ${item.posology || item.posologie || "-"} | Duree : ${
+              item.duration || item.duree || "-"
+            }`,
+            25,
+            curY
+          );
+          curY += 7;
+        });
+      } else {
+        // Document Général
+        pdf.setFillColor(248, 251, 255);
+        pdf.setDrawColor(192, 211, 232);
+        pdf.roundedRect(15, curY, 180, 8, 1, 1, "FD");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(26, 58, 92);
+        pdf.text("DETAILS DU DOCUMENT", 20, curY + 5.5);
+        curY += 13;
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        pdf.setTextColor(30, 30, 30);
+        pdf.text(`Categorie : ${doc.category || "Dossier medical"}`, 22, curY);
+        curY += 6;
+        pdf.text(
+          `Emetteur : ${doc.author || "Dr N. BELBACHIR OULD HENNIA"}`,
+          22,
+          curY
+        );
+        curY += 6;
+        pdf.text(
+          `Date d'enregistrement : ${
+            doc.date || new Date().toISOString().split("T")[0]
+          }`,
+          22,
+          curY
+        );
+        curY += 8;
+        pdf.text(
+          "Document certifie conforme et archive dans le dossier medical du patient.",
+          22,
+          curY
+        );
+        curY += 10;
+      }
+
+      // Cachet & Signature
+      const signY = Math.max(curY + 10, 240);
+      pdf.setDrawColor(192, 211, 232);
+      pdf.roundedRect(120, signY, 75, 32, 1, 1, "D");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("Dr N. BELBACHIR OULD HENNIA", 125, signY + 6);
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text("Specialiste en Gynecologie Obstetrique", 125, signY + 11);
+      pdf.text("Signature et Cachet Officiel", 125, signY + 17);
+
+      // Footer
+      pdf.setDrawColor(26, 58, 92);
+      pdf.setLineWidth(0.4);
+      pdf.line(15, 280, 195, 280);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(120, 120, 120);
+      pdf.text(
+        "Cabinet Medical Dr Belbachir - Es-Senia, Oran | Document officiel imprime le " +
+          new Date().toLocaleDateString("fr-FR"),
+        105,
+        284,
+        { align: "center" }
+      );
+
+      const cleanFileName = (doc.title || "document_medical")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]/g, "_");
+
+      pdf.save(`${cleanFileName}.pdf`);
+
       Swal.fire({
-        icon: "info",
-        title: "Téléchargement",
-        text: `Téléchargement du document : ${doc.title} (${doc.fileSize})`,
-        timer: 1800,
+        icon: "success",
+        title: "Document téléchargé",
+        text: `Le document "${doc.title}" a été téléchargé avec succès au format PDF.`,
+        timer: 2000,
         showConfirmButton: false,
+      });
+    } catch (err) {
+      console.error("Erreur génération PDF :", err);
+      Swal.fire({
+        icon: "error",
+        title: "Erreur de téléchargement",
+        text: "Impossible de générer le document : " + err.message,
       });
     }
   };
@@ -1262,7 +1714,7 @@ const PatientDetailsCabinet = () => {
                     <span style={{ color: "#475569" }}>
                       {patient.chronicDiseases && patient.chronicDiseases.length > 0
                         ? patient.chronicDiseases.join(", ")
-                        : "Asthme modéré"}
+                        : "Aucun"}
                     </span>
                   </div>
 
@@ -1270,7 +1722,7 @@ const PatientDetailsCabinet = () => {
                   <div className="patient-box-item">
                     <strong>Chirurgicaux : </strong>
                     <span style={{ color: "#475569" }}>
-                      Appendicectomie (enfance), amygdalectomie.
+                      {patient.surgicalHistory || "Aucun"}
                     </span>
                   </div>
 
@@ -1278,7 +1730,17 @@ const PatientDetailsCabinet = () => {
                   <div className="patient-box-item">
                     <strong>Familiaux : </strong>
                     <span style={{ color: "#475569" }}>
-                      HTA chez le père, pas d'antécédent néoplasique précoce.
+                      {patient.familyHistory || "Aucun"}
+                    </span>
+                  </div>
+
+                  {/* Gynéco-Obstétriques */}
+                  <div className="patient-box-item">
+                    <strong>Gynéco-Obstétriques : </strong>
+                    <span style={{ color: "#475569" }}>
+                      {patient.gravida !== null && patient.gravida !== undefined
+                        ? `Gestité G${patient.gravida} • Parité P${patient.para || 0} • Césarienne(s) : ${patient.cesarean || 0} • Fausse(s) couche(s) : ${patient.abortions || 0}`
+                        : "G1P0, aucun antécédent particulier."}
                     </span>
                   </div>
                 </div>
@@ -1338,17 +1800,102 @@ const PatientDetailsCabinet = () => {
                           border: "1px solid #e2e8f0",
                         }}
                       >
-                        <strong>Constantes :</strong> TA: {cs.vitals.bp} mmHg |
-                        Pouls: {cs.vitals.hr} bpm | Temp: {cs.vitals.temp}°C |
-                        Poids: {cs.vitals.weight} kg
+                        <strong>Constantes :</strong> TA: {cs.vitals?.bp || "-"} mmHg |{" "}
+                        Pouls: {cs.vitals?.hr || cs.vitals?.heartRate || "-"} bpm | Temp:{" "}
+                        {cs.vitals?.temp || cs.vitals?.temperature || "-"}°C | Poids:{" "}
+                        {cs.vitals?.weight || "-"} kg
+                        {cs.vitals?.ddr && cs.vitals.ddr !== "-" && (
+                          <span>
+                            {" "}
+                            | DDR: {cs.vitals.ddr}{" "}
+                            {cs.vitals.terme && `(${cs.vitals.terme})`}
+                          </span>
+                        )}
                       </div>
                       <p className="mb-1 fs-14">
                         <strong>Diagnostic :</strong> {cs.diagnosis}
                       </p>
-                      <p className="mb-0 text-muted fs-13">
-                        <strong>Observations :</strong> {cs.examFindings} —{" "}
-                        {cs.recommendations}
+                      <p className="mb-2 text-muted fs-13">
+                        <strong>Observations :</strong> {cs.examFindings}
+                        {cs.recommendations ? ` — ${cs.recommendations}` : ""}
                       </p>
+
+                      {/* ÉCHOGRAPHIE ASSOCIÉE */}
+                      {(cs.echoFindings || cs.echoType || cs.ultrasoundReport) && (
+                        <div
+                          className="p-2.5 mb-2 rounded fs-13"
+                          style={{
+                            background: "#f0fdf4",
+                            border: "1px solid #bbf7d0",
+                            color: "#166534",
+                          }}
+                        >
+                          <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-1">
+                            <span className="font-w600 d-flex align-items-center gap-1">
+                              <i className="fa fa-wave-square me-1"></i>
+                              {cs.echoType || "Compte-Rendu Échographique"}
+                            </span>
+                            <div className="d-flex align-items-center gap-2">
+                              {cs.ultrasoundReport?.epf_hadlock_g && (
+                                <span className="badge bg-success text-white fs-11">
+                                  EPF (Hadlock) : {cs.ultrasoundReport.epf_hadlock_g} g
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                className="btn btn-xs btn-outline-success d-flex align-items-center gap-1"
+                                style={{ fontSize: "11px", padding: "2px 8px" }}
+                                onClick={() => setSelectedEchoConsultation(cs)}
+                                title="Aperçu du compte-rendu échographique"
+                              >
+                                <i className="fa fa-file-medical"></i>
+                                <span>Compte-rendu complet</span>
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ color: "#14532d" }}>
+                            <strong>Conclusion / Mesures : </strong>
+                            {cs.echoFindings ||
+                              cs.echoConclusion ||
+                              cs.ultrasoundReport?.findings ||
+                              "Échographie enregistrée dans le dossier."}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ORDONNANCE ASSOCIÉE */}
+                      {(cs.prescriptionCreated || cs.prescriptionData) && (
+                        <div
+                          className="p-2 rounded fs-13 d-flex align-items-center justify-content-between flex-wrap gap-2"
+                          style={{
+                            background: "#eff6ff",
+                            border: "1px solid #bfdbfe",
+                            color: "#1e40af",
+                          }}
+                        >
+                          <div className="d-flex align-items-center gap-2">
+                            <i className="fa fa-prescription text-primary"></i>
+                            <span>
+                              <strong>Ordonnance : </strong>
+                              {cs.prescriptionData?.items && cs.prescriptionData.items.length > 0
+                                ? `${cs.prescriptionData.items.length} médicament(s) prescrit(s) (${cs.prescriptionData.items.map((i) => i.medication).slice(0, 2).join(", ")}${cs.prescriptionData.items.length > 2 ? "..." : ""})`
+                                : "Prescription médicale établie"}
+                            </span>
+                          </div>
+                          {cs.prescriptionData && (
+                            <button
+                              type="button"
+                              className="btn btn-xs btn-primary text-white d-flex align-items-center gap-1"
+                              style={{ fontSize: "11px", padding: "3px 10px" }}
+                              onClick={() => setSelectedPrescription(cs.prescriptionData)}
+                              title="Voir et imprimer l'ordonnance médicale"
+                            >
+                              <i className="fa fa-print"></i>
+                              <span>Voir l'ordonnance</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1791,16 +2338,14 @@ const PatientDetailsCabinet = () => {
                         <td>{doc.author}</td>
                         <td className="text-end">
                           <div className="d-inline-flex align-items-center gap-2">
-                            {doc.fileDataUrl && (
-                              <button
-                                type="button"
-                                className="btn btn-xs btn-outline-info"
-                                onClick={() => setPreviewingDoc(doc)}
-                                title="Aperçu du document ou de la photo"
-                              >
-                                <i className="fa fa-eye me-1"></i> Voir
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              className="btn btn-xs btn-outline-info"
+                              onClick={() => handleViewDoc(doc)}
+                              title="Aperçu et impression du document"
+                            >
+                              <i className="fa fa-eye me-1"></i> Voir
+                            </button>
                             <button
                               type="button"
                               className="patient-btn-back"
@@ -1848,16 +2393,29 @@ const PatientDetailsCabinet = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {patientInvoices.map((inv) => (
-                    <tr key={inv.id}>
-                      <td>
-                        <strong>{inv.invoiceNumber}</strong>
+                  {patientInvoices.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="text-center text-muted py-4">
+                        <i className="fa fa-file-invoice fs-24 d-block mb-2 text-muted"></i>
+                        Aucune facture enregistrée pour ce patient
                       </td>
-                      <td style={{ whiteSpace: "nowrap" }}>{inv.date}</td>
-                      <td>{inv.actDescription}</td>
-                      <td><strong className="text-dark">{inv.amount.toLocaleString("fr-DZ")} DA</strong></td>
                     </tr>
-                  ))}
+                  ) : (
+                    patientInvoices.map((inv) => (
+                      <tr key={inv.id}>
+                        <td>
+                          <strong>{inv.invoiceNumber}</strong>
+                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}>{inv.date}</td>
+                        <td>{inv.actDescription}</td>
+                        <td>
+                          <strong className="text-dark">
+                            {inv.amount.toLocaleString("fr-DZ")} DA
+                          </strong>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1870,6 +2428,13 @@ const PatientDetailsCabinet = () => {
         show={!!selectedPrescription}
         onHide={() => setSelectedPrescription(null)}
         prescription={selectedPrescription}
+      />
+
+      {/* Modal Prévisualisation & Impression Officielle Compte-Rendu Échographique */}
+      <EchoReportPrintModal
+        show={!!selectedEchoConsultation}
+        onHide={() => setSelectedEchoConsultation(null)}
+        consultation={selectedEchoConsultation}
       />
 
       {/* Lightbox / Modal d'Aperçu Photo et Document */}

@@ -342,9 +342,12 @@ const ConsultationsPage = () => {
       examFindings: formConsult.examFindings || (formConsult.symptoms ? `Motif / Symptômes : ${formConsult.symptoms}` : "Examen clinique normal."),
       diagnosis: formConsult.diagnosis,
       recommendations: formConsult.recommendations,
+      echoType: hasEcho ? formConsult.echoType : null,
       echoFindings: hasEcho ? `${formConsult.echoType} : ${formConsult.echoFindings}${formConsult.echoConclusion ? ` — Conclusion : ${formConsult.echoConclusion}` : ""}` : "",
+      echoConclusion: hasEcho ? formConsult.echoConclusion : "",
       prescriptionCreated: hasPrescription,
       prescriptionData: prescData,
+      prescriptionItems: hasPrescription ? prescData.items : [],
       status: "Clôturée",
     };
 
@@ -412,6 +415,12 @@ const ConsultationsPage = () => {
       ...payload,
       id: consultations.length + 1,
       consultationNumber: `CS-${new Date().getFullYear()}-010${consultations.length + 6}`,
+      echoType: payload.echoType || (payload.examType ? `Échographie ${payload.examType.toUpperCase()}` : "Échographie"),
+      echoFindings: payload.echoFindings || payload.diagnosis,
+      echoConclusion: payload.diagnosis || payload.echoFindings,
+      prescriptionCreated: !!prescData,
+      prescriptionData: prescData,
+      prescriptionItems: prescData?.items || [],
     };
 
     setConsultations([newCs, ...consultations]);

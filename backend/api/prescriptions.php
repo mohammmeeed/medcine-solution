@@ -14,6 +14,9 @@ switch ($method) {
     case 'POST':
         handleCreatePrescription($db);
         break;
+    case 'DELETE':
+        handleDeletePrescription($db);
+        break;
     default:
         sendResponse("error", null, "Méthode non autorisée", 405);
 }
@@ -135,3 +138,21 @@ function handleCreatePrescription($db) {
         sendResponse("error", null, "Erreur création ordonnance : " . $e->getMessage(), 500);
     }
 }
+
+function handleDeletePrescription($db) {
+    $id = isset($_GET['id']) ? intval($_GET['id']) : null;
+    if (!$id) {
+        sendResponse("error", null, "ID requis", 400);
+    }
+    try {
+        $db->beginTransaction();
+        $db->prepare("DELETE FROM prescription_items WHERE prescription_id = :id")->execute([':id' => $id]);
+        $db->prepare("DELETE FROM prescriptions WHERE id = :id")->execute([':id' => $id]);
+        $db->commit();
+        sendResponse("success", null, "Ordonnance supprimée avec succès");
+    } catch (Exception $e) {
+        $db->rollBack();
+        sendResponse("error", null, "Erreur suppression ordonnance : " . $e->getMessage(), 500);
+    }
+}
+

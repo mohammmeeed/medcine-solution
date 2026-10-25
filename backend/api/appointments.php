@@ -61,10 +61,10 @@ function handleGetAppointments($db) {
         }
 
         $sql = "SELECT a.*, 
-                       COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))), ''), 'Patient') AS patient_name,
-                       COALESCE(p.first_name, '') AS first_name,
+                       COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))), ''), NULLIF(TRIM(a.patient_name), ''), 'Patient') AS patient_name,
+                       COALESCE(p.first_name, a.patient_name, '') AS first_name,
                        COALESCE(p.last_name, '') AS last_name,
-                       COALESCE(p.phone, '') AS patient_phone,
+                       COALESCE(p.phone, a.patient_phone, '') AS patient_phone,
                        COALESCE(p.email, '') AS patient_email
                 FROM appointments a
                 LEFT JOIN patients p ON a.patient_id = p.id
@@ -81,7 +81,7 @@ function handleGetAppointments($db) {
             $appointments[] = [
                 "id" => intval($r['id']),
                 "ticketNumber" => calculateTicketNumber($timeShort),
-                "patientId" => intval($r['patient_id']),
+                "patientId" => !empty($r['patient_id']) ? intval($r['patient_id']) : null,
                 "patientName" => $r['patient_name'],
                 "firstName" => $r['first_name'],
                 "lastName" => $r['last_name'],
@@ -114,68 +114,34 @@ function handleCreateAppointment($db) {
 
     try {
         $patientId = !empty($body['patientId']) ? intval($body['patientId']) : null;
+        $patientName = trim($body['patientName'] ?? '');
+        $patientPhone = trim($body['patientPhone'] ?? ($body['phone'] ?? ''));
 
-        // Si le patientId n'est pas fourni (ex: réservation en ligne depuis le site web public)
-        if (!$patientId && !empty($body['patientName'])) {
-            $rawName = trim($body['patientName']);
-            $parts = preg_split('/\s+/', $rawName, 2);
-            $firstName = !empty($parts[0]) ? $parts[0] : 'Patient';
-            $lastName = !empty($parts[1]) ? $parts[1] : '';
-            $phone = trim($body['patientPhone'] ?? ($body['phone'] ?? ''));
-
-            // Chercher si le patient existe par téléphone
-            $found = null;
-            if (!empty($phone)) {
-                $find = $db->prepare("SELECT id FROM patients WHERE phone = :phone AND phone != '' LIMIT 1");
-                $find->execute([':phone' => $phone]);
-                $found = $find->fetchColumn();
-            }
-
-            if ($found) {
-                $patientId = (int)$found;
-            } else {
-                // Génération d'un file_number garanti unique
-                $seq = (int)$db->query("SELECT COALESCE(MAX(id), 0) + 1 FROM patients")->fetchColumn();
-                do {
-                    $fileNumber = 'DOS-' . date('Y') . '-' . str_pad($seq, 3, '0', STR_PAD_LEFT);
-                    $chk = $db->prepare("SELECT COUNT(*) FROM patients WHERE file_number = :fn");
-                    $chk->execute([':fn' => $fileNumber]);
-                    if ($chk->fetchColumn() == 0) {
-                        break;
-                    }
-                    $seq++;
-                } while (true);
-
-                $insPat = $db->prepare("
-                    INSERT INTO patients (file_number, first_name, last_name, phone, status)
-                    VALUES (:fn, :fnm, :lnm, :ph, 'Nouveau')
-                ");
-                $insPat->execute([
-                    ':fn' => $fileNumber,
-                    ':fnm' => $firstName,
-                    ':lnm' => $lastName,
-                    ':ph' => $phone
-                ]);
-                $patientId = (int)$db->lastInsertId();
+        // Si le patientId n'est pas fourni, vérifier si le patient existe déjà par son numéro de téléphone
+        if (!$patientId && !empty($patientPhone)) {
+            $find = $db->prepare("SELECT id, CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) AS full_name FROM patients WHERE phone = :phone AND phone != '' LIMIT 1");
+            $find->execute([':phone' => $patientPhone]);
+            $existing = $find->fetch(PDO::FETCH_ASSOC);
+            if ($existing) {
+                $patientId = (int)$existing['id'];
+                if (empty($patientName)) {
+                    $patientName = trim($existing['full_name']);
+                }
             }
         }
 
-        if (!$patientId) {
-            $firstPatient = $db->query("SELECT id FROM patients ORDER BY id ASC LIMIT 1")->fetchColumn();
-            $patientId = $firstPatient ? (int)$firstPatient : null;
-        }
+        // RÈGLE : Lors d'une réservation (en ligne ou sans dossier patient),
+        // ON N'AJOUTE PAS le patient dans la table `patients`.
+        // Le rendez-vous est enregistré avec son nom et son téléphone, et patient_id reste NULL.
+        // Seul l'administrateur/médecin pourra créer manuellement le dossier patient dans `patients`.
 
-        if (!$patientId) {
-            $insPat = $db->prepare("INSERT INTO patients (file_number, first_name, last_name, phone, status) VALUES ('DOS-" . date('Y') . "-001', 'Patient', 'Public', '', 'Nouveau')");
-            $insPat->execute();
-            $patientId = (int)$db->lastInsertId();
-        }
-
-        $sql = "INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, duration, reason, status, notes)
-                VALUES (:pid, 1, :adate, :atime, :dur, :reason, :status, :notes)";
+        $sql = "INSERT INTO appointments (patient_id, patient_name, patient_phone, doctor_id, appointment_date, appointment_time, duration, reason, status, notes)
+                VALUES (:pid, :pname, :pphone, 1, :adate, :atime, :dur, :reason, :status, :notes)";
         $stmt = $db->prepare($sql);
         $stmt->execute([
             ':pid' => $patientId,
+            ':pname' => !empty($patientName) ? $patientName : null,
+            ':pphone' => !empty($patientPhone) ? $patientPhone : null,
             ':adate' => $date,
             ':atime' => strlen($time) === 5 ? ($time . ":00") : $time,
             ':dur' => $body['duration'] ?? '20 min',
@@ -187,21 +153,32 @@ function handleCreateAppointment($db) {
         $newId = intval($db->lastInsertId());
         $ticketNo = calculateTicketNumber($time);
 
-        // Si créé avec le statut Arrivé, ajouter dans la salle d'attente
+        // Si créé avec le statut Arrivé
         if (($body['status'] ?? '') === 'Arrivé') {
             $insWait = $db->prepare("
-                INSERT INTO waiting_room (patient_id, appointment_id, appointment_time, arrival_time, reason, status)
-                VALUES (:pid, :aid, :atime, CURTIME(), :reason, 'En attente')
+                INSERT INTO waiting_room (patient_id, patient_name, patient_phone, appointment_id, appointment_time, arrival_time, reason, status)
+                VALUES (:pid, :pname, :pphone, :aid, :atime, CURTIME(), :reason, 'En attente')
             ");
             $insWait->execute([
-                ':pid' => $patientId,
+                ':pid' => $patientId ?: null,
+                ':pname' => $patientName ?: null,
+                ':pphone' => $patientPhone ?: null,
                 ':aid' => $newId,
                 ':atime' => strlen($time) === 5 ? ($time . ":00") : $time,
                 ':reason' => $body['reason'] ?? 'Consultation générale'
             ]);
         }
 
-        sendResponse("success", ["id" => $newId, "ticketNumber" => $ticketNo], "Rendez-vous créé avec succès dans MySQL", 201);
+        sendResponse("success", [
+            "id" => $newId,
+            "ticketNumber" => $ticketNo,
+            "patientId" => $patientId,
+            "patientName" => $patientName,
+            "phone" => $patientPhone,
+            "date" => $date,
+            "time" => substr($time, 0, 5),
+            "status" => $body['status'] ?? 'Confirmé'
+        ], "Rendez-vous créé avec succès dans MySQL", 201);
     } catch (Exception $e) {
         sendResponse("error", null, "Erreur création rendez-vous : " . $e->getMessage(), 500);
     }
@@ -257,16 +234,30 @@ function handleUpdateAppointment($db) {
             $chkWait = $db->prepare("SELECT id FROM waiting_room WHERE appointment_id = :aid AND status != 'Terminé' LIMIT 1");
             $chkWait->execute([':aid' => (int)$id]);
             if (!$chkWait->fetchColumn()) {
-                $aptQ = $db->prepare("SELECT patient_id, appointment_time, reason FROM appointments WHERE id = :id");
+                $aptQ = $db->prepare("
+                    SELECT a.patient_id, a.patient_name, a.patient_phone, a.appointment_time, a.reason,
+                           p.first_name, p.last_name, p.phone
+                    FROM appointments a
+                    LEFT JOIN patients p ON a.patient_id = p.id
+                    WHERE a.id = :id
+                ");
                 $aptQ->execute([':id' => (int)$id]);
                 $aptRow = $aptQ->fetch(PDO::FETCH_ASSOC);
                 if ($aptRow) {
+                    $pName = trim(($aptRow['first_name'] ?? '') . ' ' . ($aptRow['last_name'] ?? ''));
+                    if (empty($pName)) {
+                        $pName = $aptRow['patient_name'] ?: 'Patient';
+                    }
+                    $pPhone = $aptRow['phone'] ?: ($aptRow['patient_phone'] ?: null);
+
                     $insWait = $db->prepare("
-                        INSERT INTO waiting_room (patient_id, appointment_id, appointment_time, arrival_time, reason, status)
-                        VALUES (:pid, :aid, :atime, CURTIME(), :reason, 'En attente')
+                        INSERT INTO waiting_room (patient_id, patient_name, patient_phone, appointment_id, appointment_time, arrival_time, reason, status)
+                        VALUES (:pid, :pname, :pphone, :aid, :atime, CURTIME(), :reason, 'En attente')
                     ");
                     $insWait->execute([
-                        ':pid' => $aptRow['patient_id'],
+                        ':pid' => $aptRow['patient_id'] ?: null,
+                        ':pname' => $pName,
+                        ':pphone' => $pPhone,
                         ':aid' => (int)$id,
                         ':atime' => $aptRow['appointment_time'] ?: date('H:i:s'),
                         ':reason' => $aptRow['reason'] ?: 'Consultation générale'

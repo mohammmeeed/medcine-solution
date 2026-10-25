@@ -6,7 +6,7 @@ import { Link, useLocation } from "react-router-dom";
 
 /// Image
 // import profile from "../../../images/profile/17.jpg";  
-import profile2 from "../../../images/profile/pic1.jpg";
+// import profile2 from "../../../images/profile/pic1.jpg";
 import { useContext } from "react";
 import { ThemeContext } from "../../../context/ThemeContext";
 // import { set } from "date-fns/esm";
@@ -97,18 +97,18 @@ const Header = ({ onNote }) => {
               </div>
             </div>
 
-            <ul className="navbar-nav header-right align-items-center"> 
-                <li className="nav-item me-2 d-none d-md-block">
+            <ul className="navbar-nav header-right d-flex flex-row align-items-center flex-nowrap mb-0 gap-2"> 
+                <li className="nav-item d-none d-md-flex align-items-center">
                   <Link
                     to="/"
-                    className="btn btn-outline-primary btn-sm rounded-pill d-flex align-items-center gap-1 px-3 py-1"
+                    className="btn btn-outline-primary btn-sm rounded-pill d-flex align-items-center gap-1 px-3 py-1 text-nowrap"
                     title="Voir le site public (Prise de rendez-vous)"
                   >
                     <i className="fa fa-globe"></i>
                     <span>Portail Patient</span>
                   </Link>
                 </li>
-                <li className="nav-item dropdown notification_dropdown">
+                <li className="nav-item dropdown notification_dropdown d-flex align-items-center">
                   <Link to={"#"} className={`nav-link bell dz-theme-mode ${ background.value === "dark" ? "active": ""}`}
                     onClick={handelChangeMode}
                   >
@@ -118,7 +118,7 @@ const Header = ({ onNote }) => {
 							  </li>
               {fullScreen ? (
                 <li
-                  className="nav-item dropdown notification_dropdown d-none d-sm-block"
+                  className="nav-item dropdown notification_dropdown d-none d-sm-flex align-items-center"
                   onClick={() => offFullScreen()}
                 >
                   <Link className="nav-link dz-fullscreen active" to={"#"}>
@@ -153,7 +153,7 @@ const Header = ({ onNote }) => {
                   </Link>
                 </li>
               ) : (
-                <li className="nav-item dropdown notification_dropdown d-none d-sm-block">
+                <li className="nav-item dropdown notification_dropdown d-none d-sm-flex align-items-center">
                   <Link
                     className="nav-link dz-fullscreen"
                     to="#"
@@ -192,18 +192,17 @@ const Header = ({ onNote }) => {
               )}
               
 
-              <Dropdown as="li" className="nav-item dropdown header-profile">
+              <Dropdown as="li" className="nav-item dropdown header-profile d-flex align-items-center">
                 <Dropdown.Toggle
                   as={Link}
                   variant=""
-                  className="nav-link i-false"
+                  className="nav-link i-false d-flex align-items-center text-decoration-none"
                   to="#"                  
                 >
-                  <div className="header-info d-none d-lg-block">
-                    <span>Dr N. BELBACHIR OULD HENNIA</span>
-                    <small>Gynécologie Obstétrique</small>
+                  <div className="header-info d-none d-lg-block text-end pe-1">
+                    <span className="fw-semibold text-primary d-block">Dr N. BELBACHIR OULD HENNIA</span>
+                    <small className="text-muted d-block">Gynécologie Obstétrique</small>
                   </div>
-                  <img src={profile2} width={20} alt="" />
                 </Dropdown.Toggle>
                 <Dropdown.Menu
                   align="end"

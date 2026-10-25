@@ -21,6 +21,7 @@
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.3.3",
     "formik": "^2.4.3",
+    "jspdf": "^4.2.1",
     "lightgallery": "^2.7.1",
     "lucide-react": "^1.61.0",
     "p-min-delay": "^4.0.2",

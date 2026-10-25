@@ -25,7 +25,16 @@ switch ($method) {
 
 function handleGetInvoices($db) {
     try {
-        $stmt = $db->query("
+        $patientId = $_GET['patient_id'] ?? null;
+        $params = [];
+        $where = "";
+
+        if ($patientId) {
+            $where = "WHERE i.patient_id = :pid";
+            $params[':pid'] = (int)$patientId;
+        }
+
+        $stmt = $db->prepare("
             SELECT 
                 i.*,
                 CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
@@ -33,8 +42,10 @@ function handleGetInvoices($db) {
                 p.phone AS patient_phone
             FROM invoices i
             LEFT JOIN patients p ON p.id = i.patient_id
+            $where
             ORDER BY i.id DESC
         ");
+        $stmt->execute($params);
         $rows = $stmt->fetchAll();
 
         $data = array_map(function ($row) {
@@ -42,7 +53,9 @@ function handleGetInvoices($db) {
                 'id' => (int)$row['id'],
                 'invoiceNumber' => $row['invoice_number'],
                 'patientId' => (int)$row['patient_id'],
+                'consultationId' => !empty($row['consultation_id']) ? (int)$row['consultation_id'] : null,
                 'patientName' => $row['patient_name'] ?? 'Patient',
+                'fileNumber' => $row['file_number'] ?? '',
                 'date' => $row['invoice_date'],
                 'actDescription' => $row['act_description'],
                 'amount' => (float)$row['amount'],

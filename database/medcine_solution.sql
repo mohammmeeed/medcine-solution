@@ -29,7 +29,9 @@ DROP TABLE IF EXISTS `appointments`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `appointments` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `patient_id` int(11) NOT NULL,
+  `patient_id` int(11) DEFAULT NULL,
+  `patient_name` varchar(150) DEFAULT NULL,
+  `patient_phone` varchar(50) DEFAULT NULL,
   `doctor_id` int(11) DEFAULT NULL,
   `appointment_date` date NOT NULL,
   `appointment_time` time NOT NULL,
@@ -45,7 +47,7 @@ CREATE TABLE `appointments` (
   KEY `idx_appointment_date` (`appointment_date`,`appointment_time`),
   KEY `idx_appointment_status` (`status`),
   CONSTRAINT `fk_appointments_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `staff_users` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_appointments_patient` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`id`) ON DELETE CASCADE
+  CONSTRAINT `fk_appointments_patient` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -905,6 +907,28 @@ CREATE OR REPLACE VIEW `v_today_appointments` AS select `a`.`id` AS `appointment
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+--
+-- Table structure for table `waiting_room`
+--
+
+CREATE TABLE IF NOT EXISTS `waiting_room` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `patient_id` int(11) DEFAULT NULL,
+  `patient_name` varchar(150) DEFAULT NULL,
+  `patient_phone` varchar(50) DEFAULT NULL,
+  `appointment_id` int(11) DEFAULT NULL,
+  `appointment_time` time DEFAULT NULL,
+  `arrival_time` time NOT NULL,
+  `reason` varchar(255) DEFAULT NULL,
+  `wait_time_minutes` int(11) DEFAULT 0,
+  `status` enum('En attente','Appelé','En consultation','Terminé') NOT NULL DEFAULT 'En attente',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `fk_waiting_patient` (`patient_id`),
+  KEY `fk_waiting_appointment` (`appointment_id`),
+  CONSTRAINT `fk_waiting_appointment` FOREIGN KEY (`appointment_id`) REFERENCES `appointments` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_waiting_patient` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Dump completed on 2026-10-22 16:15:38

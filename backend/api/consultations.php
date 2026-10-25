@@ -96,6 +96,9 @@ function handleGetConsultations($db) {
             $echoStmt->execute([':cid' => $r['id']]);
             $echoRow = $echoStmt->fetch();
             if ($echoRow) {
+                if (!empty($echoRow['morphology_details']) && is_string($echoRow['morphology_details'])) {
+                    $echoRow['morphology_details'] = json_decode($echoRow['morphology_details'], true);
+                }
                 $echoReport = $echoRow;
             }
 
@@ -122,6 +125,7 @@ function handleGetConsultations($db) {
                 "echoFindings" => $r['echo_findings'],
                 "echoConclusion" => $r['echo_conclusion'],
                 "echoType" => $r['echo_type'],
+                "echoData" => $echoReport['morphology_details'] ?? null,
                 "prescriptionCreated" => boolval($r['prescription_created']),
                 "prescriptionId" => $r['prescription_id'] ? intval($r['prescription_id']) : null,
                 "prescriptionData" => $prescriptionData,
@@ -181,9 +185,10 @@ function handleCreateConsultation($db) {
         $examFindings = $body['examFindings'] ?? null;
         $diagnosis = $body['diagnosis'] ?? "Bilan médical normal";
         $recommendations = $body['recommendations'] ?? null;
-        $echoType = $body['echoType'] ?? null;
-        $echoFindings = $body['echoFindings'] ?? null;
-        $echoConclusion = $body['echoConclusion'] ?? null;
+        $examType = $body['examType'] ?? null;
+        $echoType = $body['echoType'] ?? (!empty($examType) ? ("Échographie " . strtoupper($examType)) : null);
+        $echoFindings = $body['echoFindings'] ?? ($body['conclusion'] ?? null);
+        $echoConclusion = $body['echoConclusion'] ?? ($body['conclusionText'] ?? ($body['diagnosis'] ?? null));
 
         // Insertion dans la table consultations
         $cSql = "INSERT INTO consultations 
@@ -285,12 +290,27 @@ function handleCreateConsultation($db) {
                     "items" => array_values($validItems),
                     "validated" => true
                 ];
+
+                // Enregistrer l'ordonnance dans medical_documents pour le dossier médical
+                try {
+                    $docSql = "INSERT INTO medical_documents 
+                                (patient_id, consultation_id, title, category, doc_date, author, file_size, file_type, status)
+                               VALUES 
+                                (:pid, :cid, :title, 'Autre', :ddate, :author, 'Ordonnance', 'Prescription', 'Validée')";
+                    $db->prepare($docSql)->execute([
+                        ':pid' => $patientId,
+                        ':cid' => $consultationId,
+                        ':title' => "Ordonnance Médicale #" . $prescNumber,
+                        ':ddate' => $date,
+                        ':author' => $docName
+                    ]);
+                } catch (Exception $e) {}
             }
         }
 
         // 2. Gestion du Compte-Rendu Échographique Spécialisé (si applicable)
-        $examType = $body['examType'] ?? null;
-        if (!empty($examType) || !empty($body['echoData'])) {
+        $hasEcho = !empty($examType) || !empty($body['echoData']) || !empty($echoType) || !empty($echoFindings);
+        if ($hasEcho) {
             $echoCount = $db->query("SELECT COUNT(*) FROM ultrasound_reports")->fetchColumn() + 1;
             $reportNumber = sprintf("CR-ECHO-%s-%04d", $year, $echoCount);
             $calc = $body['calculated'] ?? [];
@@ -325,7 +345,80 @@ function handleCreateConsultation($db) {
                 ':find' => $echoFindings ?: $examFindings,
                 ':concl' => $echoConclusion ?: $diagnosis
             ]);
+
+            // Enregistrer automatiquement le rapport d'échographie dans medical_documents pour le dossier du patient
+            try {
+                $docSql = "INSERT INTO medical_documents 
+                            (patient_id, consultation_id, title, category, doc_date, author, file_size, file_type, status)
+                           VALUES 
+                            (:pid, :cid, :title, 'Imagerie & Radiologie', :ddate, 'Dr N. BELBACHIR OULD HENNIA', 'Compte-rendu officiel', 'Échographie', 'Archivé')";
+                $db->prepare($docSql)->execute([
+                    ':pid' => $patientId,
+                    ':cid' => $consultationId,
+                    ':title' => "Compte-Rendu Échographique (" . ($echoType ?: "Échographie") . ")",
+                    ':ddate' => $date
+                ]);
+            } catch (Exception $e) {}
         }
+
+        // 3. Enregistrer automatiquement la facture correspondante dans la section des factures
+        try {
+            $invCount = $db->query("SELECT COUNT(*) FROM invoices")->fetchColumn() + 1;
+            $invNumber = sprintf("FAC-%s-%04d", $year, $invCount);
+
+            // Calcul automatique du montant selon la cotation
+            $amount = 2500.00;
+            if (!empty($billingCode) && preg_match('/([\d\s]+)\s*DA/i', $billingCode, $m)) {
+                $clean = str_replace(' ', '', $m[1]);
+                if (is_numeric($clean) && floatval($clean) > 0) {
+                    $amount = floatval($clean);
+                }
+            } elseif ($hasEcho) {
+                $amount = 4000.00;
+            }
+
+            $actDesc = !empty($billingCode) ? $billingCode : ($reason ?: "Consultation médicale");
+
+            $invSql = "INSERT INTO invoices 
+                        (invoice_number, patient_id, consultation_id, invoice_date, act_description, amount, covered_amo, covered_amc, patient_remaining, payment_method, status)
+                       VALUES 
+                        (:invNum, :pid, :cid, :idate, :actDesc, :amt, 0.00, 0.00, :rem, 'Espèces', 'Payée')";
+            $db->prepare($invSql)->execute([
+                ':invNum' => $invNumber,
+                ':pid' => $patientId,
+                ':cid' => $consultationId,
+                ':idate' => $date,
+                ':actDesc' => $actDesc,
+                ':amt' => $amount,
+                ':rem' => $amount
+            ]);
+        } catch (Exception $e) {}
+
+        // Mettre à jour la fiche patient (dernière visite et antécédents obstétricaux si fournis)
+        try {
+            $patUpdates = ["last_visit = :lvisit"];
+            $patParams = [':lvisit' => $date, ':pid' => $patientId];
+            if (!empty($body['atcd']) && is_array($body['atcd'])) {
+                $atcd = $body['atcd'];
+                if (isset($atcd['gestite']) && is_numeric($atcd['gestite'])) {
+                    $patUpdates[] = "gravida = :grav";
+                    $patParams[':grav'] = intval($atcd['gestite']);
+                }
+                if (isset($atcd['parite']) && is_numeric($atcd['parite'])) {
+                    $patUpdates[] = "para = :para";
+                    $patParams[':para'] = intval($atcd['parite']);
+                }
+                if (isset($atcd['cesarienne']) && is_numeric($atcd['cesarienne'])) {
+                    $patUpdates[] = "cesarean = :cesar";
+                    $patParams[':cesar'] = intval($atcd['cesarienne']);
+                }
+                if (isset($atcd['faussesCouches']) && is_numeric($atcd['faussesCouches'])) {
+                    $patUpdates[] = "abortions = :abort";
+                    $patParams[':abort'] = intval($atcd['faussesCouches']);
+                }
+            }
+            $db->prepare("UPDATE patients SET " . implode(", ", $patUpdates) . " WHERE id = :pid")->execute($patParams);
+        } catch (Exception $e) {}
 
         // Si le patient était dans la salle d'attente, mettre à jour son statut à 'Terminé'
         $upWait = $db->prepare("UPDATE waiting_room SET status = 'Terminé' WHERE patient_id = :pid AND status IN ('Attente', 'Appelé', 'En consultation')");

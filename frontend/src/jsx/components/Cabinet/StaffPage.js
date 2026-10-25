@@ -719,136 +719,22 @@ const StaffPage = () => {
         activeMenu="Personnel & Droits d'Accès"
       />
 
-      {/* En-tête Principal & Boutons d'Action */}
-      <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-3">
-        <div>
-          <h4 className="text-primary font-w600 mb-1">
-            Équipe & Gestion des Droits d'Accès
-          </h4>
-          <p className="text-muted fs-13 mb-0">
-            Création, modification et attribution des rôles et habilitations par page pour le cabinet médical
-          </p>
-        </div>
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <button
-            className="btn btn-outline-primary btn-sm d-flex align-items-center gap-2"
-            onClick={handleOpenNewRole}
-          >
-            <i className="flaticon-381-shield-1"></i>
-            <span>Nouveau Rôle</span>
-          </button>
-          <button
-            className="btn btn-primary btn-sm d-flex align-items-center gap-2"
-            onClick={handleOpenNewAccount}
-          >
-            <i className="flaticon-381-user-7"></i>
-            <span>Nouveau Compte</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Cartes Métriques KPI */}
-      <div className="row mb-3">
-        <div className="col-xl-3 col-sm-6 mb-3">
-          <div className="card h-100 mb-0 shadow-sm border-0">
-            <div className="card-body p-3 d-flex align-items-center">
-              <div
-                className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  backgroundColor: "#e8f0fe",
-                  color: "#1e60d5",
-                }}
-              >
-                <i className="flaticon-381-user-9 fs-20"></i>
-              </div>
-              <div>
-                <p className="text-muted fs-12 mb-0">Total Comptes</p>
-                <h4 className="font-w700 mb-0 text-dark">
-                  {accounts.length}{" "}
-                  <span className="fs-12 font-w400 text-success">
-                    ({activeAccountsCount} actifs)
-                  </span>
-                </h4>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-xl-3 col-sm-6 mb-3">
-          <div className="card h-100 mb-0 shadow-sm border-0">
-            <div className="card-body p-3 d-flex align-items-center">
-              <div
-                className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  backgroundColor: "#e6f4ea",
-                  color: "#137333",
-                }}
-              >
-                <i className="flaticon-381-shield-1 fs-20"></i>
-              </div>
-              <div>
-                <p className="text-muted fs-12 mb-0">Rôles Configurés</p>
-                <h4 className="font-w700 mb-0 text-dark">
-                  {roles.length}{" "}
-                  <span className="fs-12 font-w400 text-muted">profils</span>
-                </h4>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-xl-3 col-sm-6 mb-3">
-          <div className="card h-100 mb-0 shadow-sm border-0">
-            <div className="card-body p-3 d-flex align-items-center">
-              <div
-                className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  backgroundColor: "#fef7e0",
-                  color: "#b06000",
-                }}
-              >
-                <i className="flaticon-381-layers fs-20"></i>
-              </div>
-              <div>
-                <p className="text-muted fs-12 mb-0">Pages & Modules</p>
-                <h4 className="font-w700 mb-0 text-dark">
-                  {SITE_PAGES.length}{" "}
-                  <span className="fs-12 font-w400 text-muted">protégés</span>
-                </h4>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-xl-3 col-sm-6 mb-3">
-          <div className="card h-100 mb-0 shadow-sm border-0">
-            <div className="card-body p-3 d-flex align-items-center">
-              <div
-                className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  backgroundColor: "#fce8e6",
-                  color: "#c5221f",
-                }}
-              >
-                <i className="flaticon-381-lock fs-20"></i>
-              </div>
-              <div>
-                <p className="text-muted fs-12 mb-0">Sécurité Médicale</p>
-                <h5 className="font-w700 mb-0 text-dark fs-14">
-                  Secret Médical Actif
-                </h5>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Boutons d'Action Supérieurs */}
+      <div className="d-flex mb-3 align-items-center justify-content-end gap-2 flex-wrap">
+        <button
+          className="btn btn-outline-primary btn-sm d-flex align-items-center gap-2"
+          onClick={handleOpenNewRole}
+        >
+          <i className="flaticon-381-shield-1"></i>
+          <span>Nouveau Rôle</span>
+        </button>
+        <button
+          className="btn btn-primary btn-sm d-flex align-items-center gap-2"
+          onClick={handleOpenNewAccount}
+        >
+          <i className="flaticon-381-user-7"></i>
+          <span>Nouveau Compte</span>
+        </button>
       </div>
 
       {/* Onglets de Navigation : Comptes vs Rôles */}

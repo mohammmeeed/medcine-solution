@@ -1190,3 +1190,45 @@ rect#chart_ChartBorder {
   }
 }
 
+/* Alignement parfait sur une seule ligne du Header Right & style du Profil Médecin */
+.header-right {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  margin-bottom: 0 !important;
+  height: 100% !important;
+}
+
+.header-right > li {
+  display: inline-flex !important;
+  align-items: center !important;
+  height: 100% !important;
+  margin-bottom: 0 !important;
+  float: none !important;
+}
+
+.header-right .header-profile > a.nav-link {
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 4px !important;
+}
+
+.header-right .header-profile .header-info {
+  padding-right: 0 !important;
+  text-align: right !important;
+}
+
+.header-right .header-profile .header-info span {
+  font-size: 14.5px !important;
+  font-weight: 600 !important;
+  color: #1e60d5 !important;
+  line-height: 1.2 !important;
+}
+
+.header-right .header-profile .header-info small {
+  font-size: 12px !important;
+  color: #64748b !important;
+  line-height: 1.1 !important;
+}
+

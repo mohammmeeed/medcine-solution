@@ -4,6 +4,7 @@ import { Modal, Button, Badge } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
+import { jsPDF } from "jspdf";
 import {
   initialDocuments,
   initialPatients,
@@ -147,17 +148,160 @@ const MedicalDocumentsPage = () => {
     if (doc.fileDataUrl) {
       const link = document.createElement("a");
       link.href = doc.fileDataUrl;
-      link.download = doc.fileName || `${doc.title}.${(doc.type || "pdf").toLowerCase()}`;
+      link.download =
+        doc.fileName || `${doc.title}.${(doc.type || "pdf").toLowerCase()}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } else {
+      return;
+    }
+
+    try {
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      pdf.setDrawColor(26, 58, 92);
+      pdf.setLineWidth(0.8);
+      pdf.line(15, 28, 195, 28);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(14);
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("CABINET DE GYNECOLOGIE OBSTETRIQUE", 15, 14);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.setTextColor(45, 106, 159);
+      pdf.text("Dr N. BELBACHIR OULD HENNIA", 15, 19);
+
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(9);
+      pdf.setTextColor(80, 80, 80);
+      pdf.text(
+        "Medecin Specialiste en Gynecologie Obstetrique - Echographie",
+        15,
+        23
+      );
+      pdf.text(
+        "Cite 500 Logements, Bloc A, Es-Senia, Oran | Tel : 0550 50 50 25",
+        15,
+        27
+      );
+
+      pdf.setFillColor(245, 249, 255);
+      pdf.setDrawColor(192, 211, 232);
+      pdf.roundedRect(15, 33, 180, 11, 2, 2, "FD");
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.setTextColor(26, 58, 92);
+      pdf.text((doc.title || "DOCUMENT MEDICAL").toUpperCase(), 105, 40, {
+        align: "center",
+      });
+
+      pdf.setFillColor(250, 250, 250);
+      pdf.setDrawColor(220, 225, 230);
+      pdf.roundedRect(15, 48, 180, 22, 1, 1, "FD");
+
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("Patient(e) :", 20, 56);
+      pdf.text("Date du document :", 20, 63);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(30, 30, 30);
+      pdf.text(`${doc.patientName || "Patient"}`, 55, 56);
+      pdf.text(`${doc.date || ""}`, 55, 63);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("Categorie :", 115, 56);
+      pdf.text("Emetteur :", 115, 63);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(30, 30, 30);
+      pdf.text(`${doc.category || "General"}`, 140, 56);
+      pdf.text(`${doc.author || "Dr Belbachir"}`, 140, 63);
+
+      pdf.setFillColor(248, 251, 255);
+      pdf.setDrawColor(192, 211, 232);
+      pdf.roundedRect(15, 76, 180, 40, 1, 1, "FD");
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("DETAILS & ATTESTATION", 20, 83);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.setTextColor(30, 30, 30);
+      pdf.text(
+        `Ce document officiel fait partie intégrante du dossier médical informatisé.`,
+        20,
+        91
+      );
+      pdf.text(
+        `Type de pièce : ${doc.fileType || "Rapport / Analyse"} (${doc.fileSize || "Archive médicale"})`,
+        20,
+        98
+      );
+      pdf.text(
+        `Statut d'homologation : ${doc.status || "Validé par le médecin"}`,
+        20,
+        105
+      );
+
+      // Cachet & Signature
+      pdf.setDrawColor(192, 211, 232);
+      pdf.roundedRect(120, 220, 75, 32, 1, 1, "D");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("Dr N. BELBACHIR OULD HENNIA", 125, 226);
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text("Specialiste en Gynecologie Obstetrique", 125, 231);
+      pdf.text("Signature et Cachet Officiel", 125, 237);
+
+      pdf.setDrawColor(26, 58, 92);
+      pdf.setLineWidth(0.4);
+      pdf.line(15, 280, 195, 280);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(120, 120, 120);
+      pdf.text(
+        "Cabinet Medical Dr Belbachir - Es-Senia, Oran | Document officiel imprime le " +
+          new Date().toLocaleDateString("fr-FR"),
+        105,
+        284,
+        { align: "center" }
+      );
+
+      const cleanFileName = (doc.title || "document_medical")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]/g, "_");
+
+      pdf.save(`${cleanFileName}.pdf`);
+
       Swal.fire({
-        icon: "info",
-        title: "Téléchargement sécurisé",
-        text: `Téléchargement du document : ${doc.title} (${doc.fileSize})`,
-        timer: 1500,
+        icon: "success",
+        title: "Document téléchargé",
+        text: `Le document "${doc.title}" a été téléchargé avec succès au format PDF.`,
+        timer: 2000,
         showConfirmButton: false,
+      });
+    } catch (err) {
+      console.error("Erreur PDF :", err);
+      Swal.fire({
+        icon: "error",
+        title: "Erreur de téléchargement",
+        text: "Impossible de générer le PDF : " + err.message,
       });
     }
   };

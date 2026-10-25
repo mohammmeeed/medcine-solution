@@ -41,6 +41,9 @@ const AppointmentsPage = () => {
   const [calendarTitle, setCalendarTitle] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [liveTime, setLiveTime] = useState(
+    new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+  );
 
   const calendarRef = useRef(null);
 
@@ -95,10 +98,22 @@ const AppointmentsPage = () => {
     window.addEventListener("focus", onFocus);
 
     const timer = setInterval(() => fetchAppointments(true), 10000);
+    const clockTimer = setInterval(() => {
+      setLiveTime(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
+    }, 1000);
+
+    // Défilement automatique vers l'heure actuelle sur la première case visible
+    const scrollInitTimer = setTimeout(() => {
+      const now = new Date();
+      const currentSlot = `${String(Math.max(8, now.getHours())).padStart(2, "0")}:${now.getMinutes() >= 30 ? "30" : "00"}:00`;
+      calendarRef.current?.getApi()?.scrollToTime(currentSlot);
+    }, 350);
 
     return () => {
       window.removeEventListener("focus", onFocus);
       clearInterval(timer);
+      clearInterval(clockTimer);
+      clearTimeout(scrollInitTimer);
     };
   }, []);
 
@@ -131,7 +146,13 @@ const AppointmentsPage = () => {
     calendarRef.current?.getApi().next();
   };
   const handleToday = () => {
-    calendarRef.current?.getApi().today();
+    const api = calendarRef.current?.getApi();
+    if (api) {
+      api.today();
+      const now = new Date();
+      const currentSlot = `${String(Math.max(8, now.getHours())).padStart(2, "0")}:${now.getMinutes() >= 30 ? "30" : "00"}:00`;
+      api.scrollToTime(currentSlot);
+    }
   };
   const handleViewChange = (viewName) => {
     setActiveView(viewName);
@@ -269,9 +290,10 @@ const AppointmentsPage = () => {
       if (!exists) {
         const newArrival = {
           id: Date.now(),
-          appointmentId: item.appointmentId,
-          patientId: item.patientId,
-          patientName: item.patientName,
+          appointmentId: item.appointmentId || null,
+          patientId: item.patientId || null,
+          patientName: item.patientName || "Patient",
+          phone: item.phone || "",
           appointmentTime: item.appointmentTime || "10:00",
           arrivalTime: arrTime,
           reason: item.reason || "Consultation générale",
@@ -288,6 +310,17 @@ const AppointmentsPage = () => {
           channel.postMessage({ type: "UPDATE_LIST", list: updatedList });
           channel.close();
         } catch (e) {}
+
+        // Enregistrer également dans MySQL pour persistance garantie
+        ApiService.createWaitingArrival({
+          patientId: item.patientId || null,
+          patientName: item.patientName,
+          phone: item.phone || "",
+          appointmentId: item.appointmentId || null,
+          appointmentTime: item.appointmentTime,
+          arrivalTime: arrTime,
+          reason: item.reason,
+        }).catch((err) => console.warn("Erreur createWaitingArrival MySQL :", err));
       }
     } catch (err) {
       console.warn("Erreur synchronisation salle d'attente locale :", err);
@@ -332,12 +365,12 @@ const AppointmentsPage = () => {
     const existingApt = editId ? appointments.find((a) => a.id === editId) : null;
     const patientList = patients && patients.length > 0 ? patients : initialPatients;
     const patient = patientList.find((p) => p.id === parseInt(formRdv.patientId)) || {
-      id: formRdv.patientId || existingApt?.patientId || 1,
+      id: formRdv.patientId ? parseInt(formRdv.patientId) : (existingApt?.patientId || null),
       firstName: existingApt?.firstName || (existingApt?.patientName?.split(" ")[0] || "Patient"),
       lastName: existingApt?.lastName || (existingApt?.patientName?.split(" ").slice(1).join(" ") || ""),
       phone: existingApt?.phone || "",
     };
-    const pFullName = existingApt && !formRdv.patientId ? existingApt.patientName : `${patient.firstName} ${patient.lastName}`.trim();
+    const pFullName = (existingApt && !formRdv.patientId) ? (existingApt.patientName || "Patient") : `${patient.firstName} ${patient.lastName}`.trim();
 
     if (editId) {
       setAppointments(
@@ -345,7 +378,7 @@ const AppointmentsPage = () => {
           a.id === editId
             ? {
                 ...a,
-                patientId: patient.id,
+                patientId: patient.id || null,
                 patientName: pFullName,
                 phone: patient.phone,
                 date: formRdv.date,
@@ -373,8 +406,9 @@ const AppointmentsPage = () => {
       if (formRdv.status === "Arrivé") {
         syncArrivalToWaitingRoom({
           appointmentId: editId,
-          patientId: patient.id,
+          patientId: patient.id || null,
           patientName: pFullName,
+          phone: patient.phone,
           appointmentTime: formRdv.time,
           reason: formRdv.reason,
         });
@@ -397,7 +431,7 @@ const AppointmentsPage = () => {
     } else {
       const newAppt = {
         id: appointments.length + 1,
-        patientId: patient.id,
+        patientId: patient.id || null,
         patientName: pFullName,
         phone: patient.phone,
         date: formRdv.date,
@@ -411,7 +445,9 @@ const AppointmentsPage = () => {
 
       // Synchronisation MySQL
       ApiService.createAppointment({
-        patientId: patient.id,
+        patientId: patient.id || null,
+        patientName: pFullName,
+        phone: patient.phone,
         date: formRdv.date,
         time: formRdv.time,
         duration: formRdv.duration,
@@ -423,8 +459,9 @@ const AppointmentsPage = () => {
       if (formRdv.status === "Arrivé") {
         syncArrivalToWaitingRoom({
           appointmentId: newAppt.id,
-          patientId: patient.id,
+          patientId: patient.id || null,
           patientName: pFullName,
+          phone: patient.phone,
           appointmentTime: formRdv.time,
           reason: formRdv.reason,
         });
@@ -792,11 +829,20 @@ const AppointmentsPage = () => {
               </button>
               <button
                 type="button"
-                className="btn btn-sm btn-outline-primary ms-1"
+                className="btn btn-sm btn-outline-primary ms-1 d-inline-flex align-items-center gap-1"
                 onClick={handleToday}
+                title="Revenir à aujourd'hui et centrer sur l'heure actuelle"
               >
-                Aujourd'hui
+                <i className="fa fa-calendar-check-o"></i>
+                <span>Aujourd'hui</span>
               </button>
+              <div
+                className="d-none d-md-inline-flex align-items-center ms-2 px-2 py-1 rounded bg-light border text-primary font-w600 fs-12 shadow-sm"
+                title="Heure réelle en direct"
+              >
+                <span className="spinner-grow spinner-grow-sm text-danger me-1" style={{ width: "7px", height: "7px" }}></span>
+                <span>{liveTime}</span>
+              </div>
             </div>
 
             {/* Actions à droite : Request Approval (badge 7) & Refresh */}
@@ -1020,6 +1066,20 @@ const AppointmentsPage = () => {
                 background-size: contain;
               }
 
+              /* Ligne rouge temps réel et flèche heure actuelle */
+              .modern-calendar-wrapper .fc-timegrid-now-indicator-line {
+                border-color: #ef4444 !important;
+                border-width: 2.5px !important;
+                z-index: 10 !important;
+              }
+              .modern-calendar-wrapper .fc-timegrid-now-indicator-arrow {
+                border-color: #ef4444 !important;
+                border-top-color: transparent !important;
+                border-bottom-color: transparent !important;
+                border-width: 6px !important;
+                z-index: 10 !important;
+              }
+
               /* Days Header Styling */
               .modern-calendar-wrapper .fc-col-header-cell {
                 background-color: #ffffff !important;
@@ -1205,12 +1265,14 @@ const AppointmentsPage = () => {
                 plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                 initialView="timeGridWeek"
                 headerToolbar={false}
-                firstDay={1}
+                firstDay={new Date().getDay()}
                 slotMinTime="08:00:00"
                 slotMaxTime="18:00:00"
-                slotDuration="00:15:00"
-                slotLabelInterval="00:15:00"
-                snapDuration="00:15:00"
+                slotDuration="00:30:00"
+                slotLabelInterval="00:30:00"
+                snapDuration="00:30:00"
+                scrollTime={`${String(Math.max(8, new Date().getHours())).padStart(2, "0")}:${new Date().getMinutes() >= 30 ? "30" : "00"}:00`}
+                scrollTimeReset={false}
                 editable={true}
                 droppable={true}
                 eventResizableFromStart={true}
@@ -1240,13 +1302,13 @@ const AppointmentsPage = () => {
                       ) : (
                         <span className="cal-day-num">{dayNum}</span>
                       )}
-                      <span className="cal-day-name">{dayName}</span>
+                      <span className="cal-day-name">{isToday ? "Aujourd'hui" : dayName}</span>
                     </div>
                   );
                 }}
                 slotEventOverlap={false}
                 allDaySlot={false}
-                nowIndicator={false}
+                nowIndicator={true}
                 events={calendarEvents}
                 eventContent={(eventInfo) => {
                   const rdv = eventInfo.event.extendedProps || {};

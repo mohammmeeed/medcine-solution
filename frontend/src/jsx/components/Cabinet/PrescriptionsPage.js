@@ -6,7 +6,7 @@ import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import PrescriptionPreviewModal from "./PrescriptionPreviewModal";
 import MedicationsModal from "./MedicationsModal";
-import { ApiService } from "../../../services/ApiService";
+import ApiService from "../../../services/ApiService";
 import {
   initialDoctor,
   initialPatients,
@@ -20,7 +20,7 @@ const PrescriptionsPage = () => {
   const patientIdQuery = searchParams.get("patientId");
 
   const [patients, setPatients] = useState([]);
-  const [prescriptions, setPrescriptions] = useState(initialPrescriptions);
+  const [prescriptions, setPrescriptions] = useState([]);
   const [medications, setMedications] = useState(initialMedications);
   const [showMedModal, setShowMedModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -28,11 +28,27 @@ const PrescriptionsPage = () => {
   const [previewPrescription, setPreviewPrescription] = useState(null);
 
   useEffect(() => {
+    // 1. Récupérer toutes les ordonnances enregistrées dans MySQL
+    ApiService.getPrescriptions().then((data) => {
+      if (data && Array.isArray(data)) {
+        const clean = data.filter((p) => {
+          const name = (p.patientName || "").toLowerCase();
+          return !["dubois", "lemoine", "bernard", "moreau"].some((demo) =>
+            name.includes(demo)
+          );
+        });
+        setPrescriptions(clean);
+      }
+    });
+
+    // 2. Médicaments
     ApiService.getMedications().then((data) => {
       if (data && Array.isArray(data) && data.length > 0) {
         setMedications(data);
       }
     });
+
+    // 3. Patients
     ApiService.getPatients().then((data) => {
       if (data && Array.isArray(data)) {
         const clean = data.filter((p) => {
@@ -178,7 +194,7 @@ const PrescriptionsPage = () => {
     setFormData({ ...formData, items: updated });
   };
 
-  const handleSavePrescription = (e) => {
+  const handleSavePrescription = async (e) => {
     e.preventDefault();
     if (!formData.patientId) {
       Swal.fire({
@@ -202,28 +218,74 @@ const PrescriptionsPage = () => {
       return;
     }
 
-    const newOrd = {
-      id: prescriptions.length + 1,
-      prescriptionNumber: `ORD-2024-00${prescriptions.length + 91}`,
-      patientId: pat.id,
-      patientName: `${pat.firstName || ""} ${pat.lastName || ""}`.trim(),
-      date: new Date().toISOString().split("T")[0],
-      validity: formData.validity,
-      ald: formData.ald,
-      doctorName: initialDoctor.name,
-      items: formData.items,
-      notes: formData.notes,
-      validated: true,
-    };
+    try {
+      const year = new Date().getFullYear();
+      const prescNum = `ORD-${year}-${String(prescriptions.length + 1).padStart(4, "0")}`;
 
-    setPrescriptions([newOrd, ...prescriptions]);
-    setShowCreateModal(false);
+      const res = await ApiService.savePrescription({
+        patientId: pat.id,
+        prescriptionNumber: prescNum,
+        date: new Date().toISOString().split("T")[0],
+        validity: formData.validity,
+        ald: formData.ald,
+        doctorName: initialDoctor.name,
+        notes: formData.notes,
+        items: formData.items,
+      });
 
+      const newOrd = {
+        id: res?.data?.id || Date.now(),
+        prescriptionNumber: prescNum,
+        patientId: pat.id,
+        patientName: `${pat.firstName || ""} ${pat.lastName || ""}`.trim(),
+        date: new Date().toISOString().split("T")[0],
+        validity: formData.validity,
+        ald: formData.ald,
+        doctorName: initialDoctor.name,
+        items: formData.items,
+        notes: formData.notes,
+        validated: true,
+      };
+
+      setPrescriptions([newOrd, ...prescriptions]);
+      setShowCreateModal(false);
+
+      Swal.fire({
+        icon: "success",
+        title: "Ordonnance validée et signée",
+        text: `Prescription #${newOrd.prescriptionNumber} enregistrée avec succès.`,
+        confirmButtonColor: "#1e60d5",
+      });
+    } catch (err) {
+      console.error("Erreur sauvegarde ordonnance :", err);
+    }
+  };
+
+  const handleDeletePrescription = (id, num) => {
     Swal.fire({
-      icon: "success",
-      title: "Ordonnance validée et signée",
-      text: `Prescription #${newOrd.prescriptionNumber} enregistrée avec succès.`,
-      confirmButtonColor: "#1e60d5",
+      title: "Supprimer cette ordonnance ?",
+      text: `Êtes-vous sûr de vouloir supprimer l'ordonnance ${num || ""} ?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Oui, supprimer",
+      cancelButtonText: "Annuler",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          await ApiService.deletePrescription(id);
+          setPrescriptions((prev) => prev.filter((p) => p.id !== id));
+          Swal.fire({
+            icon: "success",
+            title: "Ordonnance supprimée",
+            timer: 1500,
+            showConfirmButton: false,
+          });
+        } catch (err) {
+          console.error("Erreur suppression ordonnance :", err);
+        }
+      }
     });
   };
 
@@ -233,8 +295,8 @@ const PrescriptionsPage = () => {
 
   const filteredPrescriptions = prescriptions.filter(
     (p) =>
-      p.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.prescriptionNumber.toLowerCase().includes(searchTerm.toLowerCase())
+      (p.patientName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.prescriptionNumber || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -508,7 +570,7 @@ const PrescriptionsPage = () => {
                       </td>
                       <td>
                         <ul className="mb-0 ps-3 fs-13">
-                          {ord.items.map((item, idx) => (
+                          {(ord.items || []).map((item, idx) => (
                             <li key={idx}>
                               <strong>{item.medication}</strong> ({item.posology})
                             </li>
@@ -517,13 +579,26 @@ const PrescriptionsPage = () => {
                       </td>
                       <td>{ord.validity}</td>
                       <td>
-                        <div className="d-flex gap-1">
+                        <div className="d-flex gap-1 align-items-center">
                           <button
                             className="btn btn-outline-primary btn-xs"
                             onClick={() => setPreviewPrescription(ord)}
                             title="Aperçu & Impression officielle"
                           >
                             <i className="flaticon-381-print me-1"></i> Imprimer
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-xs btn-link text-danger p-0 ms-2"
+                            onClick={() =>
+                              handleDeletePrescription(
+                                ord.id,
+                                ord.prescriptionNumber
+                              )
+                            }
+                            title="Supprimer l'ordonnance"
+                          >
+                            <i className="fa fa-trash"></i>
                           </button>
                         </div>
                       </td>

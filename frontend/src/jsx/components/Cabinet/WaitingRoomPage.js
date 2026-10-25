@@ -158,7 +158,11 @@ const WaitingRoomPage = () => {
       console.warn("Erreur mise à jour statut MySQL :", e)
     );
 
-    navigate(`/consultations?patientId=${patient.patientId}`);
+    if (patient.patientId) {
+      navigate(`/consultations?patientId=${patient.patientId}`);
+    } else {
+      navigate(`/consultations?patientName=${encodeURIComponent(patient.patientName)}&appointmentId=${patient.appointmentId || ""}`);
+    }
   };
 
   const handleRemovePatient = (id) => {
@@ -334,12 +338,19 @@ const WaitingRoomPage = () => {
                         <span className="text-muted">{p.appointmentTime}</span>
                       </td>
                       <td>
-                        <Link
-                          to={`/patient-details?id=${p.patientId}`}
-                          className="font-w600 text-dark hover-primary"
-                        >
-                          {p.patientName}
-                        </Link>
+                        {p.patientId ? (
+                          <Link
+                            to={`/patient-details?id=${p.patientId}`}
+                            className="font-w600 text-dark hover-primary"
+                          >
+                            {p.patientName}
+                          </Link>
+                        ) : (
+                          <span className="font-w600 text-dark">
+                            {p.patientName}{" "}
+                            <span className="badge badge-xs badge-info light ms-1">En ligne</span>
+                          </span>
+                        )}
                       </td>
                       <td>{p.reason}</td>
                       <td>

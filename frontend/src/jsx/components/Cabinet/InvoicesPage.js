@@ -492,19 +492,6 @@ const InvoicesPage = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Cachet et Signature */}
-              <div className="row pt-3 mt-2">
-                <div className="col-6">
-                  <small className="text-muted fs-11">
-                    Cabinet Médical Dr N. BELBACHIR OULD HENNIA
-                  </small>
-                </div>
-                <div className="col-6 text-end">
-                  <span className="text-muted fs-12 d-block mb-4">Cachet et Signature / الختم والإمضاء</span>
-                  <div style={{ height: "45px" }}></div>
-                </div>
-              </div>
             </div>
           )}
         </div>

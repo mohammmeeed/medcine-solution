@@ -27,10 +27,10 @@ switch ($method) {
 function handleGetWaitingRoom($db) {
     try {
         $sql = "SELECT w.*, 
-                       COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))), ''), 'Patient') AS patient_name,
+                       COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))), ''), NULLIF(TRIM(w.patient_name), ''), 'Patient') AS patient_name,
                        p.dob AS patient_dob,
                        p.file_number AS patient_file_number,
-                       p.phone AS patient_phone
+                       COALESCE(NULLIF(TRIM(p.phone), ''), NULLIF(TRIM(w.patient_phone), ''), '') AS patient_phone
                 FROM waiting_room w
                 LEFT JOIN patients p ON w.patient_id = p.id
                 WHERE w.status != 'Terminé'
@@ -50,9 +50,9 @@ function handleGetWaitingRoom($db) {
             $list[] = [
                 "id" => intval($r['id']),
                 "appointmentId" => !empty($r['appointment_id']) ? intval($r['appointment_id']) : null,
-                "patientId" => intval($r['patient_id']),
+                "patientId" => !empty($r['patient_id']) ? intval($r['patient_id']) : null,
                 "patientName" => $r['patient_name'],
-                "fileNumber" => $r['patient_file_number'],
+                "fileNumber" => $r['patient_file_number'] ?: "EN LIGNE",
                 "age" => $age,
                 "phone" => $r['patient_phone'],
                 "appointmentTime" => substr($r['appointment_time'] ?: "10:00", 0, 5),
@@ -72,12 +72,15 @@ function handleGetWaitingRoom($db) {
 function handleCreateArrival($db) {
     $body = getRequestBody();
 
-    if (empty($body['patientId'])) {
-        sendResponse("error", null, "patientId est requis", 400);
+    $patientId = !empty($body['patientId']) ? intval($body['patientId']) : null;
+    $patientName = trim($body['patientName'] ?? '');
+    $patientPhone = trim($body['patientPhone'] ?? ($body['phone'] ?? ''));
+
+    if (!$patientId && empty($patientName)) {
+        sendResponse("error", null, "patientId ou patientName est requis", 400);
     }
 
     try {
-        $patientId = intval($body['patientId']);
         $appId = !empty($body['appointmentId']) ? intval($body['appointmentId']) : null;
         $appTime = $body['appointmentTime'] ?? date('H:i:s');
         $arrTime = $body['arrivalTime'] ?? date('H:i:s');
@@ -93,11 +96,13 @@ function handleCreateArrival($db) {
             }
         }
 
-        $sql = "INSERT INTO waiting_room (patient_id, appointment_id, appointment_time, arrival_time, reason, status) 
-                VALUES (:pid, :aid, :atime, :artime, :reason, 'En attente')";
+        $sql = "INSERT INTO waiting_room (patient_id, patient_name, patient_phone, appointment_id, appointment_time, arrival_time, reason, status) 
+                VALUES (:pid, :pname, :pphone, :aid, :atime, :artime, :reason, 'En attente')";
         $stmt = $db->prepare($sql);
         $stmt->execute([
             ':pid' => $patientId,
+            ':pname' => $patientName ?: null,
+            ':pphone' => $patientPhone ?: null,
             ':aid' => $appId,
             ':atime' => strlen($appTime) === 5 ? ($appTime . ":00") : $appTime,
             ':artime' => strlen($arrTime) === 5 ? ($arrTime . ":00") : $arrTime,
