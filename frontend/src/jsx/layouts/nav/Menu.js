@@ -63,6 +63,11 @@ export const MenuList = [
         to: "invoices",
         iconStyle: <i className="flaticon-381-calculator" />
     },
+    {
+        title: "Journal de Caisse",
+        to: "cashflow",
+        iconStyle: <i className="flaticon-381-notebook-1" />
+    },
 
     {
         title: "Rapports & Stats",
@@ -89,6 +94,11 @@ export const MenuList = [
         title: "Paramètres",
         to: "settings",
         iconStyle: <i className="flaticon-381-settings-2" />
+    },
+    {
+        title: "Configuration SMTP",
+        to: "smtp",
+        iconStyle: <i className="flaticon-381-send" />
     },
     {
         title: "Aide & Support",

@@ -24,6 +24,27 @@ switch ($method) {
         sendResponse("error", null, "Méthode non autorisée", 405);
 }
 
+function generatePatientPassword($lastName, $firstName, $phone) {
+    $cleanLast = trim($lastName ?? '');
+    $cleanFirst = trim($firstName ?? '');
+
+    if (function_exists('iconv')) {
+        $cleanLast = @iconv('UTF-8', 'ASCII//TRANSLIT', $cleanLast) ?: $cleanLast;
+        $cleanFirst = @iconv('UTF-8', 'ASCII//TRANSLIT', $cleanFirst) ?: $cleanFirst;
+    }
+
+    $cleanLast = preg_replace('/[^a-zA-Z]/', '', $cleanLast);
+    $cleanFirst = preg_replace('/[^a-zA-Z]/', '', $cleanFirst);
+
+    $lastInitial = !empty($cleanLast) ? strtolower(substr($cleanLast, 0, 1)) : 'p';
+    $firstInitial = !empty($cleanFirst) ? strtolower(substr($cleanFirst, 0, 1)) : 'a';
+
+    $digits = preg_replace('/\D/', '', $phone ?? '');
+    $last3 = strlen($digits) >= 3 ? substr($digits, -3) : str_pad($digits, 3, '0', STR_PAD_LEFT);
+
+    return strtolower($lastInitial . $firstInitial . $last3);
+}
+
 function handleGetPatients($db) {
     try {
         $id = isset($_GET['id']) ? intval($_GET['id']) : null;
@@ -71,6 +92,21 @@ function handleGetPatients($db) {
                 $calculatedAge = $today->diff($dob)->y;
             }
 
+            // Calculer le nombre réel de consultations enregistrées
+            $cStmt = $db->prepare("SELECT COUNT(*) FROM consultations WHERE patient_id = :pid");
+            $cStmt->execute([':pid' => $r['id']]);
+            $consultationsCount = intval($cStmt->fetchColumn());
+
+            // Récupérer la dernière visite réelle si non renseignée
+            $latestVisit = $r['last_visit'];
+            if (empty($latestVisit)) {
+                $lvStmt = $db->prepare("SELECT date FROM consultations WHERE patient_id = :pid ORDER BY date DESC, id DESC LIMIT 1");
+                $lvStmt->execute([':pid' => $r['id']]);
+                $latestVisit = $lvStmt->fetchColumn() ?: null;
+            }
+
+            $pwd = !empty($r['password']) ? $r['password'] : generatePatientPassword($r['last_name'], $r['first_name'], $r['phone']);
+
             $patients[] = [
                 "id" => intval($r['id']),
                 "fileNumber" => $r['file_number'],
@@ -81,6 +117,7 @@ function handleGetPatients($db) {
                 "gender" => $r['gender'],
                 "phone" => $r['phone'],
                 "email" => $r['email'],
+                "password" => $pwd,
                 "address" => $r['address'],
                 "secuNumber" => $r['secu_number'],
                 "bloodGroup" => $r['blood_group'],
@@ -91,7 +128,8 @@ function handleGetPatients($db) {
                 "para" => intval($r['para'] ?? 0),
                 "cesarean" => intval($r['cesarean'] ?? 0),
                 "livingChildren" => intval($r['living_children'] ?? 0),
-                "lastVisit" => $r['last_visit'],
+                "lastVisit" => $latestVisit,
+                "consultationsCount" => $consultationsCount,
                 "status" => $r['status']
             ];
         }
@@ -124,10 +162,14 @@ function handleCreatePatient($db) {
             $age = intval($body['age']);
         }
 
+        $password = !empty($body['password']) 
+            ? trim($body['password']) 
+            : generatePatientPassword($body['lastName'], $body['firstName'], $body['phone'] ?? '');
+
         $sql = "INSERT INTO patients 
-                    (file_number, first_name, last_name, dob, age, gender, phone, email, address, secu_number, blood_group, status)
+                    (file_number, first_name, last_name, dob, age, gender, phone, email, password, address, secu_number, blood_group, status)
                 VALUES 
-                    (:fn, :fname, :lname, :dob, :age, :gender, :phone, :email, :addr, :secu, :bg, 'Actif')";
+                    (:fn, :fname, :lname, :dob, :age, :gender, :phone, :email, :pwd, :addr, :secu, :bg, 'Actif')";
 
         $stmt = $db->prepare($sql);
         $stmt->execute([
@@ -139,6 +181,7 @@ function handleCreatePatient($db) {
             ':gender' => $body['gender'] ?? 'Féminin',
             ':phone' => $body['phone'] ?? null,
             ':email' => $body['email'] ?? null,
+            ':pwd' => $password,
             ':addr' => $body['address'] ?? null,
             ':secu' => $body['secuNumber'] ?? null,
             ':bg' => $body['bloodGroup'] ?? 'O+'
@@ -176,6 +219,7 @@ function handleCreatePatient($db) {
             "gender" => $body['gender'] ?? 'Féminin',
             "phone" => $body['phone'] ?? null,
             "email" => $body['email'] ?? null,
+            "password" => $password,
             "address" => $body['address'] ?? null,
             "secuNumber" => $body['secuNumber'] ?? null,
             "bloodGroup" => $body['bloodGroup'] ?? 'O+',
@@ -208,6 +252,9 @@ function handleUpdatePatient($db) {
             $age = intval($body['age']);
         }
 
+        $pwd = !empty($body['password']) ? trim($body['password']) : null;
+        $pwdSql = $pwd ? ", password = :pwd" : "";
+
         $sql = "UPDATE patients SET 
                     first_name = :fname,
                     last_name = :lname,
@@ -219,9 +266,10 @@ function handleUpdatePatient($db) {
                     address = :addr,
                     secu_number = :secu,
                     blood_group = :bg
+                    $pwdSql
                 WHERE id = :id";
         $stmt = $db->prepare($sql);
-        $stmt->execute([
+        $params = [
             ':fname' => trim($body['firstName']),
             ':lname' => trim($body['lastName']),
             ':dob' => $dob,
@@ -233,7 +281,11 @@ function handleUpdatePatient($db) {
             ':secu' => $body['secuNumber'] ?? null,
             ':bg' => $body['bloodGroup'] ?? null,
             ':id' => $id
-        ]);
+        ];
+        if ($pwd) {
+            $params[':pwd'] = $pwd;
+        }
+        $stmt->execute($params);
 
         sendResponse("success", [
             "id" => $id,
@@ -244,6 +296,7 @@ function handleUpdatePatient($db) {
             "gender" => $body['gender'] ?? 'Féminin',
             "phone" => $body['phone'] ?? null,
             "email" => $body['email'] ?? null,
+            "password" => $pwd,
             "address" => $body['address'] ?? null,
             "secuNumber" => $body['secuNumber'] ?? null,
             "bloodGroup" => $body['bloodGroup'] ?? null

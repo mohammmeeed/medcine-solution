@@ -47,6 +47,19 @@ const AppointmentsPage = () => {
 
   const calendarRef = useRef(null);
 
+  const defaultConsultationTypes = [
+    { id: 1, name: "Consultation de médecine générale", duration: "20 min", price: 2500 },
+    { id: 2, name: "Consultation gynécologique / spécialisée", duration: "25 min", price: 3000 },
+    { id: 3, name: "Suivi de grossesse / Maternité", duration: "20 min", price: 2500 },
+    { id: 4, name: "Échographie obstétricale (T1 / T2 / T3)", duration: "30 min", price: 4000 },
+    { id: 5, name: "Échographie pelvienne / gynécologique", duration: "25 min", price: 3500 },
+    { id: 6, name: "Consultation avec frottis / acte", duration: "30 min", price: 3500 },
+    { id: 7, name: "Visite de contrôle / Bilan", duration: "15 min", price: 1500 },
+  ];
+
+  const [consultationTypesList, setConsultationTypesList] = useState(defaultConsultationTypes);
+  const [defaultConsultationTypeName, setDefaultConsultationTypeName] = useState("Consultation de médecine générale");
+
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [formRdv, setFormRdv] = useState({
@@ -54,7 +67,9 @@ const AppointmentsPage = () => {
     date: new Date().toISOString().split("T")[0],
     time: "14:00",
     duration: "20 min",
-    reason: "Consultation de routine",
+    consultationType: "Consultation de médecine générale",
+    price: 2500,
+    reason: "Consultation de médecine générale",
     status: "Confirmé",
     notes: "",
   });
@@ -63,12 +78,31 @@ const AppointmentsPage = () => {
   const fetchAppointments = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const [aptData, patData] = await Promise.all([
+      const [aptData, patData, settData] = await Promise.all([
         ApiService.getAppointments(),
         ApiService.getPatients(),
+        ApiService.getSettings().catch(() => null),
       ]);
       if (Array.isArray(aptData)) {
         setAppointments(aptData);
+      }
+      if (settData) {
+        if (Array.isArray(settData.consultationTypes) && settData.consultationTypes.length > 0) {
+          setConsultationTypesList(settData.consultationTypes);
+        }
+        if (settData.defaultConsultationType) {
+          setDefaultConsultationTypeName(settData.defaultConsultationType);
+          const matched = (settData.consultationTypes || []).find((t) => t.name === settData.defaultConsultationType);
+          const pr = matched ? matched.price : (settData.consultationPrice !== undefined ? settData.consultationPrice : 2500);
+          const dur = matched?.duration || settData.defaultDuration || "20 min";
+          setFormRdv((prev) => ({
+            ...prev,
+            consultationType: settData.defaultConsultationType,
+            price: pr,
+            duration: dur,
+            reason: prev.reason === "Consultation de médecine générale" ? settData.defaultConsultationType : prev.reason,
+          }));
+        }
       }
       if (Array.isArray(patData)) {
         const clean = patData.filter((p) => {
@@ -238,12 +272,18 @@ const AppointmentsPage = () => {
 
   const handleOpenAdd = () => {
     setEditId(null);
+    const defType =
+      consultationTypesList.find((t) => t.name === defaultConsultationTypeName) ||
+      consultationTypesList[0] ||
+      defaultConsultationTypes[0];
     setFormRdv({
-      patientId: initialPatients[0]?.id || 1,
+      patientId: patients[0]?.id || initialPatients[0]?.id || 1,
       date: new Date().toISOString().split("T")[0],
       time: "10:00",
-      duration: "20 min",
-      reason: "Consultation de médecine générale",
+      duration: defType.duration || "20 min",
+      consultationType: defType.name,
+      price: defType.price || 2500,
+      reason: defType.name,
       status: "Confirmé",
       notes: "",
     });
@@ -255,12 +295,17 @@ const AppointmentsPage = () => {
 
   const handleOpenEdit = (rdv) => {
     setEditId(rdv.id);
+    const matchedType = consultationTypesList.find(
+      (t) => t.name === rdv.consultationType || t.name === rdv.reason
+    );
     setFormRdv({
       patientId: rdv.patientId,
       date: rdv.date,
       time: rdv.time,
-      duration: rdv.duration,
-      reason: rdv.reason,
+      duration: rdv.duration || "20 min",
+      consultationType: rdv.consultationType || matchedType?.name || "Consultation de médecine générale",
+      price: rdv.price !== undefined ? rdv.price : (matchedType?.price || 2500),
+      reason: rdv.reason || "Consultation de médecine générale",
       status: rdv.status,
       notes: rdv.notes || "",
     });
@@ -288,8 +333,10 @@ const AppointmentsPage = () => {
       );
 
       if (!exists) {
+        const ticketNum = item.ticketNumber || calculateTicketNumber(item.appointmentTime || item.time);
         const newArrival = {
           id: Date.now(),
+          ticketNumber: ticketNum,
           appointmentId: item.appointmentId || null,
           patientId: item.patientId || null,
           patientName: item.patientName || "Patient",
@@ -317,6 +364,7 @@ const AppointmentsPage = () => {
           patientName: item.patientName,
           phone: item.phone || "",
           appointmentId: item.appointmentId || null,
+          ticketNumber: ticketNum,
           appointmentTime: item.appointmentTime,
           arrivalTime: arrTime,
           reason: item.reason,
@@ -385,6 +433,8 @@ const AppointmentsPage = () => {
                 time: formRdv.time,
                 duration: formRdv.duration,
                 reason: formRdv.reason,
+                consultationType: formRdv.consultationType || "Consultation générale",
+                price: formRdv.price || 2500,
                 status: formRdv.status,
                 notes: formRdv.notes,
               }
@@ -399,6 +449,8 @@ const AppointmentsPage = () => {
         time: formRdv.time,
         duration: formRdv.duration,
         reason: formRdv.reason,
+        consultationType: formRdv.consultationType || "Consultation générale",
+        price: formRdv.price || 2500,
         status: formRdv.status,
         notes: formRdv.notes,
       }).catch((err) => console.warn("Erreur mise à jour rendez-vous MySQL :", err));
@@ -438,6 +490,8 @@ const AppointmentsPage = () => {
         time: formRdv.time,
         duration: formRdv.duration,
         reason: formRdv.reason,
+        consultationType: formRdv.consultationType || "Consultation générale",
+        price: formRdv.price || 2500,
         status: formRdv.status,
         notes: formRdv.notes,
       };
@@ -452,6 +506,8 @@ const AppointmentsPage = () => {
         time: formRdv.time,
         duration: formRdv.duration,
         reason: formRdv.reason,
+        consultationType: formRdv.consultationType || "Consultation générale",
+        price: formRdv.price || 2500,
         status: formRdv.status,
         notes: formRdv.notes,
       }).catch((err) => console.warn("Erreur création rendez-vous MySQL :", err));
@@ -718,6 +774,56 @@ const AppointmentsPage = () => {
                 </div>
               </div>
 
+              {/* Sélection Type de consultation et Prix de la consultation */}
+              <div className="row mb-3 p-3 mx-0 rounded" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                <div className="col-md-7 mb-2">
+                  <label className="form-label font-w600 text-dark">
+                    <i className="flaticon-381-notepad me-1 text-primary"></i>
+                    Type de consultation
+                  </label>
+                  <select
+                    className="form-control"
+                    value={formRdv.consultationType}
+                    onChange={(e) => {
+                      const sel = e.target.value;
+                      const found = consultationTypesList.find((t) => t.name === sel);
+                      setFormRdv({
+                        ...formRdv,
+                        consultationType: sel,
+                        price: found ? found.price : formRdv.price,
+                        duration: found?.duration ? found.duration : formRdv.duration,
+                        reason: (!formRdv.reason || formRdv.reason.includes("Consultation") || formRdv.reason === "Consultation de routine") ? sel : formRdv.reason,
+                      });
+                    }}
+                  >
+                    {consultationTypesList.map((t) => (
+                      <option key={t.id || t.name} value={t.name}>
+                        {t.name} — ({Number(t.price).toLocaleString("fr-FR")} DA)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-5 mb-2">
+                  <label className="form-label font-w600 text-dark">
+                    <i className="flaticon-381-price-tag me-1 text-primary"></i>
+                    Prix de la consultation (DA)
+                  </label>
+                  <div className="input-group">
+                    <input
+                      type="number"
+                      step="100"
+                      min="0"
+                      className="form-control font-w700 text-primary fs-15"
+                      value={formRdv.price}
+                      onChange={(e) => setFormRdv({ ...formRdv, price: parseFloat(e.target.value) || 0 })}
+                      placeholder="Ex: 2500"
+                      required
+                    />
+                    <span className="input-group-text font-w700 bg-white text-primary">DA</span>
+                  </div>
+                </div>
+              </div>
+
               <div className="row">
                 <div className="col-md-4 mb-3">
                   <label className="form-label">Durée</label>
@@ -728,6 +834,7 @@ const AppointmentsPage = () => {
                   >
                     <option value="15 min">15 minutes</option>
                     <option value="20 min">20 minutes</option>
+                    <option value="25 min">25 minutes</option>
                     <option value="30 min">30 minutes</option>
                     <option value="45 min">45 minutes</option>
                   </select>
@@ -776,7 +883,7 @@ const AppointmentsPage = () => {
                 Fermer
               </Button>
               <Button variant="primary" type="submit">
-                {editId ? "Sauvegarder" : "Confirmer le RDV"}
+                {editId ? "Enregistrer" : "Confirmer le RDV"}
               </Button>
             </div>
           </form>
@@ -1356,7 +1463,9 @@ const AppointmentsPage = () => {
                             </svg>
                             {timeRange}
                           </span>
-                          <span className="cal-badge-new">New</span>
+                          <span className="cal-badge-new" style={{ backgroundColor: "#0284c7" }}>
+                            {rdv.price ? `${Number(rdv.price).toLocaleString("fr-FR")} DA` : "RÉSERVÉ"}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1369,13 +1478,19 @@ const AppointmentsPage = () => {
                 dateClick={(info) => {
                   const clickedDate = info.dateStr.split("T")[0];
                   const clickedTime = info.dateStr.split("T")[1]?.substring(0, 5) || "09:00";
+                  const defType =
+                    consultationTypesList.find((t) => t.name === defaultConsultationTypeName) ||
+                    consultationTypesList[0] ||
+                    defaultConsultationTypes[0];
                   setEditId(null);
                   setFormRdv({
-                    patientId: initialPatients[0]?.id || 1,
+                    patientId: patients[0]?.id || initialPatients[0]?.id || 1,
                     date: clickedDate,
                     time: clickedTime,
-                    duration: "60 min",
-                    reason: "Consultation générale",
+                    duration: defType.duration || "20 min",
+                    consultationType: defType.name,
+                    price: defType.price || 2500,
+                    reason: defType.name,
                     status: "Confirmé",
                     notes: "",
                   });
@@ -1401,7 +1516,6 @@ const AppointmentsPage = () => {
                   <tr>
                     <th><strong>DATE & HEURE</strong></th>
                     <th><strong>PATIENT</strong></th>
-                    <th><strong>MOTIF</strong></th>
                     <th><strong>DURÉE</strong></th>
                     <th><strong>TÉLÉPHONE</strong></th>
                     <th><strong>STATUT</strong></th>
@@ -1411,7 +1525,7 @@ const AppointmentsPage = () => {
                 <tbody>
                   {filteredAppointments.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="text-center py-4 text-muted">
+                      <td colSpan="6" className="text-center py-4 text-muted">
                         Aucun rendez-vous ne correspond aux critères.
                       </td>
                     </tr>
@@ -1427,7 +1541,6 @@ const AppointmentsPage = () => {
                         <td>
                           <span className="font-w600 text-dark">{rdv.patientName}</span>
                         </td>
-                        <td>{rdv.reason}</td>
                         <td>{rdv.duration}</td>
                         <td>{rdv.phone}</td>
                         <td>{getStatusBadge(rdv.status)}</td>

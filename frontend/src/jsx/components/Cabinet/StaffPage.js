@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Button, Badge } from "react-bootstrap";
+import { Badge } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
@@ -228,11 +228,12 @@ export const DEFAULT_ACCOUNTS = [
   },
 ];
 
-const StaffPage = () => {
+const StaffPage = ({ initialView = "list" }) => {
   // États principaux
   const [activeTab, setActiveTab] = useState("accounts"); // 'accounts' | 'roles'
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Tous");
+  const [viewMode, setViewMode] = useState(initialView); // 'list' | 'account-form' | 'role-form'
+  const searchQuery = "";
+  const statusFilter = "Tous";
 
   // Données persistées dans localStorage
   const [roles, setRoles] = useState(() => {
@@ -292,8 +293,7 @@ const StaffPage = () => {
     localStorage.setItem("cabinet_staff_accounts", JSON.stringify(accounts));
   }, [accounts]);
 
-  // Modal Compte Utilisateur
-  const [showAccountModal, setShowAccountModal] = useState(false);
+  // Formulaire Compte Utilisateur (Pleine page)
   const [editingAccountId, setEditingAccountId] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [accountForm, setAccountForm] = useState({
@@ -306,8 +306,7 @@ const StaffPage = () => {
     status: "Actif",
   });
 
-  // Modal Rôle & Permissions
-  const [showRoleModal, setShowRoleModal] = useState(false);
+  // Formulaire Rôle & Permissions (Pleine page)
   const [editingRoleId, setEditingRoleId] = useState(null);
   const [pageCategoryFilter, setPageCategoryFilter] = useState("Tous");
   const [roleForm, setRoleForm] = useState({
@@ -332,7 +331,8 @@ const StaffPage = () => {
       status: "Actif",
     });
     setShowPassword(false);
-    setShowAccountModal(true);
+    setViewMode("account-form");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleEditAccount = (acc) => {
@@ -347,7 +347,8 @@ const StaffPage = () => {
       status: acc.status || "Actif",
     });
     setShowPassword(false);
-    setShowAccountModal(true);
+    setViewMode("account-form");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSaveAccount = (e) => {
@@ -471,7 +472,8 @@ const StaffPage = () => {
       });
     }
 
-    setShowAccountModal(false);
+    setViewMode("list");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDeleteAccount = (acc) => {
@@ -547,7 +549,8 @@ const StaffPage = () => {
       pages: SITE_PAGES.reduce((acc, p) => ({ ...acc, [p.id]: false }), {}),
     });
     setPageCategoryFilter("Tous");
-    setShowRoleModal(true);
+    setViewMode("role-form");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleEditRole = (role) => {
@@ -562,7 +565,8 @@ const StaffPage = () => {
       },
     });
     setPageCategoryFilter("Tous");
-    setShowRoleModal(true);
+    setViewMode("role-form");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSaveRole = (e) => {
@@ -628,7 +632,8 @@ const StaffPage = () => {
       });
     }
 
-    setShowRoleModal(false);
+    setViewMode("list");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDeleteRole = (role) => {
@@ -706,11 +711,537 @@ const StaffPage = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const activeAccountsCount = accounts.filter((a) => a.status === "Actif").length;
-
   const countAllowedPages = (rolePages = {}) => {
     return Object.values(rolePages).filter(Boolean).length;
   };
+
+  // =========================================================================
+  // VUE 1 : NOUVEAU / MODIFIER COMPTE (PLEINE PAGE - PAS DE POPUP)
+  // =========================================================================
+  if (viewMode === "account-form") {
+    const selectedRole = roles.find((r) => r.id === accountForm.roleId) || roles[0];
+    const allowedPages = SITE_PAGES.filter(
+      (p) => selectedRole && selectedRole.pages && selectedRole.pages[p.id]
+    );
+
+    return (
+      <div className="fade-in-up">
+        <PageTitle
+          motherMenu="Cabinet & Configuration"
+          activeMenu={editingAccountId ? "Modifier le Compte Administrateur" : "Nouveau Compte Administrateur"}
+        />
+
+        {/* Barre de retour et d'actions */}
+        <div className="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm btn-rounded d-inline-flex align-items-center gap-2"
+            onClick={() => {
+              setViewMode("list");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
+            <i className="fa fa-arrow-left"></i>
+            <span>Retour à la liste du personnel</span>
+          </button>
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge badge-light text-primary fs-12 px-3 py-2">
+              <i className="flaticon-381-shield-1 me-1"></i> Sécurité & Gestion des Droits
+            </span>
+          </div>
+        </div>
+
+        {/* Formulaire Pleine Page */}
+        <div className="row justify-content-center">
+          <div className="col-xl-9 col-lg-10 col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header border-bottom py-3">
+                <div className="d-flex align-items-center gap-3">
+                  <div
+                    className="avatar-preview bg-primary-light text-primary rounded-circle d-flex align-items-center justify-content-center"
+                    style={{ width: 46, height: 46, minWidth: 46 }}
+                  >
+                    <i className="flaticon-381-user-7 fs-22"></i>
+                  </div>
+                  <div>
+                    <h5 className="card-title mb-1 font-w600 text-dark">
+                      {editingAccountId
+                        ? "Modifier le Compte Utilisateur"
+                        : "Créer un Nouveau Compte Administrateur"}
+                    </h5>
+                    <p className="card-text text-muted fs-12 mb-0">
+                      Renseignez les coordonnées de l'utilisateur et attribuez son rôle et ses permissions d'accès au cabinet.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveAccount}>
+                <div className="card-body p-4">
+                  <div className="row">
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Nom complet du titulaire <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Ex : Dr N. BELBACHIR OULD HENNIA"
+                        value={accountForm.name}
+                        onChange={(e) =>
+                          setAccountForm({ ...accountForm, name: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Nom d'utilisateur (Identifiant de connexion){" "}
+                        <span className="text-danger">*</span>
+                      </label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-light">@</span>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Ex : dr.belbachir ou secretaire"
+                          value={accountForm.username}
+                          onChange={(e) =>
+                            setAccountForm({
+                              ...accountForm,
+                              username: e.target.value.toLowerCase().replace(/\s+/g, ""),
+                            })
+                          }
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Mot de passe{" "}
+                        {editingAccountId ? (
+                          <span className="text-muted fs-11 font-w400">
+                            (Laisser vide pour ne pas modifier)
+                          </span>
+                        ) : (
+                          <span className="text-danger">*</span>
+                        )}
+                      </label>
+                      <div className="input-group">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          className="form-control"
+                          placeholder={
+                            editingAccountId
+                              ? "Nouveau mot de passe (optionnel)"
+                              : "Mot de passe sécurisé"
+                          }
+                          value={accountForm.password}
+                          onChange={(e) =>
+                            setAccountForm({
+                              ...accountForm,
+                              password: e.target.value,
+                            })
+                          }
+                          required={!editingAccountId}
+                        />
+                        <button
+                          className="btn btn-outline-secondary"
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          <i
+                            className={`fa ${showPassword ? "fa-eye-slash" : "fa-eye"}`}
+                          ></i>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Rôle & Droits d'Accès <span className="text-danger">*</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={accountForm.roleId}
+                        onChange={(e) =>
+                          setAccountForm({ ...accountForm, roleId: e.target.value })
+                        }
+                      >
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name} ({countAllowedPages(r.pages)}/{SITE_PAGES.length} pages)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Adresse Email
+                      </label>
+                      <input
+                        type="email"
+                        className="form-control"
+                        placeholder="contact@cabinet-medical.dz"
+                        value={accountForm.email}
+                        onChange={(e) =>
+                          setAccountForm({ ...accountForm, email: e.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Téléphone professionnel
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Ex : 01 42 68 50 10 ou 05 50 ..."
+                        value={accountForm.phone}
+                        onChange={(e) =>
+                          setAccountForm({ ...accountForm, phone: e.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div className="col-md-12 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Statut du Compte
+                      </label>
+                      <div className="d-flex gap-4">
+                        <div className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="radio"
+                            name="accountStatus"
+                            id="statusActive"
+                            value="Actif"
+                            checked={accountForm.status === "Actif"}
+                            onChange={() =>
+                              setAccountForm({ ...accountForm, status: "Actif" })
+                            }
+                          />
+                          <label
+                            className="form-check-label text-success font-w600"
+                            htmlFor="statusActive"
+                            style={{ cursor: "pointer" }}
+                          >
+                            <i className="fa fa-check-circle me-1"></i> Actif (Connexion autorisée)
+                          </label>
+                        </div>
+                        <div className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="radio"
+                            name="accountStatus"
+                            id="statusInactive"
+                            value="Inactif"
+                            checked={accountForm.status === "Inactif"}
+                            onChange={() =>
+                              setAccountForm({ ...accountForm, status: "Inactif" })
+                            }
+                          />
+                          <label
+                            className="form-check-label text-danger font-w600"
+                            htmlFor="statusInactive"
+                            style={{ cursor: "pointer" }}
+                          >
+                            <i className="fa fa-times-circle me-1"></i> Inactif (Accès suspendu)
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Aperçu des permissions du rôle sélectionné */}
+                  {selectedRole && (
+                    <div className="p-3 bg-light rounded mt-3 border">
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <span className="font-w600 text-dark fs-12">
+                          <i className="flaticon-381-shield-1 text-primary me-1"></i>
+                          Aperçu des accès accordés pour le rôle « {selectedRole.name} » :
+                        </span>
+                        <span className="badge bg-primary fs-11">
+                          {allowedPages.length} / {SITE_PAGES.length} pages
+                        </span>
+                      </div>
+                      <div className="d-flex flex-wrap gap-1">
+                        {allowedPages.map((p) => (
+                          <span
+                            key={p.id}
+                            className="badge bg-white text-dark border fs-11 font-w500"
+                          >
+                            <i className={`${p.icon} text-primary me-1`}></i>
+                            {p.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="card-footer border-top d-flex justify-content-end gap-2 bg-light py-3 px-4">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => {
+                      setViewMode("list");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                  >
+                    Annuler
+                  </button>
+                  <button type="submit" className="btn btn-primary d-flex align-items-center gap-2">
+                    <i className="fa fa-save"></i>
+                    <span>
+                      {editingAccountId ? "Enregistrer les modifications" : "Créer le compte"}
+                    </span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VUE 2 : NOUVEAU / MODIFIER RÔLE (PLEINE PAGE - PAS DE POPUP)
+  // =========================================================================
+  if (viewMode === "role-form") {
+    return (
+      <div className="fade-in-up">
+        <PageTitle
+          motherMenu="Cabinet & Configuration"
+          activeMenu={editingRoleId ? "Modifier le Rôle & Accès" : "Nouveau Rôle de Sécurité"}
+        />
+
+        {/* Barre de retour et d'actions */}
+        <div className="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm btn-rounded d-inline-flex align-items-center gap-2"
+            onClick={() => {
+              setViewMode("list");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
+            <i className="fa fa-arrow-left"></i>
+            <span>Retour à la liste du personnel</span>
+          </button>
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge badge-light text-primary fs-12 px-3 py-2">
+              <i className="flaticon-381-shield-1 me-1"></i> Matrice des Permissions
+            </span>
+          </div>
+        </div>
+
+        {/* Formulaire Pleine Page */}
+        <div className="row justify-content-center">
+          <div className="col-xl-10 col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header border-bottom py-3">
+                <div className="d-flex align-items-center gap-3">
+                  <div
+                    className="avatar-preview bg-primary-light text-primary rounded-circle d-flex align-items-center justify-content-center"
+                    style={{ width: 46, height: 46, minWidth: 46 }}
+                  >
+                    <i className="flaticon-381-shield-1 fs-22"></i>
+                  </div>
+                  <div>
+                    <h5 className="card-title mb-1 font-w600 text-dark">
+                      {editingRoleId
+                        ? "Modifier le Rôle & la Matrice des Permissions"
+                        : "Créer un Nouveau Rôle de Sécurité"}
+                    </h5>
+                    <p className="card-text text-muted fs-12 mb-0">
+                      Définissez les autorisations d'accès aux différentes rubriques et fonctionnalités du cabinet.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveRole}>
+                <div className="card-body p-4">
+                  <div className="row">
+                    <div className="col-md-7 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Nom du rôle <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Ex : Secrétaire Médicale, Médecin Remplaçant, Infirmier..."
+                        value={roleForm.name}
+                        onChange={(e) =>
+                          setRoleForm({ ...roleForm, name: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+
+                    <div className="col-md-5 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Couleur du badge
+                      </label>
+                      <select
+                        className="form-select"
+                        value={roleForm.badgeColor}
+                        onChange={(e) =>
+                          setRoleForm({ ...roleForm, badgeColor: e.target.value })
+                        }
+                      >
+                        <option value="primary">Bleu Primaire (Médecin / Titulaire)</option>
+                        <option value="info">Cyan / Info (Secrétariat)</option>
+                        <option value="success">Vert Succès (Comptabilité)</option>
+                        <option value="warning">Orange / Attention</option>
+                        <option value="secondary">Gris / Neutre</option>
+                      </select>
+                    </div>
+
+                    <div className="col-md-12 mb-3">
+                      <label className="form-label font-w600 text-dark">
+                        Description du rôle & missions
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Ex : Accueil des patientes, prise de RDV et encaissement sans accès aux diagnostics"
+                        value={roleForm.description}
+                        onChange={(e) =>
+                          setRoleForm({ ...roleForm, description: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <hr className="my-4" />
+
+                  {/* Matrice des droits par page */}
+                  <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                    <div>
+                      <h6 className="font-w600 text-dark mb-0">
+                        Habilitation d'Accès aux Pages du Site ({countAllowedPages(roleForm.pages)} / {SITE_PAGES.length} pages sélectionnées)
+                      </h6>
+                      <small className="text-muted">
+                        Cochez les pages auxquelles les utilisateurs rattachés à ce rôle pourront accéder
+                      </small>
+                    </div>
+
+                    <div className="d-flex gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-success btn-xs"
+                        onClick={() => handleSelectAllPages(true)}
+                      >
+                        <i className="fa fa-check-double me-1"></i> Tout autoriser
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger btn-xs"
+                        onClick={() => handleSelectAllPages(false)}
+                      >
+                        <i className="fa fa-ban me-1"></i> Tout révoquer
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Filtre par catégorie de pages */}
+                  <div className="d-flex gap-1 mb-3">
+                    {["Tous", "Principal", "Médical", "Financier", "Configuration"].map(
+                      (cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          className={`btn btn-xs ${pageCategoryFilter === cat
+                              ? "btn-primary"
+                              : "btn-light text-muted"
+                            }`}
+                          onClick={() => setPageCategoryFilter(cat)}
+                        >
+                          {cat}
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  {/* Grille de sélection des 16 pages */}
+                  <div className="row g-3">
+                    {SITE_PAGES.filter(
+                      (p) =>
+                        pageCategoryFilter === "Tous" ||
+                        p.category === pageCategoryFilter
+                    ).map((page) => {
+                      const isChecked = !!roleForm.pages[page.id];
+
+                      return (
+                        <div key={page.id} className="col-md-6">
+                          <div
+                            className={`p-3 rounded border h-100 d-flex align-items-start gap-3 ${isChecked
+                                ? "border-primary bg-primary-light"
+                                : "border-light bg-light opacity-75"
+                              }`}
+                            onClick={() => handleTogglePagePermission(page.id)}
+                            style={{ cursor: "pointer", transition: "all 0.15s" }}
+                          >
+                            <input
+                              type="checkbox"
+                              className="form-check-input mt-1"
+                              checked={isChecked}
+                              onChange={() => { }}
+                            />
+                            <div className="flex-grow-1">
+                              <div className="d-flex align-items-center justify-content-between">
+                                <span className="font-w600 text-dark fs-13">
+                                  <i
+                                    className={`${page.icon} me-1 ${isChecked ? "text-primary" : "text-muted"
+                                      }`}
+                                  ></i>
+                                  {page.name}
+                                </span>
+                                <code className="fs-10 text-muted">{page.path}</code>
+                              </div>
+                              <p className="text-muted fs-11 mb-0 mt-1 line-clamp-1">
+                                {page.description}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="card-footer border-top d-flex justify-content-end gap-2 bg-light py-3 px-4">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => {
+                      setViewMode("list");
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                  >
+                    Annuler
+                  </button>
+                  <button type="submit" className="btn btn-primary d-flex align-items-center gap-2">
+                    <i className="fa fa-save"></i>
+                    <span>
+                      {editingRoleId ? "Enregistrer les modifications" : "Créer le rôle"}
+                    </span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -770,41 +1301,6 @@ const StaffPage = () => {
       {/* ==================================================================== */}
       {activeTab === "accounts" && (
         <div className="card border-0 shadow-sm">
-          <div className="card-header border-bottom py-3 px-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <div>
-              <h5 className="card-title mb-0 font-w600 text-dark">
-                Liste des Comptes Administrateurs & Employés
-              </h5>
-              <p className="text-muted fs-12 mb-0">
-                Gérez les identifiants de connexion, les mots de passe et les rôles attribués
-              </p>
-            </div>
-            <div className="d-flex align-items-center gap-2 flex-wrap">
-              <div className="input-group input-group-sm" style={{ width: "220px" }}>
-                <span className="input-group-text bg-light border-0">
-                  <i className="flaticon-381-search-2"></i>
-                </span>
-                <input
-                  type="text"
-                  className="form-control border-0 bg-light"
-                  placeholder="Rechercher nom, login..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-
-              <select
-                className="form-select form-select-sm"
-                style={{ width: "130px" }}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="Tous">Tous statuts</option>
-                <option value="Actif">Actif</option>
-                <option value="Inactif">Inactif</option>
-              </select>
-            </div>
-          </div>
 
           <div className="card-body p-0">
             <div className="table-responsive">
@@ -1053,457 +1549,6 @@ const StaffPage = () => {
           })}
         </div>
       )}
-
-      {/* ==================================================================== */}
-      {/* MODAL 1 : CRÉATION / MODIFICATION D'UN COMPTE UTILISATEUR            */}
-      {/* ==================================================================== */}
-      <Modal
-        show={showAccountModal}
-        onHide={() => setShowAccountModal(false)}
-        centered
-        size="lg"
-      >
-        <div className="modal-header border-bottom">
-          <h5 className="modal-title font-w600 text-dark d-flex align-items-center gap-2">
-            <i className="flaticon-381-user-7 text-primary"></i>
-            <span>
-              {editingAccountId
-                ? "Modifier le Compte Utilisateur"
-                : "Créer un Nouveau Compte Administrateur"}
-            </span>
-          </h5>
-          <button
-            type="button"
-            className="btn-close"
-            onClick={() => setShowAccountModal(false)}
-          ></button>
-        </div>
-
-        <form onSubmit={handleSaveAccount}>
-          <div className="modal-body p-4">
-            <div className="row">
-              <div className="col-md-6 mb-3">
-                <label className="form-label font-w600 text-dark">
-                  Nom complet du titulaire <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Ex : Dr N. BELBACHIR OULD HENNIA"
-                  value={accountForm.name}
-                  onChange={(e) =>
-                    setAccountForm({ ...accountForm, name: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="col-md-6 mb-3">
-                <label className="form-label font-w600 text-dark">
-                  Nom d'utilisateur (Identifiant de connexion){" "}
-                  <span className="text-danger">*</span>
-                </label>
-                <div className="input-group">
-                  <span className="input-group-text bg-light">@</span>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Ex : dr.belbachir ou secretaire"
-                    value={accountForm.username}
-                    onChange={(e) =>
-                      setAccountForm({
-                        ...accountForm,
-                        username: e.target.value.toLowerCase().replace(/\s+/g, ""),
-                      })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="col-md-6 mb-3">
-                <label className="form-label font-w600 text-dark">
-                  Mot de passe{" "}
-                  {editingAccountId ? (
-                    <span className="text-muted fs-11 font-w400">
-                      (Laisser vide pour ne pas modifier)
-                    </span>
-                  ) : (
-                    <span className="text-danger">*</span>
-                  )}
-                </label>
-                <div className="input-group">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    className="form-control"
-                    placeholder={
-                      editingAccountId
-                        ? "Nouveau mot de passe (optionnel)"
-                        : "Mot de passe sécurisé"
-                    }
-                    value={accountForm.password}
-                    onChange={(e) =>
-                      setAccountForm({
-                        ...accountForm,
-                        password: e.target.value,
-                      })
-                    }
-                    required={!editingAccountId}
-                  />
-                  <button
-                    className="btn btn-outline-secondary"
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    <i
-                      className={`fa ${showPassword ? "fa-eye-slash" : "fa-eye"
-                        }`}
-                    ></i>
-                  </button>
-                </div>
-              </div>
-
-              <div className="col-md-6 mb-3">
-                <label className="form-label font-w600 text-dark">
-                  Rôle & Droits d'Accès <span className="text-danger">*</span>
-                </label>
-                <select
-                  className="form-select"
-                  value={accountForm.roleId}
-                  onChange={(e) =>
-                    setAccountForm({ ...accountForm, roleId: e.target.value })
-                  }
-                >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} ({countAllowedPages(r.pages)}/{SITE_PAGES.length}{" "}
-                      pages)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="col-md-6 mb-3">
-                <label className="form-label font-w600 text-dark">
-                  Adresse Email
-                </label>
-                <input
-                  type="email"
-                  className="form-control"
-                  placeholder="contact@cabinet-medical.dz"
-                  value={accountForm.email}
-                  onChange={(e) =>
-                    setAccountForm({ ...accountForm, email: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="col-md-6 mb-3">
-                <label className="form-label font-w600 text-dark">
-                  Téléphone professionnel
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Ex : 01 42 68 50 10 ou 05 50 ..."
-                  value={accountForm.phone}
-                  onChange={(e) =>
-                    setAccountForm({ ...accountForm, phone: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="col-md-12 mb-2">
-                <label className="form-label font-w600 text-dark">
-                  Statut du Compte
-                </label>
-                <div className="d-flex gap-3">
-                  <div className="form-check">
-                    <input
-                      className="form-check-input"
-                      type="radio"
-                      name="accountStatus"
-                      id="statusActive"
-                      value="Actif"
-                      checked={accountForm.status === "Actif"}
-                      onChange={() =>
-                        setAccountForm({ ...accountForm, status: "Actif" })
-                      }
-                    />
-                    <label
-                      className="form-check-label text-success font-w600"
-                      htmlFor="statusActive"
-                    >
-                      <i className="fa fa-check-circle me-1"></i> Actif (Connexion autorisée)
-                    </label>
-                  </div>
-                  <div className="form-check">
-                    <input
-                      className="form-check-input"
-                      type="radio"
-                      name="accountStatus"
-                      id="statusInactive"
-                      value="Inactif"
-                      checked={accountForm.status === "Inactif"}
-                      onChange={() =>
-                        setAccountForm({ ...accountForm, status: "Inactif" })
-                      }
-                    />
-                    <label
-                      className="form-check-label text-danger font-w600"
-                      htmlFor="statusInactive"
-                    >
-                      <i className="fa fa-times-circle me-1"></i> Inactif (Accès suspendu)
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Aperçu des permissions du rôle sélectionné */}
-            {(() => {
-              const selectedRole = roles.find(
-                (r) => r.id === accountForm.roleId
-              );
-              if (!selectedRole) return null;
-              const allowedPages = SITE_PAGES.filter(
-                (p) => selectedRole.pages && selectedRole.pages[p.id]
-              );
-              return (
-                <div className="p-3 bg-light rounded mt-3 border">
-                  <div className="d-flex align-items-center justify-content-between mb-2">
-                    <span className="font-w600 text-dark fs-12">
-                      <i className="flaticon-381-shield-1 text-primary me-1"></i>
-                      Aperçu des accès accordés pour le rôle « {selectedRole.name} » :
-                    </span>
-                    <span className="badge bg-primary fs-11">
-                      {allowedPages.length} / {SITE_PAGES.length} pages
-                    </span>
-                  </div>
-                  <div className="d-flex flex-wrap gap-1">
-                    {allowedPages.map((p) => (
-                      <span
-                        key={p.id}
-                        className="badge bg-white text-dark border fs-11 font-w500"
-                      >
-                        <i className={`${p.icon} text-primary me-1`}></i>
-                        {p.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-
-          <div className="modal-footer border-top">
-            <Button
-              variant="outline-secondary"
-              onClick={() => setShowAccountModal(false)}
-            >
-              Annuler
-            </Button>
-            <Button variant="primary" type="submit">
-              <i className="fa fa-save me-1"></i>
-              {editingAccountId ? "Enregistrer les modifications" : "Créer le compte"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* ==================================================================== */}
-      {/* MODAL 2 : CRÉATION / MODIFICATION D'UN RÔLE & DES PAGES AUTORISÉES  */}
-      {/* ==================================================================== */}
-      <Modal
-        show={showRoleModal}
-        onHide={() => setShowRoleModal(false)}
-        centered
-        size="lg"
-      >
-        <div className="modal-header border-bottom">
-          <h5 className="modal-title font-w600 text-dark d-flex align-items-center gap-2">
-            <i className="flaticon-381-shield-1 text-primary"></i>
-            <span>
-              {editingRoleId
-                ? "Modifier le Rôle & la Matrice des Permissions"
-                : "Créer un Nouveau Rôle de Sécurité"}
-            </span>
-          </h5>
-          <button
-            type="button"
-            className="btn-close"
-            onClick={() => setShowRoleModal(false)}
-          ></button>
-        </div>
-
-        <form onSubmit={handleSaveRole}>
-          <div className="modal-body p-4">
-            <div className="row">
-              <div className="col-md-7 mb-3">
-                <label className="form-label font-w600 text-dark">
-                  Nom du rôle <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Ex : Secrétaire Médicale, Médecin Remplaçant, Infirmier..."
-                  value={roleForm.name}
-                  onChange={(e) =>
-                    setRoleForm({ ...roleForm, name: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="col-md-5 mb-3">
-                <label className="form-label font-w600 text-dark">
-                  Couleur du badge
-                </label>
-                <select
-                  className="form-select"
-                  value={roleForm.badgeColor}
-                  onChange={(e) =>
-                    setRoleForm({ ...roleForm, badgeColor: e.target.value })
-                  }
-                >
-                  <option value="primary">Bleu Primaire (Médecin / Titulaire)</option>
-                  <option value="info">Cyan / Info (Secrétariat)</option>
-                  <option value="success">Vert Succès (Comptabilité)</option>
-                  <option value="warning">Orange / Attention</option>
-                  <option value="secondary">Gris / Neutre</option>
-                </select>
-              </div>
-
-              <div className="col-md-12 mb-3">
-                <label className="form-label font-w600 text-dark">
-                  Description du rôle & missions
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Ex : Accueil des patientes, prise de RDV et encaissement sans accès aux diagnostics"
-                  value={roleForm.description}
-                  onChange={(e) =>
-                    setRoleForm({ ...roleForm, description: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <hr className="my-3" />
-
-            {/* Matrice des droits par page */}
-            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-              <div>
-                <h6 className="font-w600 text-dark mb-0">
-                  Habilitation d'Accès aux Pages du Site ({countAllowedPages(roleForm.pages)} / {SITE_PAGES.length} pages sélectionnées)
-                </h6>
-                <small className="text-muted">
-                  Cochez les pages auxquelles les utilisateurs rattachés à ce rôle pourront accéder
-                </small>
-              </div>
-
-              <div className="d-flex gap-2">
-                <button
-                  type="button"
-                  className="btn btn-outline-success btn-xs"
-                  onClick={() => handleSelectAllPages(true)}
-                >
-                  <i className="fa fa-check-double me-1"></i> Tout autoriser
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-danger btn-xs"
-                  onClick={() => handleSelectAllPages(false)}
-                >
-                  <i className="fa fa-ban me-1"></i> Tout révoquer
-                </button>
-              </div>
-            </div>
-
-            {/* Filtre par catégorie de pages */}
-            <div className="d-flex gap-1 mb-3">
-              {["Tous", "Principal", "Médical", "Financier", "Configuration"].map(
-                (cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    className={`btn btn-xs ${pageCategoryFilter === cat
-                        ? "btn-primary"
-                        : "btn-light text-muted"
-                      }`}
-                    onClick={() => setPageCategoryFilter(cat)}
-                  >
-                    {cat}
-                  </button>
-                )
-              )}
-            </div>
-
-            {/* Grille de sélection des 16 pages */}
-            <div
-              className="row g-2"
-              style={{ maxHeight: "360px", overflowY: "auto" }}
-            >
-              {SITE_PAGES.filter(
-                (p) =>
-                  pageCategoryFilter === "Tous" ||
-                  p.category === pageCategoryFilter
-              ).map((page) => {
-                const isChecked = !!roleForm.pages[page.id];
-
-                return (
-                  <div key={page.id} className="col-md-6">
-                    <div
-                      className={`p-3 rounded border cursor-pointer h-100 d-flex align-items-start gap-2 ${isChecked
-                          ? "border-primary bg-primary-light"
-                          : "border-light bg-light opacity-75"
-                        }`}
-                      onClick={() => handleTogglePagePermission(page.id)}
-                      style={{ cursor: "pointer", transition: "all 0.15s" }}
-                    >
-                      <input
-                        type="checkbox"
-                        className="form-check-input mt-1"
-                        checked={isChecked}
-                        onChange={() => { }} // géré par le clic parent
-                      />
-                      <div className="flex-grow-1">
-                        <div className="d-flex align-items-center justify-content-between">
-                          <span className="font-w600 text-dark fs-13">
-                            <i
-                              className={`${page.icon} me-1 ${isChecked ? "text-primary" : "text-muted"
-                                }`}
-                            ></i>
-                            {page.name}
-                          </span>
-                          <code className="fs-10 text-muted">{page.path}</code>
-                        </div>
-                        <p className="text-muted fs-11 mb-0 mt-1 line-clamp-1">
-                          {page.description}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="modal-footer border-top">
-            <Button
-              variant="outline-secondary"
-              onClick={() => setShowRoleModal(false)}
-            >
-              Annuler
-            </Button>
-            <Button variant="primary" type="submit">
-              <i className="fa fa-save me-1"></i>
-              {editingRoleId ? "Enregistrer les modifications" : "Créer le rôle"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </>
   );
 };

@@ -14751,8 +14751,15 @@ Fixing Order => Base + Typography >> General Layout + Grid >> Page Layout + Comp
   overflow: visible;
   position: absolute;
 }
-[data-sidebar-style=full][data-layout=vertical] .menu-toggle .deznav .nav-text {
-  display: none;
+[data-sidebar-style=full][data-layout=vertical] .menu-toggle .deznav .nav-text,
+[data-sidebar-style=full][data-layout=vertical] .menu-toggle .deznav .menu-title,
+.menu-toggle .deznav .menu-title,
+.menu-toggle .deznav .metismenu .menu-title,
+.menu-toggle .deznav .metismenu > li.menu-title,
+[data-sidebar-style="mini"] .deznav .menu-title,
+[data-sidebar-style="compact"] .deznav .menu-title,
+[data-sidebar-style="modern"] .deznav .menu-title {
+  display: none !important;
 }
 [data-sidebar-style=full][data-layout=vertical] .menu-toggle .deznav .slimScrollDiv,
 [data-sidebar-style=full][data-layout=vertical] .menu-toggle .deznav .deznav-scroll {
@@ -33726,4 +33733,32 @@ input[type=number] {
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* ========================================================
+   Titres de rubriques du menu (PRINCIPAL, GESTION MÉDICALE...)
+   ======================================================== */
+.deznav .metismenu li.menu-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  padding: 16px 20px 6px;
+  margin-top: 6px;
+  list-style: none;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Masquer impérativement quand le menu est fermé */
+.menu-toggle .deznav .menu-title,
+.menu-toggle .deznav .metismenu .menu-title,
+.menu-toggle .deznav .metismenu > li.menu-title,
+[data-sidebar-style="mini"] .deznav .menu-title,
+[data-sidebar-style="compact"] .deznav .menu-title,
+[data-sidebar-style="modern"] .deznav .menu-title {
+  display: none !important;
+}
+
 /*# sourceMappingURL=style.css.map */
+

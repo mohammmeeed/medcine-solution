@@ -61,6 +61,28 @@ const PaymentsPage = () => {
     fetchData();
   }, []);
 
+  const getPatientPassword = (item) => {
+    if (!item) return "";
+    const pat = patients.find(
+      (p) =>
+        p.id === item.patientId ||
+        `${p.firstName} ${p.lastName}`.trim().toLowerCase() ===
+          (item.patientName || "").trim().toLowerCase()
+    );
+    if (pat?.password) return pat.password;
+    if (pat) {
+      const l = (pat.lastName || "").trim().charAt(0).toLowerCase() || "p";
+      const f = (pat.firstName || "").trim().charAt(0).toLowerCase() || "a";
+      const digits = (pat.phone || "").replace(/\D/g, "");
+      const d3 = digits.length >= 3 ? digits.slice(-3) : digits.padStart(3, "0");
+      return `${l}${f}${d3}`;
+    }
+    const nameParts = (item.patientName || "").trim().split(" ");
+    const l = nameParts[0]?.charAt(0).toLowerCase() || "p";
+    const f = nameParts[1]?.charAt(0).toLowerCase() || "a";
+    return `${l}${f}123`;
+  };
+
   const handleSavePayment = async (e) => {
     e.preventDefault();
     const pat =
@@ -430,6 +452,15 @@ const PaymentsPage = () => {
               <p className="fs-12 text-muted mb-1">
                 Patient : <strong>{previewReceipt.patientName}</strong>
               </p>
+              <div className="p-2 mb-2 rounded border bg-light d-inline-block">
+                <span className="fs-12 text-muted me-2">🔑 Mot de passe Client :</span>
+                <span
+                  className="badge bg-primary text-white font-w700 fs-13 px-2 py-1"
+                  style={{ letterSpacing: "1px", fontFamily: "monospace" }}
+                >
+                  {getPatientPassword(previewReceipt)}
+                </span>
+              </div>
               <p className="fs-12 text-muted mb-0">
                 N° Reçu : {previewReceipt.receiptNumber} • Facture : {previewReceipt.invoiceNumber}
               </p>

@@ -111,7 +111,11 @@ const SideBar = () => {
             let menuClass = data.classsChange;
             if (menuClass === "menu-title") {
               return (
-                <li className={menuClass} key={index}>
+                <li
+                  className={menuClass}
+                  key={index}
+                  style={sideMenu ? { display: "none" } : undefined}
+                >
                   {data.title}
                 </li>
               );

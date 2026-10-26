@@ -1,227 +1,289 @@
 import React, { Component } from "react";
 import ReactApexChart from "react-apexcharts";
+import ApiService from "../../../../../services/ApiService";
 
 class VisitorChart extends Component {
   constructor(props) {
     super(props);
 
     this.state = {
+      viewMode: "daily", // "daily" | "monthly" | "yearly" | "hourly"
+      loading: true,
+      stats: {
+        todayCount: 0,
+        totalVisits: 0,
+        lastUpdated: "",
+      },
+      rawData: null,
       series: [
         {
-          name: "Series 1",
-          data: [
-            [1327359600000,30.95],
-            [1327446000000,31.34],
-            [1327532400000,31.18],
-            [1327618800000,31.05],
-            [1327878000000,31.00],
-            [1327964400000,30.95],
-            [1328050800000,31.24],
-            [1328137200000,31.29],
-            [1328223600000,31.85],
-            [1328482800000,31.86],
-            [1328569200000,32.28],
-            [1328655600000,32.10],
-            [1328742000000,32.65],
-            [1328828400000,32.21],
-            [1329087600000,32.35],
-            [1329174000000,32.44],
-            [1329260400000,32.46],
-            [1329346800000,32.86],
-            [1329433200000,32.75],
-            [1329778800000,32.54],
-            [1329865200000,32.33],
-            [1329951600000,32.97],
-            [1330038000000,33.41],
-            [1330297200000,33.27],
-            [1330383600000,33.27],
-            [1330470000000,32.89],
-            [1330556400000,33.10],
-            [1330642800000,33.73],
-            [1330902000000,33.22],
-            [1330988400000,31.99],
-            [1331074800000,32.41],
-            [1331161200000,33.05],
-            [1331247600000,33.64],
-            [1331506800000,33.56],
-            [1331593200000,34.22],
-            [1331679600000,33.77],
-            [1331766000000,34.17],
-            [1331852400000,33.82],
-            [1332111600000,34.51],
-            [1332198000000,33.16],
-            [1332284400000,33.56],
-            [1332370800000,33.71],
-            [1332457200000,33.81],
-            [1332712800000,34.40],
-            [1332799200000,34.63],
-            [1332885600000,34.46],
-            [1332972000000,34.48],
-            [1333058400000,34.31],
-            [1333317600000,34.70],
-            [1333404000000,34.31],
-            [1333490400000,33.46],
-            [1333576800000,33.59],
-            [1333922400000,33.22],
-            [1334008800000,32.61],
-            [1334095200000,33.01],
-            [1334181600000,33.55],
-            [1334268000000,33.18],
-            [1334527200000,32.84],
-            [1334613600000,33.84],
-            [1334700000000,33.39],
-            [1334786400000,32.91],
-            [1334872800000,33.06],
-            [1335132000000,32.62],
-            [1335218400000,32.40],
-            [1335304800000,33.13],
-            [1335391200000,33.26],
-            [1335477600000,33.58],
-            [1335736800000,33.55],
-            [1335823200000,33.77],
-            [1335909600000,33.76],
-            [1335996000000,33.32],
-            [1336082400000,32.61],
-            [1336341600000,32.52],
-            [1336428000000,32.67],
-            [1336514400000,32.52],
-            [1336600800000,31.92],
-            [1336687200000,32.20],
-            [1336946400000,32.23],
-            [1337032800000,32.33],
-            [1337119200000,32.36],
-            [1337205600000,32.01],
-            [1337292000000,31.31],
-            [1337551200000,32.01],
-            [1337637600000,32.01],
-            [1337724000000,32.18],
-            [1337810400000,31.54],
-            [1337896800000,31.60],
-            [1338242400000,32.05],
-            [1338328800000,31.29],
-            [1338415200000,31.05],
-            [1338501600000,29.82],
-            [1338760800000,30.31],
-            [1338847200000,30.70],
-            [1338933600000,31.69],
-            [1339020000000,31.32],
-            [1339106400000,31.65],
-            [1339365600000,31.13],
-            [1339452000000,31.77],
-            [1339538400000,31.79],
-            [1339624800000,31.67],
-            [1339711200000,32.39],
-            [1339970400000,32.63],
-            [1340056800000,32.89],
-            [1340143200000,31.99],
-            [1340229600000,31.23],
-            [1340316000000,31.57],
-            [1340575200000,30.84],
-            [1340661600000,31.07],
-            [1340748000000,31.41],
-            [1340834400000,31.17],
-            [1340920800000,32.37],
-            [1341180000000,32.19],
-            [1341266400000,32.51],
-            [1341439200000,32.53],
-            [1341525600000,31.37],
-            [1341784800000,30.43],
-            [1341871200000,30.44],
-            [1341957600000,30.20],
-            [1342044000000,30.14],
-            [1342130400000,30.65],
-            [1342389600000,30.40],
-            [1342476000000,30.65],
-            [1342562400000,31.43],
-            [1342648800000,31.89],
-            [1342735200000,31.38],
-            [1342994400000,30.64],
-            [1343080800000,30.02],
-            [1343167200000,30.33],
-            [1343253600000,30.95],
-            [1343340000000,31.89],
-            [1343599200000,31.01],
-          ],
+          name: "Visites du portail",
+          data: [],
         },
       ],
-      options: {
-        chart: {
-          id: "area-datetime",
-          type: "area",
-          height: 350,
-          width: "100%",          
-          zoom: {
-            autoScaleYaxis: true,
-          },
-          toolbar: {
-            show: false,
-          },
-        },
-        colors: ["#2060e2"],
-        stroke: {
-          curve: "smooth",
-          width: 3,
-        },
-        fill: {
-          type: "gradient",
-          gradient: {
-            shadeIntensity: 1,
-            opacityFrom: 0.5,
-            opacityTo: 0.05,
-            stops: [0, 90, 100],
-          },
-        },
-        dataLabels: {
-          enabled: false,
-        },
-        markers: {
-          size: 0,
-          style: "hollow",
-        },
-        xaxis: {
-          show: false,
-          type: "datetime",
-          labels: {
-            format: "MMM",
-            style: {
-              colors: ['#887878','#887878','#887878','#887878','#887878','#887878'],             
-             },
-          },
-          axisBorder: {
-            show: false,
-          },
-        },
-
-        yaxis: {
-          show: false,
-        },
-        grid: {
-          show: false,
-        },
-        responsive: [
-          {
-            breakpoint: 1024,
-            options: {
-              chart: {
-                width: "100%",
-              },
-            },
-          },
-        ],
-      },
+      options: this.getBaseOptions("daily"),
     };
   }
 
+  getBaseOptions(mode = "daily") {
+    const isDaily = mode === "daily";
+    return {
+      chart: {
+        id: "area-site-visits",
+        type: "area",
+        height: 310,
+        width: "100%",
+        toolbar: { show: false },
+        animations: {
+          enabled: true,
+          easing: "easeinout",
+          speed: 500,
+          dynamicAnimation: {
+            enabled: true,
+            speed: 300,
+          },
+        },
+      },
+      colors: ["#2060e2"],
+      stroke: {
+        curve: "smooth",
+        width: 3,
+      },
+      fill: {
+        type: "gradient",
+        gradient: {
+          shadeIntensity: 1,
+          opacityFrom: 0.5,
+          opacityTo: 0.05,
+          stops: [0, 90, 100],
+        },
+      },
+      dataLabels: {
+        enabled: false,
+      },
+      markers: {
+        size: isDaily ? 3 : 3,
+        colors: ["#2060e2"],
+        strokeColors: "#fff",
+        strokeWidth: 2,
+        hover: { size: 6 },
+      },
+      xaxis: isDaily
+        ? {
+            type: "datetime",
+            labels: {
+              format: "dd MMM",
+              style: { colors: "#887878", fontSize: "11px" },
+            },
+            axisBorder: { show: false },
+            axisTicks: { show: false },
+          }
+        : {
+            type: "category",
+            labels: {
+              style: { colors: "#887878", fontSize: "11px" },
+            },
+            axisBorder: { show: false },
+            axisTicks: { show: false },
+          },
+      yaxis: {
+        show: true,
+        min: 0,
+        forceNiceScale: true,
+        labels: {
+          style: { colors: "#887878", fontSize: "11px" },
+          formatter: (val) => Math.round(val),
+        },
+      },
+      grid: {
+        borderColor: "rgba(0,0,0,0.05)",
+        strokeDashArray: 4,
+        yaxis: { lines: { show: true } },
+        xaxis: { lines: { show: false } },
+      },
+      tooltip: {
+        theme: "light",
+        x: {
+          format: isDaily ? "dd MMMM yyyy" : undefined,
+        },
+        y: {
+          formatter: (val) => `${val ? val.toLocaleString("fr-DZ") : 0} visite${val > 1 ? "s" : ""}`,
+          title: {
+            formatter: () => "Visites : ",
+          },
+        },
+      },
+      responsive: [
+        {
+          breakpoint: 1024,
+          options: {
+            chart: { width: "100%" },
+          },
+        },
+      ],
+    };
+  }
+
+  fetchVisits = async () => {
+    try {
+      const data = await ApiService.getSiteVisits();
+      if (data) {
+        this.applyData(data, this.state.viewMode);
+      }
+    } catch (e) {
+      console.warn("Erreur chargement visites:", e);
+    }
+  };
+
+  applyData(data, mode) {
+    if (!data) return;
+
+    let seriesData = [];
+    let seriesName = "Visites";
+
+    if (mode === "daily") {
+      seriesName = "Visites quotidiennes";
+      seriesData = data.timelineSeries || [];
+    } else if (mode === "monthly") {
+      seriesName = "Visites mensuelles";
+      seriesData = (data.monthlySeries || []).map((m) => ({
+        x: m.label || m.month,
+        y: m.count,
+      }));
+    } else if (mode === "yearly") {
+      seriesName = "Visites annuelles";
+      seriesData = (data.yearlySeries || []).map((y) => ({
+        x: y.year,
+        y: y.count,
+      }));
+    } else {
+      seriesName = "Visites du jour (heures)";
+      seriesData = (data.hourlySeries || []).map((h) => ({
+        x: h.hour,
+        y: h.count,
+      }));
+    }
+
+    this.setState({
+      rawData: data,
+      loading: false,
+      stats: {
+        todayCount: data.todayCount || 0,
+        totalVisits: data.totalVisits || 0,
+        lastUpdated: data.lastUpdated || "",
+      },
+      series: [
+        {
+          name: seriesName,
+          data: seriesData,
+        },
+      ],
+      options: this.getBaseOptions(mode),
+    });
+  }
+
+  componentDidMount() {
+    this.fetchVisits();
+    this.intervalId = setInterval(this.fetchVisits, 10000);
+  }
+
+  componentWillUnmount() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+    }
+  }
+
+  handleModeChange = (mode) => {
+    this.setState({ viewMode: mode }, () => {
+      if (this.state.rawData) {
+        this.applyData(this.state.rawData, mode);
+      }
+    });
+  };
+
   render() {
+    const { viewMode, stats, series, options } = this.state;
+
     return (
-      <>
+      <div className="visitor-chart-realtime-wrapper">
+        {/* Barre de métriques épurée (sans 'En direct') & Sélecteur de période */}
+        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 pt-1 px-1">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <span
+              className="badge"
+              style={{
+                backgroundColor: "rgba(32, 96, 226, 0.1)",
+                color: "#2060e2",
+                fontWeight: "600",
+                fontSize: "12px",
+                padding: "6px 10px",
+                borderRadius: "8px",
+              }}
+            >
+              <i className="fa fa-calendar-check-o me-1"></i> Aujourd'hui :{" "}
+              <strong style={{ fontSize: "13px" }}>{stats.todayCount}</strong>
+            </span>
+
+            <span
+              className="badge text-muted"
+              style={{
+                backgroundColor: "#f8f9fa",
+                border: "1px solid #e9ecef",
+                fontWeight: "500",
+                fontSize: "11px",
+                padding: "6px 10px",
+                borderRadius: "8px",
+              }}
+            >
+              Total cumulé : {stats.totalVisits.toLocaleString("fr-DZ")}
+            </span>
+          </div>
+
+          {/* Boutons de bascule de vue : 14 Jours | Par Mois | Par Année | Aujourd'hui */}
+          <div className="btn-group btn-group-sm" role="group">
+            <button
+              type="button"
+              className={`btn btn-xs ${viewMode === "daily" ? "btn-primary" : "btn-light"}`}
+              style={{ borderRadius: "6px 0 0 6px", fontSize: "11px", fontWeight: "600", padding: "5px 11px" }}
+              onClick={() => this.handleModeChange("daily")}
+            >
+              14 Jours
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs ${viewMode === "monthly" ? "btn-primary" : "btn-light"}`}
+              style={{ borderRadius: "0", fontSize: "11px", fontWeight: "600", padding: "5px 11px" }}
+              onClick={() => this.handleModeChange("monthly")}
+            >
+              Par Mois
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs ${viewMode === "yearly" ? "btn-primary" : "btn-light"}`}
+              style={{ borderRadius: "0", fontSize: "11px", fontWeight: "600", padding: "5px 11px" }}
+              onClick={() => this.handleModeChange("yearly")}
+            >
+              Par Année
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs ${viewMode === "hourly" ? "btn-primary" : "btn-light"}`}
+              style={{ borderRadius: "0 6px 6px 0", fontSize: "11px", fontWeight: "600", padding: "5px 11px" }}
+              onClick={() => this.handleModeChange("hourly")}
+            >
+              Aujourd'hui (Heures)
+            </button>
+          </div>
+        </div>
+
+        {/* Graphique ApexCharts */}
         <ReactApexChart
-          options={this.state.options}
-          series={this.state.series}
+          options={options}
+          series={series}
           type="area"
-          height={350}
+          height={310}
         />
-      </>
+      </div>
     );
   }
 }

@@ -23,6 +23,27 @@ switch ($method) {
         break;
 }
 
+function generateInvoicePatientPassword($lastName, $firstName, $phone) {
+    $cleanLast = trim($lastName ?? '');
+    $cleanFirst = trim($firstName ?? '');
+
+    if (function_exists('iconv')) {
+        $cleanLast = @iconv('UTF-8', 'ASCII//TRANSLIT', $cleanLast) ?: $cleanLast;
+        $cleanFirst = @iconv('UTF-8', 'ASCII//TRANSLIT', $cleanFirst) ?: $cleanFirst;
+    }
+
+    $cleanLast = preg_replace('/[^a-zA-Z]/', '', $cleanLast);
+    $cleanFirst = preg_replace('/[^a-zA-Z]/', '', $cleanFirst);
+
+    $lastInitial = !empty($cleanLast) ? strtolower(substr($cleanLast, 0, 1)) : 'p';
+    $firstInitial = !empty($cleanFirst) ? strtolower(substr($cleanFirst, 0, 1)) : 'a';
+
+    $digits = preg_replace('/\D/', '', $phone ?? '');
+    $last3 = strlen($digits) >= 3 ? substr($digits, -3) : str_pad($digits, 3, '0', STR_PAD_LEFT);
+
+    return strtolower($lastInitial . $firstInitial . $last3);
+}
+
 function handleGetInvoices($db) {
     try {
         $patientId = $_GET['patient_id'] ?? null;
@@ -38,8 +59,11 @@ function handleGetInvoices($db) {
             SELECT 
                 i.*,
                 CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
+                p.first_name,
+                p.last_name,
                 p.file_number,
-                p.phone AS patient_phone
+                p.phone AS patient_phone,
+                p.password AS patient_password
             FROM invoices i
             LEFT JOIN patients p ON p.id = i.patient_id
             $where
@@ -49,12 +73,18 @@ function handleGetInvoices($db) {
         $rows = $stmt->fetchAll();
 
         $data = array_map(function ($row) {
+            $pwd = !empty($row['patient_password']) ? $row['patient_password'] : '';
+            if (empty($pwd)) {
+                $pwd = generateInvoicePatientPassword($row['last_name'] ?? '', $row['first_name'] ?? '', $row['patient_phone'] ?? '');
+            }
             return [
                 'id' => (int)$row['id'],
                 'invoiceNumber' => $row['invoice_number'],
                 'patientId' => (int)$row['patient_id'],
                 'consultationId' => !empty($row['consultation_id']) ? (int)$row['consultation_id'] : null,
                 'patientName' => $row['patient_name'] ?? 'Patient',
+                'patientPhone' => $row['patient_phone'] ?? '',
+                'patientPassword' => $pwd,
                 'fileNumber' => $row['file_number'] ?? '',
                 'date' => $row['invoice_date'],
                 'actDescription' => $row['act_description'],

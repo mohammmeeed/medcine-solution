@@ -2,6 +2,28 @@ import React, { useState, useEffect, useRef } from "react";
 import { initialWaitingRoom, initialDoctor } from "../../../services/CabinetData";
 import ApiService from "../../../services/ApiService";
 
+// Créneaux horaires officiels pour calcul du ticket réservé (ex: 09:00 -> Ticket 1, 11:30 -> Ticket 6)
+const ALL_DAY_SLOTS = [
+  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+  "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"
+];
+
+const getPatientTicketNumber = (p, fallbackIdx) => {
+  if (p?.ticketNumber) return p.ticketNumber;
+  const time = p?.appointmentTime || p?.time;
+  if (time) {
+    const normalized = time.trim().substring(0, 5).padStart(5, "0");
+    const slotIdx = ALL_DAY_SLOTS.indexOf(normalized);
+    if (slotIdx !== -1) return slotIdx + 1;
+    const [h, m] = time.split(":").map(Number);
+    if (!isNaN(h) && !isNaN(m)) {
+      const diff = (h * 60 + m) - (9 * 60);
+      if (diff >= 0) return Math.floor(diff / 30) + 1;
+    }
+  }
+  return fallbackIdx != null ? fallbackIdx + 1 : 1;
+};
+
 const AffichageSalleAttente = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [waitingList, setWaitingList] = useState(() => {
@@ -71,11 +93,13 @@ const AffichageSalleAttente = () => {
   };
 
   // Annonce vocale de synthèse vocale (SpeechSynthesis)
-  const speakPatient = (patientName) => {
+  const speakPatient = (patientName, ticketNum) => {
     if (!window.speechSynthesis) return;
     try {
       window.speechSynthesis.cancel();
-      const text = `Le docteur appelle : ${patientName}. Veuillez entrer dans le cabinet.`;
+      const text = ticketNum
+        ? `Ticket numéro ${ticketNum}. ${patientName}. Veuillez entrer dans le cabinet.`
+        : `Le docteur appelle : ${patientName}. Veuillez entrer dans le cabinet.`;
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = "fr-FR";
       utterance.rate = 0.95;
@@ -89,10 +113,11 @@ const AffichageSalleAttente = () => {
   const triggerCallNotification = (callData) => {
     setCalledPatient(callData);
     setIsCallingAnimation(true);
+    const ticketNum = callData.ticketNumber || getPatientTicketNumber(callData);
     if (soundEnabled) {
       playChime();
       setTimeout(() => {
-        speakPatient(callData.patientName);
+        speakPatient(callData.patientName, ticketNum);
       }, 700);
     }
     setTimeout(() => {
@@ -423,21 +448,40 @@ const AffichageSalleAttente = () => {
               </div>
 
               <div>
-                <div
-                  style={{
-                    display: "inline-block",
-                    padding: "6px 16px",
-                    borderRadius: "20px",
-                    background: "#fbbf24",
-                    color: "#78350f",
-                    fontWeight: "800",
-                    fontSize: "14px",
-                    textTransform: "uppercase",
-                    letterSpacing: "1.5px",
-                    marginBottom: "10px",
-                  }}
-                >
-                  <i className="fa fa-bullhorn me-2"></i> Le médecin vous appelle
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "10px" }}>
+                  <div
+                    style={{
+                      display: "inline-block",
+                      padding: "6px 16px",
+                      borderRadius: "20px",
+                      background: "#fbbf24",
+                      color: "#78350f",
+                      fontWeight: "800",
+                      fontSize: "14px",
+                      textTransform: "uppercase",
+                      letterSpacing: "1.5px",
+                    }}
+                  >
+                    <i className="fa fa-bullhorn me-2"></i> Le médecin vous appelle
+                  </div>
+
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 16px",
+                      borderRadius: "20px",
+                      background: "rgba(255, 255, 255, 0.2)",
+                      border: "1px solid rgba(255, 255, 255, 0.4)",
+                      color: "#ffffff",
+                      fontWeight: "900",
+                      fontSize: "14px",
+                      letterSpacing: "1px",
+                    }}
+                  >
+                    <i className="fa fa-ticket-alt text-warning"></i> TICKET N° {calledPatient.ticketNumber || getPatientTicketNumber(calledPatient)}
+                  </div>
                 </div>
 
                 {/* NOM DU PATIENT EN TRÈS GRAND ET BLANC */}
@@ -585,11 +629,10 @@ const AffichageSalleAttente = () => {
             >
               <thead>
                 <tr style={{ color: "#93c5fd", fontSize: "13px", fontWeight: "700", textTransform: "uppercase" }}>
-                  <th style={{ padding: "8px 20px" }}>Ordre</th>
+                  <th style={{ padding: "8px 20px" }}>Ticket</th>
                   <th style={{ padding: "8px 20px" }}>Heure d'arrivée</th>
                   <th style={{ padding: "8px 20px" }}>RDV Prévu</th>
                   <th style={{ padding: "8px 20px" }}>Nom du Patient</th>
-                  <th style={{ padding: "8px 20px" }}>Motif</th>
                   <th style={{ padding: "8px 20px", textAlign: "right" }}>Statut</th>
                 </tr>
               </thead>
@@ -597,7 +640,7 @@ const AffichageSalleAttente = () => {
                 {waitingList.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan="5"
                       style={{
                         textAlign: "center",
                         padding: "50px 20px",
@@ -613,6 +656,7 @@ const AffichageSalleAttente = () => {
                   waitingList.map((p, idx) => {
                     const isCalled = p.status === "Appelé" || (calledPatient && calledPatient.patientName === p.patientName);
                     const isInConsult = p.status === "En consultation";
+                    const ticketNum = getPatientTicketNumber(p, idx);
 
                     return (
                       <tr
@@ -631,7 +675,7 @@ const AffichageSalleAttente = () => {
                           transition: "all 0.3s ease",
                         }}
                       >
-                        {/* Ordre */}
+                        {/* Numéro de Ticket réservé */}
                         <td
                           style={{
                             padding: "16px 20px",
@@ -642,18 +686,21 @@ const AffichageSalleAttente = () => {
                           <span
                             style={{
                               display: "inline-flex",
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "50%",
-                              background: isCalled ? "#f59e0b" : "rgba(255, 255, 255, 0.15)",
-                              color: isCalled ? "#000" : "#fff",
-                              fontWeight: "700",
-                              fontSize: "14px",
+                              minWidth: "38px",
+                              height: "38px",
+                              padding: "0 10px",
+                              borderRadius: "19px",
+                              background: isCalled ? "#f59e0b" : "rgba(56, 189, 248, 0.2)",
+                              border: isCalled ? "2px solid #fbbf24" : "1px solid rgba(56, 189, 248, 0.4)",
+                              color: isCalled ? "#000" : "#38bdf8",
+                              fontWeight: "900",
+                              fontSize: "15px",
                               alignItems: "center",
                               justifyContent: "center",
+                              boxShadow: isCalled ? "0 0 16px rgba(245, 158, 11, 0.6)" : "none",
                             }}
                           >
-                            {idx + 1}
+                            #{ticketNum}
                           </span>
                         </td>
 
@@ -679,11 +726,6 @@ const AffichageSalleAttente = () => {
                           >
                             {p.patientName}
                           </span>
-                        </td>
-
-                        {/* Motif */}
-                        <td style={{ padding: "16px 20px", color: "#cbd5e1", fontSize: "15px" }}>
-                          {p.reason || "Consultation médicale"}
                         </td>
 
                         {/* Statut (Sans temps d'attente) */}

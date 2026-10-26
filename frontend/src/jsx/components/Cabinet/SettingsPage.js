@@ -1,15 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "react-bootstrap";
+import { Link } from "react-router-dom";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
 
+const defaultConsultationTypesList = [
+  { id: 1, name: "Consultation de médecine générale", duration: "20 min", price: 2500, active: true },
+  { id: 2, name: "Consultation gynécologique / spécialisée", duration: "25 min", price: 3000, active: true },
+  { id: 3, name: "Suivi de grossesse / Maternité", duration: "20 min", price: 2500, active: true },
+  { id: 4, name: "Échographie obstétricale (T1 / T2 / T3)", duration: "30 min", price: 4000, active: true },
+  { id: 5, name: "Échographie pelvienne / gynécologique", duration: "25 min", price: 3500, active: true },
+  { id: 6, name: "Consultation avec frottis / acte", duration: "30 min", price: 3500, active: true },
+  { id: 7, name: "Visite de contrôle / Bilan", duration: "15 min", price: 1500, active: true },
+];
+
 const SettingsPage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const [settings, setSettings] = useState({
     defaultDuration: "20 min",
     slotInterval: "15 min",
+    defaultConsultationType: "Consultation de médecine générale",
+    consultationPrice: 2500,
+    consultationTypes: defaultConsultationTypesList,
     smsReminders: true,
     emailReminders: true,
     reminderHoursBefore: "24",
@@ -26,7 +41,18 @@ const SettingsPage = () => {
         setLoading(true);
         const data = await ApiService.getSettings();
         if (data) {
-          setSettings(data);
+          setSettings((prev) => ({
+            ...prev,
+            ...data,
+            consultationTypes:
+              Array.isArray(data.consultationTypes) && data.consultationTypes.length > 0
+                ? data.consultationTypes
+                : defaultConsultationTypesList,
+            defaultConsultationType:
+              data.defaultConsultationType || "Consultation de médecine générale",
+            consultationPrice:
+              data.consultationPrice !== undefined ? data.consultationPrice : 2500,
+          }));
         }
       } catch (err) {
         console.error("Erreur chargement paramètres :", err);
@@ -37,15 +63,161 @@ const SettingsPage = () => {
     fetchSettings();
   }, []);
 
+  const handleConsultationTypeChange = (typeName) => {
+    const list = settings.consultationTypes || defaultConsultationTypesList;
+    const found = list.find((t) => t.name === typeName);
+    setSettings((prev) => ({
+      ...prev,
+      defaultConsultationType: typeName,
+      consultationPrice: found ? found.price : prev.consultationPrice,
+      defaultDuration: found?.duration ? found.duration : prev.defaultDuration,
+    }));
+  };
+
+  const handleUpdateTypePrice = (typeId, newPrice) => {
+    const numericPrice = parseFloat(newPrice) || 0;
+    const list = settings.consultationTypes || defaultConsultationTypesList;
+    const updated = list.map((t) =>
+      t.id === typeId ? { ...t, price: numericPrice } : t
+    );
+    const updatedCurrent = updated.find((t) => t.name === settings.defaultConsultationType);
+    setSettings((prev) => ({
+      ...prev,
+      consultationTypes: updated,
+      consultationPrice: updatedCurrent ? updatedCurrent.price : prev.consultationPrice,
+    }));
+  };
+
+  const handleAddConsultationType = () => {
+    Swal.fire({
+      title: "Ajouter un Type de Consultation",
+      html: `
+        <div class="text-start">
+          <label class="form-label font-w500 mb-1">Nom de la consultation ou de l'acte :</label>
+          <input id="swal-type-name" class="form-control mb-3" placeholder="Ex: Consultation Pédiatrique..." />
+          
+          <label class="form-label font-w500 mb-1">Tarif / Prix (DA) :</label>
+          <input id="swal-type-price" type="number" step="100" class="form-control" placeholder="Ex: 3000" value="2500" />
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Ajouter",
+      cancelButtonText: "Annuler",
+      confirmButtonColor: "#1e60d5",
+      preConfirm: () => {
+        const name = document.getElementById("swal-type-name").value.trim();
+        const price = parseFloat(document.getElementById("swal-type-price").value) || 0;
+        if (!name) {
+          Swal.showValidationMessage("Veuillez saisir un nom pour ce type de consultation");
+          return false;
+        }
+        return { name, price };
+      },
+    }).then((result) => {
+      if (result.isConfirmed && result.value) {
+        const newType = {
+          id: Date.now(),
+          name: result.value.name,
+          price: result.value.price,
+          active: true,
+        };
+        const updated = [...(settings.consultationTypes || defaultConsultationTypesList), newType];
+        setSettings((prev) => ({
+          ...prev,
+          consultationTypes: updated,
+        }));
+        Swal.fire({
+          icon: "success",
+          title: "Type de consultation ajouté !",
+          text: `"${newType.name}" avec tarif ${newType.price} DA a été ajouté.`,
+          timer: 1600,
+          showConfirmButton: false,
+        });
+      }
+    });
+  };
+
+  const handleDeleteConsultationType = (item) => {
+    const list = settings.consultationTypes || defaultConsultationTypesList;
+    if (list.length <= 1) {
+      Swal.fire({
+        icon: "warning",
+        title: "Action impossible",
+        text: "Vous devez conserver au moins un type de consultation dans la grille.",
+        confirmButtonColor: "#1e60d5",
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: "Supprimer ce type de consultation ?",
+      html: `Êtes-vous sûr de vouloir supprimer « <b>${item.name}</b> » de la grille tarifaire ?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Oui, supprimer",
+      cancelButtonText: "Annuler",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const updated = list.filter((t) => (t.id ? t.id !== item.id : t.name !== item.name));
+
+        let newDefault = settings.defaultConsultationType;
+        let newPrice = settings.consultationPrice;
+        let newDuration = settings.defaultDuration;
+
+        // Si on supprime le type actuellement actif par défaut, basculer sur le premier disponible
+        if (item.name === settings.defaultConsultationType && updated.length > 0) {
+          newDefault = updated[0].name;
+          newPrice = updated[0].price;
+          newDuration = updated[0].duration || "20 min";
+        }
+
+        const newSettings = {
+          ...settings,
+          consultationTypes: updated,
+          defaultConsultationType: newDefault,
+          consultationPrice: newPrice,
+          defaultDuration: newDuration,
+        };
+
+        setSettings(newSettings);
+
+        try {
+          await ApiService.updateSettings(newSettings);
+          localStorage.setItem("cabinet_settings", JSON.stringify(newSettings));
+          Swal.fire({
+            icon: "success",
+            title: "Supprimé !",
+            text: `Le type « ${item.name} » a été supprimé de la grille.`,
+            timer: 1600,
+            showConfirmButton: false,
+          });
+        } catch (err) {
+          console.warn("Erreur mise à jour MySQL :", err);
+          Swal.fire({
+            icon: "success",
+            title: "Supprimé !",
+            text: `Le type « ${item.name} » a été retiré. Pensez à cliquer sur Enregistrer.`,
+            timer: 1600,
+            showConfirmButton: false,
+          });
+        }
+      }
+    });
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     try {
       setSaving(true);
       await ApiService.updateSettings(settings);
+      // Synchroniser également dans localStorage pour réactivité immédiate de l'interface
+      localStorage.setItem("cabinet_settings", JSON.stringify(settings));
       Swal.fire({
         icon: "success",
         title: "Paramètres enregistrés dans la Base de Données",
-        text: "Vos préférences de pratique, d'agenda et de sécurité sont désormais synchronisées.",
+        text: "Le type de consultation, le tarif et les préférences de l'agenda sont enregistrés avec succès.",
         confirmButtonColor: "#1e60d5",
       });
     } catch (err) {
@@ -64,15 +236,19 @@ const SettingsPage = () => {
     <>
       <PageTitle motherMenu="Cabinet et configuration" activeMenu="Paramètres" />
 
+      {/* Onglets de navigation entre Paramètres et SMTP */}
+      <div className="d-flex align-items-center gap-2 mb-3">
+        <button type="button" className="btn btn-sm btn-primary btn-rounded px-3 py-2">
+          <i className="flaticon-381-settings-2 me-1"></i> Tarifs & Consultations
+        </button>
+        <Link to="/smtp" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
+          <i className="flaticon-381-email me-1"></i> Configuration SMTP
+        </Link>
+      </div>
+
       <div className="card">
-        <div className="card-header border-0 pb-0 d-flex justify-content-between align-items-center">
-          <div>
-            <h4 className="card-title">Paramètres de Gestion du Cabinet Médical</h4>
-            <p className="text-muted fs-13 mb-0">Configuration de l'agenda, des rappels patients et de la sécurité (Base MySQL)</p>
-          </div>
-          <span className="badge badge-success badge-pill light">
-            <i className="fa fa-database me-1"></i> Connecté à la Base de Données
-          </span>
+        <div className="card-header border-0 pb-0">
+          <h4 className="card-title">Paramètres de Gestion du Cabinet Médical</h4>
         </div>
         <div className="card-body">
           {loading ? (
@@ -82,126 +258,135 @@ const SettingsPage = () => {
             </div>
           ) : (
             <form onSubmit={handleSave}>
-              {/* 1. Préférences Agenda */}
-              <h5 className="text-primary font-w600 mb-3 border-bottom pb-2">
-                1. Paramètres de l'Agenda & Rendez-vous
-              </h5>
-              <div className="row mb-3">
+              {/* Type de consultation et Prix de cette consultation */}
+              <div className="row mb-4 p-3 rounded" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0" }}>
                 <div className="col-md-6 mb-2">
-                  <label className="form-label font-w500">Durée par défaut d'une consultation</label>
+                  <label className="form-label font-w600 text-dark d-flex align-items-center gap-1">
+                    <i className="flaticon-381-notepad text-primary"></i>
+                    <span>Type de consultation</span>
+                  </label>
                   <select
-                    className="form-control"
-                    value={settings.defaultDuration}
-                    onChange={(e) => setSettings({ ...settings, defaultDuration: e.target.value })}
+                    className="form-control font-w500"
+                    value={settings.defaultConsultationType}
+                    onChange={(e) => handleConsultationTypeChange(e.target.value)}
                   >
-                    <option value="15 min">15 minutes</option>
-                    <option value="20 min">20 minutes (Standard généraliste)</option>
-                    <option value="30 min">30 minutes</option>
-                    <option value="45 min">45 minutes</option>
+                    {(settings.consultationTypes || defaultConsultationTypesList).map((t) => (
+                      <option key={t.id || t.name} value={t.name}>
+                        {t.name} — ({Number(t.price).toLocaleString("fr-FR")} DA)
+                      </option>
+                    ))}
                   </select>
                 </div>
-                <div className="col-md-6 mb-2">
-                  <label className="form-label font-w500">Intervalle de créneau du calendrier</label>
-                  <select
-                    className="form-control"
-                    value={settings.slotInterval}
-                    onChange={(e) => setSettings({ ...settings, slotInterval: e.target.value })}
-                  >
-                    <option value="10 min">10 minutes</option>
-                    <option value="15 min">15 minutes</option>
-                    <option value="20 min">20 minutes</option>
-                    <option value="30 min">30 minutes</option>
-                  </select>
-                </div>
-              </div>
 
-              {/* 2. Rappels Patients */}
-              <h5 className="text-primary font-w600 mt-4 mb-3 border-bottom pb-2">
-                2. Rappels Automatiques des Rendez-vous
-              </h5>
-              <div className="row mb-3">
-                <div className="col-md-6 mb-3">
-                  <div className="form-check form-switch mb-2">
+                <div className="col-md-6 mb-2">
+                  <label className="form-label font-w600 text-dark d-flex align-items-center gap-1">
+                    <i className="flaticon-381-price-tag text-primary"></i>
+                    <span>Prix de cette consultation</span>
+                  </label>
+                  <div className="input-group">
                     <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="smsRemindCheck"
-                      checked={settings.smsReminders}
-                      onChange={(e) => setSettings({ ...settings, smsReminders: e.target.checked })}
+                      type="number"
+                      step="100"
+                      min="0"
+                      className="form-control font-w700 text-primary fs-16"
+                      value={settings.consultationPrice}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setSettings({ ...settings, consultationPrice: val });
+                      }}
+                      placeholder="Ex: 2500"
+                      required
                     />
-                    <label className="form-check-label font-w500 ms-2" htmlFor="smsRemindCheck">
-                      Envoyer un rappel par SMS automatique
-                    </label>
+                    <span className="input-group-text font-w700 bg-white text-primary border-start-0" style={{ letterSpacing: "0.5px" }}>
+                      DA
+                    </span>
                   </div>
-                  <small className="text-muted d-block">
-                    Réduit les rendez-vous non honorés (lapins) de plus de 70%.
-                  </small>
                 </div>
+              </div>
 
-                <div className="col-md-6 mb-3">
-                  <div className="form-check form-switch mb-2">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="emailRemindCheck"
-                      checked={settings.emailReminders}
-                      onChange={(e) => setSettings({ ...settings, emailReminders: e.target.checked })}
-                    />
-                    <label className="form-check-label font-w500 ms-2" htmlFor="emailRemindCheck">
-                      Envoyer une confirmation et rappel par Email
-                    </label>
+              {/* Grille Tarifaire Complète des Types de Consultation */}
+              <div className="card mb-4" style={{ border: "1px solid #e2e8f0", boxShadow: "none" }}>
+                <div className="card-header bg-light py-2 px-3 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div>
+                    <h6 className="mb-0 font-w600 text-dark">
+                      <i className="flaticon-381-list-1 me-2 text-primary"></i>
+                      Grille Tarifaire des Actes & Consultations du Cabinet
+                    </h6>
+                    <small className="text-muted">Gérez les prix de chaque type de consultation ou ajoutez-en de nouveaux</small>
                   </div>
-                  <small className="text-muted d-block">
-                    Contient les consignes d'accès au cabinet Saint-Honoré.
-                  </small>
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-outline-primary"
+                    onClick={handleAddConsultationType}
+                  >
+                    <i className="flaticon-381-add-1 me-1"></i> + Ajouter un type de consultation
+                  </button>
+                </div>
+                <div className="card-body p-0">
+                  <div className="table-responsive">
+                    <table className="table table-sm table-hover mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th className="ps-3">Type de Consultation / Acte</th>
+                          <th>Prix (DA)</th>
+                          <th className="text-end pe-3">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(settings.consultationTypes || defaultConsultationTypesList).map((item) => {
+                          const isDefault = item.name === settings.defaultConsultationType;
+                          return (
+                            <tr key={item.id || item.name} className={isDefault ? "table-active" : ""}>
+                              <td className="ps-3 font-w600 text-dark">
+                                {item.name}
+                              </td>
+                              <td style={{ width: "200px" }}>
+                                <div className="input-group input-group-sm">
+                                  <input
+                                    type="number"
+                                    step="100"
+                                    className="form-control form-control-sm font-w600 text-primary py-0"
+                                    value={item.price}
+                                    onChange={(e) => handleUpdateTypePrice(item.id, e.target.value)}
+                                  />
+                                  <span className="input-group-text py-0 bg-white">DA</span>
+                                </div>
+                              </td>
+                              <td className="text-end pe-3">
+                                <div className="d-flex align-items-center justify-content-end gap-2">
+                                  {!isDefault ? (
+                                    <button
+                                      type="button"
+                                      className="btn btn-xxs btn-outline-secondary"
+                                      onClick={() => handleConsultationTypeChange(item.name)}
+                                      title="Définir ce type et son prix par défaut"
+                                    >
+                                      Choisir
+                                    </button>
+                                  ) : (
+                                    <span className="text-primary font-w600 fs-12">
+                                      <i className="fa fa-check me-1"></i> Actuel
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn btn-xxs btn-outline-danger p-1 px-2"
+                                    onClick={() => handleDeleteConsultationType(item)}
+                                    title="Supprimer ce type de consultation"
+                                  >
+                                    <i className="flaticon-381-trash-1"></i>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 
-              <div className="row mb-3">
-                <div className="col-md-6">
-                  <label className="form-label font-w500">Délai d'envoi du rappel avant le rendez-vous</label>
-                  <select
-                    className="form-control"
-                    value={settings.reminderHoursBefore}
-                    onChange={(e) => setSettings({ ...settings, reminderHoursBefore: e.target.value })}
-                  >
-                    <option value="24">24 heures avant</option>
-                    <option value="48">48 heures avant</option>
-                    <option value="72">72 heures avant</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* 3. Sécurité & Sauvegardes HDS */}
-              <h5 className="text-primary font-w600 mt-4 mb-3 border-bottom pb-2">
-                3. Sauvegardes & Sécurité des Données de Santé
-              </h5>
-              <div className="row mb-3">
-                <div className="col-md-6 mb-2">
-                  <label className="form-label font-w500">Fréquence de sauvegarde automatique (HDS)</label>
-                  <select
-                    className="form-control"
-                    value={settings.backupFrequency}
-                    onChange={(e) => setSettings({ ...settings, backupFrequency: e.target.value })}
-                  >
-                    <option value="Quotidienne (23:00)">Quotidienne chaque soir (23:00)</option>
-                    <option value="Toutes les 6 heures">Toutes les 6 heures</option>
-                    <option value="En temps réel">Chaque clôture de consultation</option>
-                  </select>
-                </div>
-                <div className="col-md-6 mb-2">
-                  <label className="form-label font-w500">Délai d'inactivité avant déconnexion automatique (minutes)</label>
-                  <select
-                    className="form-control"
-                    value={settings.sessionTimeout}
-                    onChange={(e) => setSettings({ ...settings, sessionTimeout: e.target.value })}
-                  >
-                    <option value="15">15 minutes</option>
-                    <option value="30">30 minutes (Recommandé)</option>
-                    <option value="60">60 minutes</option>
-                  </select>
-                </div>
-              </div>
 
               <div className="d-flex justify-content-end mt-4">
                 <Button variant="primary" type="submit" className="btn-rounded" disabled={saving}>
@@ -212,7 +397,7 @@ const SettingsPage = () => {
                     </>
                   ) : (
                     <>
-                      <i className="flaticon-381-check-2 me-1"></i> Enregistrer dans la base de données
+                      <i className="flaticon-381-check-2 me-1"></i> Enregistrer
                     </>
                   )}
                 </Button>

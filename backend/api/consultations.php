@@ -102,6 +102,11 @@ function handleGetConsultations($db) {
                 $echoReport = $echoRow;
             }
 
+            // Récupérer les documents rattachés à cette consultation
+            $docStmt = $db->prepare("SELECT id, title, category, doc_date as date, file_path as filePath, file_size as fileSize, file_type as fileType, status FROM medical_documents WHERE consultation_id = :cid ORDER BY id DESC");
+            $docStmt->execute([':cid' => $r['id']]);
+            $attachedDocs = $docStmt->fetchAll(PDO::FETCH_ASSOC);
+
             $consultations[] = [
                 "id" => intval($r['id']),
                 "consultationNumber" => $r['consultation_number'],
@@ -130,6 +135,7 @@ function handleGetConsultations($db) {
                 "prescriptionId" => $r['prescription_id'] ? intval($r['prescription_id']) : null,
                 "prescriptionData" => $prescriptionData,
                 "ultrasoundReport" => $echoReport,
+                "documents" => $attachedDocs,
                 "patientDetails" => [
                     "nom" => $r['patient_last_name'],
                     "prenom" => $r['patient_first_name'],
@@ -162,8 +168,18 @@ function handleCreateConsultation($db) {
         $patientId = intval($body['patientId']);
         $date = !empty($body['date']) ? $body['date'] : date('Y-m-d');
         $time = !empty($body['time']) ? $body['time'] : date('H:i:s');
-        $reason = !empty($body['reason']) ? $body['reason'] : "Consultation générale";
-        $billingCode = !empty($body['billingCode']) ? $body['billingCode'] : "Consultation générale (2 000 DA)";
+        if (!empty($body['billingCode'])) {
+            $billingCode = $body['billingCode'];
+        } else {
+            $setStmt = $db->query("SELECT default_consultation_type, consultation_price FROM settings ORDER BY id ASC LIMIT 1");
+            $setRow = $setStmt ? $setStmt->fetch() : null;
+            if ($setRow && !empty($setRow['default_consultation_type'])) {
+                $pr = isset($setRow['consultation_price']) ? number_format((float)$setRow['consultation_price'], 0, '', ' ') : '3 000';
+                $billingCode = $setRow['default_consultation_type'] . " (" . $pr . " DA)";
+            } else {
+                $billingCode = "Consultation générale (2 500 DA)";
+            }
+        }
 
         // Générer le numéro de consultation séquentiel unique
         $year = date('Y', strtotime($date));
@@ -419,6 +435,39 @@ function handleCreateConsultation($db) {
             }
             $db->prepare("UPDATE patients SET " . implode(", ", $patUpdates) . " WHERE id = :pid")->execute($patParams);
         } catch (Exception $e) {}
+
+        // 4. Enregistrer les fichiers joints téléversés lors de la consultation dans medical_documents (Dossier Médical)
+        if (!empty($body['documents']) && is_array($body['documents'])) {
+            foreach ($body['documents'] as $doc) {
+                $docPath = $doc['filePath'] ?? ($doc['dataUrl'] ?? null);
+                if (!empty($docPath)) {
+                    $docTitle = !empty($doc['title']) ? trim($doc['title']) : (!empty($doc['name']) ? trim($doc['name']) : 'Fichier Consultation');
+                    $docCategory = $doc['category'] ?? 'Imagerie & Radiologie';
+                    $docDate = $doc['date'] ?? $date;
+                    $docAuthor = $doc['author'] ?? 'Dr N. BELBACHIR OULD HENNIA';
+                    $docSize = $doc['fileSize'] ?? ($doc['size'] ?? '1.5 Mo');
+                    $docType = $doc['fileType'] ?? ($doc['extension'] ?? 'Fichier');
+
+                    try {
+                        $docSql = "INSERT INTO medical_documents 
+                                    (patient_id, consultation_id, title, category, doc_date, author, file_path, file_size, file_type, status)
+                                   VALUES 
+                                    (:pid, :cid, :title, :cat, :ddate, :author, :fpath, :fsize, :ftype, 'Validé')";
+                        $db->prepare($docSql)->execute([
+                            ':pid' => $patientId,
+                            ':cid' => $consultationId,
+                            ':title' => $docTitle,
+                            ':cat' => $docCategory,
+                            ':ddate' => $docDate,
+                            ':author' => $docAuthor,
+                            ':fpath' => $docPath,
+                            ':fsize' => $docSize,
+                            ':ftype' => $docType
+                        ]);
+                    } catch (Exception $e) {}
+                }
+            }
+        }
 
         // Si le patient était dans la salle d'attente, mettre à jour son statut à 'Terminé'
         $upWait = $db->prepare("UPDATE waiting_room SET status = 'Terminé' WHERE patient_id = :pid AND status IN ('Attente', 'Appelé', 'En consultation')");

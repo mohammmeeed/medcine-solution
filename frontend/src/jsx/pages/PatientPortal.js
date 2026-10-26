@@ -1,67 +1,54 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import confetti from "canvas-confetti";
 import "../../css/patient-portal.css";
+import ApiService from "../../services/ApiService";
+import { jsPDF } from "jspdf";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Calendar,
   Clock,
   MapPin,
   Sparkles,
-  BarChart2,
-  MessageSquare,
   CheckCircle2,
   Phone,
   User,
+  Lock,
+  Key,
+  Eye,
+  EyeOff,
+  LogIn,
+  LogOut,
   Send,
   X,
   ArrowRight,
   Sun,
-  Moon,
   Sunset,
   Home,
   Info,
+  FileText,
+  Receipt,
+  Activity,
+  Download,
+  Folder,
 } from "lucide-react";
 
-// Créneaux horaires du Matin (09:00 - 12:30, chaque 30 min)
-const MORNING_SLOTS = [
-  "09:00", "09:30",
-  "10:00", "10:30",
-  "11:00", "11:30",
-  "12:00", "12:30"
-];
-
-// Créneaux horaires du Soir / Après-midi (13:00 - 17:30, chaque 30 min)
-const EVENING_SLOTS = [
-  "13:00", "13:30",
-  "14:00", "14:30",
-  "15:00", "15:30",
-  "16:00", "16:30",
-  "17:00", "17:30"
-];
-
-// Tous les créneaux quotidiens ordonnés
-const ALL_DAY_SLOTS = [...MORNING_SLOTS, ...EVENING_SLOTS];
-
-// Calcule l'ordre de passage / numéro de ticket journalier selon l'heure choisie :
-// 09:00 -> 1, 09:30 -> 2, 10:00 -> 3... et chaque nouveau jour repart toujours à 1, 2, 3...
-const getTicketNumber = (slotTime) => {
-  if (!slotTime) return 1;
-  const normalized = slotTime.trim().padStart(5, "0");
-  const idx = ALL_DAY_SLOTS.indexOf(normalized);
-  if (idx !== -1) return idx + 1;
-
-  // Calcul mathématique si heure personnalisée au format HH:MM
-  const [h, m] = slotTime.split(":").map(Number);
-  if (!isNaN(h) && !isNaN(m)) {
-    const totalMin = h * 60 + m;
-    const startMin = 9 * 60; // 09:00 = 540 min
-    const diff = totalMin - startMin;
-    if (diff >= 0) {
-      return Math.floor(diff / 30) + 1;
-    }
+// Générateur dynamique de créneaux horaires selon la durée configurée (ex: 20 min, 30 min, 40 min...)
+const generateSlots = (startStr = "09:00", endStr = "12:30", step = 30) => {
+  const [sh, sm] = (startStr || "09:00").split(":").map(Number);
+  const [eh, em] = (endStr || "12:30").split(":").map(Number);
+  const startMin = (isNaN(sh) ? 9 : sh) * 60 + (isNaN(sm) ? 0 : sm);
+  const endMin = (isNaN(eh) ? 12 : eh) * 60 + (isNaN(em) ? 30 : em);
+  const stepMin = Math.max(10, parseInt(step, 10) || 30);
+  const list = [];
+  for (let m = startMin; m <= endMin; m += stepMin) {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    list.push(`${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`);
   }
-  return 1;
+  return list;
 };
 
 // URL API dynamique : bascule automatiquement entre dev local (port 8000) et hébergeur en ligne
@@ -75,9 +62,126 @@ const getApiUrl = (endpoint) => {
   return `/backend/api/${endpoint}`;
 };
 
+// Détermination de la vue active selon le chemin de l'URL
+const getViewFromPath = (pathname) => {
+  const p = (pathname || "").toLowerCase().replace(/\/+$/, "") || "/";
+  if (p === "/agenda" || p === "/rendez-vous" || p === "/schedule") return "schedule";
+  if (p === "/profil" || p === "/espace-patient" || p === "/mon-dossier" || p === "/profile") return "profile";
+  if (p === "/a-propos" || p === "/about") return "about";
+  if (p === "/confirmation") return "confirmed";
+  return "doctor";
+};
+
 export default function PatientPortal() {
-  // Navigation entre vues: 'doctor' (présentation) | 'schedule' (agenda) | 'profile' (profil) | 'about' (à propos) | 'confirmed' (succès)
-  const [view, setView] = useState("doctor");
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Navigation entre vues: 'doctor' (/) | 'schedule' (/agenda) | 'profile' (/profil) | 'about' (/a-propos) | 'confirmed' (/confirmation)
+  const [view, setViewState] = useState(() => getViewFromPath(location?.pathname));
+
+  // Mise à jour de la vue et synchronisation de l'URL dans la barre du navigateur
+  const setView = (newView, replace = false) => {
+    let targetPath = "/";
+    if (newView === "schedule") targetPath = "/agenda";
+    else if (newView === "profile") targetPath = "/profil";
+    else if (newView === "about") targetPath = "/a-propos";
+    else if (newView === "confirmed") targetPath = "/confirmation";
+    else targetPath = "/";
+
+    setViewState(newView);
+    if (location?.pathname !== targetPath) {
+      navigate(targetPath, { replace });
+    }
+  };
+
+  // Synchronisation lorsque l'URL change (ex: bouton Précédent / Suivant du navigateur ou saisie directe)
+  useEffect(() => {
+    const target = getViewFromPath(location?.pathname);
+    setViewState(target);
+  }, [location?.pathname]);
+
+  // Enregistrement de la visite en temps réel dans MySQL (Portail Public)
+  useEffect(() => {
+    try {
+      const isMobile = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      ApiService.recordSiteVisit("/patient-portal", isMobile ? "mobile" : "desktop");
+    } catch (e) {
+      // Ignorer silencieusement si hors ligne
+    }
+  }, []);
+
+  // Informations officielles et dynamiques du cabinet synchronisées avec MySQL & Mon Cabinet
+  const [clinicInfo, setClinicInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem("cabinet_info");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      clinicName: "Cabinet Médical belbachir",
+      doctorName: "Dr N. BELBACHIR OULD HENNIA",
+      doctorNameAr: "الدكتورة ن. بلبشير ولد هنية • طبيبة مختصة",
+      specialty: "Spécialiste Gynécologie Obstétrique & Échographie",
+      aboutText: "Cabinet médical de gynécologie obstétrique et d'échographie du Dr N. BELBACHIR OULD HENNIA, situé à Haï Essedikia (Avenue Seghier Benali) à Oran.\n\nDédié à la santé et au bien-être de la femme, notre cabinet assure un suivi bienveillant et personnalisé de votre grossesse, de la conception jusqu'au terme. Équipée des dernières technologies d'imagerie ultrasonore avec Doppler couleur et rendu 3D/4D HD Live, la praticienne réalise vos bilans morphologiques et diagnostics prénataux avec la plus haute précision.\n\nNous assurons également les consultations de gynécologie générale, le dépistage précoce, les bilans de fertilité et la contraception, dans un cadre serein privilégiant l'écoute attentive, le respect du secret médical et la ponctualité.",
+      aboutSummary: "Cabinet médical moderne dédié à la santé féminine, au suivi complet de la grossesse, au diagnostic prénatal et aux échographies obstétricales et pelviennes de haute précision.",
+      hours: "Samedi — Jeudi: 09:00 — 18:00",
+      closedDays: "Vendredi: Fermé",
+      address: "Haï Seddikia (ex-Cité Boulanger), Cité 340 Logements, Bâtiment 18/A, Oran",
+      secretaryPhone: "0560 06 74 66",
+      phone: "041 53 97 82",
+      mapsUrl: "https://maps.google.com/?q=Gynecologue+Belbachir+Ouldhennia!5e0",
+      mapsIframe: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1362.0324598325215!2d-0.6038324575020871!3d35.714476270634655!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd7e88208f3036ef%3A0xe61f6a97eabb0912!2sGynecologue%20Belbachir%20Ouldhennia!5e0!3m2!1sfr!2sdz!4v1792679429928!5m2!1sfr!2sdz",
+      slotDuration: 30,
+      slotStartMorning: "09:00",
+      slotEndMorning: "12:30",
+      slotStartEvening: "13:00",
+      slotEndEvening: "18:00",
+      doctorPhoto: "/doctor.jpg",
+    };
+  });
+
+  useEffect(() => {
+    fetch(getApiUrl("cabinet_info.php"))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData && resData.status === "success" && resData.data) {
+          setClinicInfo((prev) => ({ ...prev, ...resData.data }));
+          try {
+            localStorage.setItem("cabinet_info", JSON.stringify(resData.data));
+          } catch (e) {}
+        }
+      })
+      .catch((err) => console.warn("Erreur chargement cabinet_info :", err));
+  }, []);
+
+  // Créneaux horaires générés dynamiquement selon la durée de créneau configurée dans Mon Cabinet
+  const morningSlots = useMemo(() => {
+    return generateSlots(
+      clinicInfo.slotStartMorning || "09:00",
+      clinicInfo.slotEndMorning || "12:30",
+      clinicInfo.slotDuration || 30
+    );
+  }, [clinicInfo.slotStartMorning, clinicInfo.slotEndMorning, clinicInfo.slotDuration]);
+
+  const eveningSlots = useMemo(() => {
+    return generateSlots(
+      clinicInfo.slotStartEvening || "13:00",
+      clinicInfo.slotEndEvening || "17:30",
+      clinicInfo.slotDuration || 30
+    );
+  }, [clinicInfo.slotStartEvening, clinicInfo.slotEndEvening, clinicInfo.slotDuration]);
+
+  const allDaySlots = useMemo(() => {
+    return [...morningSlots, ...eveningSlots];
+  }, [morningSlots, eveningSlots]);
+
+  // Calcule l'ordre de passage / numéro de ticket journalier selon l'heure choisie
+  const getTicketNumber = (slotTime) => {
+    if (!slotTime) return 1;
+    const normalized = slotTime.trim().padStart(5, "0");
+    const idx = allDaySlots.indexOf(normalized);
+    if (idx !== -1) return idx + 1;
+    return 1;
+  };
 
   // Liste des réservations du patient
   const [patientAppointments, setPatientAppointments] = useState(() => {
@@ -138,7 +242,7 @@ export default function PatientPortal() {
   };
 
   // Vérifie s'il reste des créneaux disponibles aujourd'hui
-  const hasFutureSlotsToday = [...MORNING_SLOTS, ...EVENING_SLOTS].some(
+  const hasFutureSlotsToday = allDaySlots.some(
     (s) => !isSlotPast(s, currentDayNumber, now.getMonth(), now.getFullYear())
   );
 
@@ -170,10 +274,10 @@ export default function PatientPortal() {
   const getFirstAvailableSlot = (day, period, month, year) => {
     const m = month !== undefined ? month : selectedMonth;
     const y = year !== undefined ? year : selectedYear;
-    const slots = period === "matin" ? MORNING_SLOTS : EVENING_SLOTS;
+    const slots = period === "matin" ? morningSlots : eveningSlots;
     const available = slots.filter((s) => !isSlotPast(s, day, m, y));
     if (available.length > 0) return available[0];
-    const otherSlots = period === "matin" ? EVENING_SLOTS : MORNING_SLOTS;
+    const otherSlots = period === "matin" ? eveningSlots : morningSlots;
     const otherAvailable = otherSlots.filter((s) => !isSlotPast(s, day, m, y));
     return otherAvailable.length > 0 ? otherAvailable[0] : (slots[0] || "09:00");
   };
@@ -192,7 +296,7 @@ export default function PatientPortal() {
     if (newPeriod === timePeriod) return;
     setSlideDirection(newPeriod === "soir" ? "left" : "right");
     setTimePeriod(newPeriod);
-    const slots = newPeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS;
+    const slots = newPeriod === "matin" ? morningSlots : eveningSlots;
     const available = slots.filter((s) => !isSlotPast(s, selectedDay, selectedMonth, selectedYear));
     if (available.length > 0 && (!slots.includes(selectedTime) || isSlotPast(selectedTime, selectedDay, selectedMonth, selectedYear))) {
       setSelectedTime(available[0]);
@@ -337,7 +441,7 @@ export default function PatientPortal() {
 
     let nextPeriod = timePeriod;
     if (isToday) {
-      const morningAvailable = MORNING_SLOTS.some((s) => !isSlotPast(s, day, calendarMonth, calendarYear));
+      const morningAvailable = morningSlots.some((s) => !isSlotPast(s, day, calendarMonth, calendarYear));
       if (!morningAvailable) {
         nextPeriod = "soir";
         setTimePeriod("soir");
@@ -350,9 +454,937 @@ export default function PatientPortal() {
     }
   };
 
-  const [patientName, setPatientName] = useState("");
-  const [patientPhone, setPatientPhone] = useState("");
-  const [consultationReason, setConsultationReason] = useState("Suivi de Grossesse");
+  const [authenticatedPatient, setAuthenticatedPatient] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("cabinet_patient_auth") || "null");
+    } catch {
+      return null;
+    }
+  });
+
+  const [patientName, setPatientName] = useState(() => {
+    try {
+      const auth = JSON.parse(localStorage.getItem("cabinet_patient_auth") || "null");
+      if (auth && (auth.firstName || auth.lastName)) {
+        return `${auth.firstName} ${auth.lastName}`.trim();
+      }
+    } catch {}
+    return "";
+  });
+
+  const [patientPhone, setPatientPhone] = useState(() => {
+    try {
+      const auth = JSON.parse(localStorage.getItem("cabinet_patient_auth") || "null");
+      if (auth && auth.phone) {
+        return auth.phone;
+      }
+    } catch {}
+    return "";
+  });
+
+  const [patientPassword, setPatientPassword] = useState(() => {
+    try {
+      const auth = JSON.parse(localStorage.getItem("cabinet_patient_auth") || "null");
+      if (auth && auth.password) {
+        return auth.password;
+      }
+    } catch {}
+    return "";
+  });
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authSuccess, setAuthSuccess] = useState("");
+
+  // Documents médicaux du patient (Factures, Ordonnances, Échographies, Documents)
+  const [patientInvoices, setPatientInvoices] = useState([]);
+  const [patientPrescriptions, setPatientPrescriptions] = useState([]);
+  const [patientEchographies, setPatientEchographies] = useState([]);
+  const [patientDocuments, setPatientDocuments] = useState([]);
+  const [patientDocsLoading, setPatientDocsLoading] = useState(false);
+
+  // Modale de prévisualisation (Voir) pour ordonnances, factures, échographies, documents
+  const [previewModal, setPreviewModal] = useState(null);
+
+  // Sections déroulantes / accordéon (wishlist style) pour RDV et documents médicaux
+  const [openSections, setOpenSections] = useState({
+    appointments: false,
+    invoices: false,
+    prescriptions: false,
+    echographies: false,
+    documents: false,
+  });
+
+  const toggleSection = (key) => {
+    setOpenSections((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  // Charger l'ensemble des documents médicaux du patient connecté
+  const loadPatientMedicalData = async (patientObj) => {
+    if (!patientObj || !patientObj.id) return;
+    setPatientDocsLoading(true);
+
+    const pid = patientObj.id;
+    const cleanPhone = (patientObj.phone || "").replace(/\D/g, "");
+
+    // 1. Factures
+    try {
+      const invResp = await fetch(getApiUrl(`invoices.php?patient_id=${pid}`));
+      const invJson = await invResp.json();
+      if (invJson && Array.isArray(invJson.data)) {
+        setPatientInvoices(invJson.data);
+      } else {
+        const invList = await ApiService.getInvoices(pid);
+        if (Array.isArray(invList)) {
+          const filtered = invList.filter(
+            (i) =>
+              Number(i.patientId) === Number(pid) ||
+              (cleanPhone && (i.patientPhone || "").replace(/\D/g, "") === cleanPhone)
+          );
+          setPatientInvoices(filtered);
+        }
+      }
+    } catch (e) {
+      console.warn("Erreur chargement factures patient :", e);
+    }
+
+    // 2. Ordonnances
+    try {
+      const prescResp = await fetch(getApiUrl(`prescriptions.php?patient_id=${pid}`));
+      const prescJson = await prescResp.json();
+      if (prescJson && Array.isArray(prescJson.data)) {
+        setPatientPrescriptions(prescJson.data);
+      } else {
+        const pList = await ApiService.getPrescriptions(pid);
+        if (Array.isArray(pList)) {
+          const filtered = pList.filter((p) => Number(p.patientId) === Number(pid));
+          setPatientPrescriptions(filtered);
+        }
+      }
+    } catch (e) {
+      console.warn("Erreur chargement ordonnances patient :", e);
+    }
+
+    // 3. Échographies & 4. Documents Médicaux
+    try {
+      const echosList = [];
+      const docsList = [];
+
+      try {
+        const docsResp = await fetch(getApiUrl(`documents.php?patient_id=${pid}`));
+        const docsJson = await docsResp.json();
+        let rawDocs = [];
+        if (docsJson && Array.isArray(docsJson.data)) {
+          rawDocs = docsJson.data;
+        } else {
+          rawDocs = await ApiService.getDocuments(pid);
+        }
+
+        if (Array.isArray(rawDocs)) {
+          rawDocs.forEach((d) => {
+            const cat = (d.category || "").toLowerCase();
+            const tit = (d.title || "").toLowerCase();
+            if (
+              cat.includes("écho") ||
+              cat.includes("echo") ||
+              cat.includes("imagerie") ||
+              cat.includes("radio") ||
+              tit.includes("écho") ||
+              tit.includes("echo")
+            ) {
+              echosList.push({
+                id: `doc-${d.id}`,
+                title: d.title || "Échographie",
+                date: d.date || d.doc_date,
+                author: d.author || clinicInfo.doctorName || "Dr N. BELBACHIR",
+                fileDataUrl: d.fileDataUrl,
+                filePath: d.filePath,
+                isDocument: true,
+              });
+            }
+
+            // Document médical (fichier joint, analyse, bilan, certificat, compte-rendu, etc.)
+            const isPurePrescText = tit.startsWith("ordonnance médicale #") && !d.fileDataUrl && !d.filePath;
+            if (!isPurePrescText) {
+              docsList.push({
+                id: d.id,
+                title: d.title || "Document Médical",
+                date: d.date || d.doc_date,
+                category: d.category || "Document Médical",
+                author: d.author || clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA",
+                fileDataUrl: d.fileDataUrl,
+                filePath: d.filePath,
+                fileType: d.fileType || "PDF",
+                fileSize: d.fileSize || "Document",
+                status: d.status || "Validé",
+                notes: d.notes,
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("Erreur documents :", err);
+      }
+
+      try {
+        const csResp = await fetch(getApiUrl(`consultations.php?patient_id=${pid}`));
+        const csJson = await csResp.json();
+        if (csJson && Array.isArray(csJson.data)) {
+          csJson.data.forEach((c) => {
+            if (c.echoType || c.echoFindings || c.echoConclusion || c.ultrasoundReport) {
+              echosList.push({
+                id: `cs-${c.id}`,
+                title: c.echoType || `Compte-rendu d'échographie (${c.reason || "Examen"})`,
+                date: c.date,
+                author: clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA",
+                echoFindings: c.echoFindings,
+                echoConclusion: c.echoConclusion,
+                echoType: c.echoType,
+                echoData: c.echoData,
+                ultrasoundReport: c.ultrasoundReport,
+                isConsultation: true,
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("Erreur consultations :", err);
+      }
+
+      setPatientEchographies(echosList);
+      setPatientDocuments(docsList);
+    } catch (e) {
+      console.warn("Erreur chargement documents/échographies patient :", e);
+    } finally {
+      setPatientDocsLoading(false);
+    }
+  };
+
+  // Synchronisation automatique si le patient est déjà connecté
+  useEffect(() => {
+    if (authenticatedPatient && authenticatedPatient.id) {
+      loadPatientMedicalData(authenticatedPatient);
+    }
+  }, [authenticatedPatient]);
+
+  // Création du PDF d'ordonnance
+  const createPrescriptionPdf = (presc) => {
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pName = authenticatedPatient
+      ? `${authenticatedPatient.lastName || ""} ${authenticatedPatient.firstName || ""}`.trim()
+      : (patientName || "Patient");
+    const pFile = authenticatedPatient ? authenticatedPatient.fileNumber : "";
+
+    // En-tête officiel Cabinet
+    pdf.setDrawColor(26, 58, 92);
+    pdf.setLineWidth(0.8);
+    pdf.line(15, 28, 195, 28);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text((clinicInfo.clinicName || "CABINET DE GYNECOLOGIE OBSTETRIQUE").toUpperCase(), 15, 14);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(45, 106, 159);
+    pdf.text(clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA", 15, 19);
+
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(clinicInfo.specialty || "Medecin Specialiste en Gynecologie Obstetrique - Echographie", 15, 23);
+    pdf.text(`${clinicInfo.address || "Cite 500 Logements, Es-Senia, Oran"} | Tel : ${clinicInfo.secretaryPhone || clinicInfo.phone || "0550 50 50 25"}`, 15, 27);
+
+    // Titre
+    pdf.setFillColor(245, 249, 255);
+    pdf.setDrawColor(192, 211, 232);
+    pdf.roundedRect(15, 33, 180, 11, 2, 2, "FD");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("ORDONNANCE MEDICALE", 105, 40, { align: "center" });
+
+    // Bloc Informations Patient
+    pdf.setFillColor(250, 250, 250);
+    pdf.setDrawColor(220, 225, 230);
+    pdf.roundedRect(15, 48, 180, 20, 1, 1, "FD");
+
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Patient(e) :", 20, 56);
+    pdf.text("Date :", 20, 63);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(`${pName.toUpperCase()} ${pFile ? "(" + pFile + ")" : ""}`, 50, 56);
+    pdf.text(`${presc.date || new Date().toISOString().split("T")[0]}`, 50, 63);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("N° Ordonnance :", 115, 56);
+    pdf.text("Validite :", 115, 63);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(`${presc.prescriptionNumber || "ORD-" + presc.id}`, 145, 56);
+    pdf.text(`${presc.validity || "3 mois"}`, 145, 63);
+
+    // Section Traitements
+    let curY = 76;
+    pdf.setFillColor(248, 251, 255);
+    pdf.setDrawColor(192, 211, 232);
+    pdf.roundedRect(15, curY, 180, 8, 1, 1, "FD");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("PRESCRIPTIONS MEDICAMENTEUSES", 20, curY + 5.5);
+    curY += 14;
+
+    const items = Array.isArray(presc.items) && presc.items.length > 0
+      ? presc.items
+      : [{ medication: "Traitement selon avis medical", posology: "Selon protocole", duration: "Selon prescription" }];
+
+    items.forEach((item, idx) => {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(26, 58, 92);
+      pdf.text(`${idx + 1}. ${item.medication || item.nom || "Medicament"} ${item.dosage || ""}`, 22, curY);
+      curY += 5;
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(60, 60, 60);
+      pdf.text(`- Posologie : ${item.posology || item.posologie || "-"} | Duree : ${item.duration || item.duree || "-"}`, 25, curY);
+      curY += 7;
+    });
+
+    if (presc.notes) {
+      curY += 4;
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(80, 80, 80);
+      pdf.text(`Instructions : ${presc.notes}`, 22, curY);
+    }
+
+    // Signature
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Le Medecin Traitant", 140, 240);
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(clinicInfo.doctorName || "Dr N. BELBACHIR", 140, 246);
+
+    return { pdf, filename: `${presc.prescriptionNumber || "Ordonnance"}_${pName.replace(/\s+/g, "_")}.pdf` };
+  };
+
+  // Prévisualisation de l'ordonnance dans la modale
+  const handleViewPrescription = (presc) => {
+    try {
+      const { pdf, filename } = createPrescriptionPdf(presc);
+      const blobUrl = pdf.output("bloburl");
+      setPreviewModal({
+        title: presc.prescriptionNumber || "Ordonnance Médicale",
+        url: blobUrl,
+        type: "pdf",
+        onDownload: () => pdf.save(filename),
+      });
+    } catch (err) {
+      console.error("Erreur visualisation ordonnance :", err);
+    }
+  };
+
+  // Génération et téléchargement de l'ordonnance en PDF
+  const handleDownloadPrescription = (presc) => {
+    try {
+      const { pdf, filename } = createPrescriptionPdf(presc);
+      pdf.save(filename);
+    } catch (err) {
+      console.error("Erreur generation ordonnance PDF :", err);
+    }
+  };
+
+  // Création du PDF d'échographie
+  const createEchographyPdf = (echo) => {
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pName = authenticatedPatient
+      ? `${authenticatedPatient.lastName || ""} ${authenticatedPatient.firstName || ""}`.trim()
+      : (patientName || "Patient");
+    const pFile = authenticatedPatient ? authenticatedPatient.fileNumber : "";
+
+    // En-tête officiel Cabinet
+    pdf.setDrawColor(26, 58, 92);
+    pdf.setLineWidth(0.8);
+    pdf.line(15, 28, 195, 28);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text((clinicInfo.clinicName || "CABINET DE GYNECOLOGIE OBSTETRIQUE").toUpperCase(), 15, 14);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(45, 106, 159);
+    pdf.text(clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA", 15, 19);
+
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(clinicInfo.specialty || "Medecin Specialiste en Gynecologie Obstetrique - Echographie", 15, 23);
+    pdf.text(`${clinicInfo.address || "Cite 500 Logements, Es-Senia, Oran"} | Tel : ${clinicInfo.secretaryPhone || clinicInfo.phone || "0550 50 50 25"}`, 15, 27);
+
+    // Titre
+    pdf.setFillColor(245, 249, 255);
+    pdf.setDrawColor(192, 211, 232);
+    pdf.roundedRect(15, 33, 180, 11, 2, 2, "FD");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("COMPTE-RENDU D'EXAMEN ECHOGRAPHIQUE", 105, 40, { align: "center" });
+
+    // Bloc Informations Patient
+    pdf.setFillColor(250, 250, 250);
+    pdf.setDrawColor(220, 225, 230);
+    pdf.roundedRect(15, 48, 180, 22, 1, 1, "FD");
+
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Nom & Prenom :", 20, 56);
+    pdf.text("N Dossier :", 20, 63);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(`${pName.toUpperCase()}`, 55, 56);
+    pdf.text(`${pFile || "DOS-" + (authenticatedPatient?.id || "")}`, 55, 63);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Date d'examen :", 115, 56);
+    pdf.text("Type examen :", 115, 63);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(`${echo.date || new Date().toISOString().split("T")[0]}`, 145, 56);
+    pdf.text(`${echo.echoType || echo.title || "Echographie"}`, 145, 63);
+
+    let curY = 76;
+
+    const echoData = echo.echoData || (echo.ultrasoundReport?.morphology_details) || {};
+    const hasBiom = echoData.bip || echoData.femur || echoData.pa || echo.bip || echo.femur;
+    if (hasBiom) {
+      pdf.setFillColor(248, 251, 255);
+      pdf.setDrawColor(192, 211, 232);
+      pdf.roundedRect(15, curY, 180, 8, 1, 1, "FD");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(26, 58, 92);
+      pdf.text("BIOMETRIE FOETALE & MESURES", 20, curY + 5.5);
+      curY += 13;
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(40, 40, 40);
+      const bText = [
+        echoData.bip || echo.bip ? `BIP: ${echoData.bip || echo.bip} mm` : null,
+        echoData.femur || echo.femur ? `LF: ${echoData.femur || echo.femur} mm` : null,
+        echoData.pa || echo.pa ? `DAT/PA: ${echoData.pa || echo.pa} mm` : null,
+        echoData.cc || echo.cc ? `PC/CC: ${echoData.cc || echo.cc} mm` : null,
+      ].filter(Boolean).join("  |  ");
+      if (bText) {
+        pdf.text(bText, 20, curY);
+        curY += 8;
+      }
+    }
+
+    // Observations morphologiques
+    pdf.setFillColor(248, 251, 255);
+    pdf.setDrawColor(192, 211, 232);
+    pdf.roundedRect(15, curY, 180, 8, 1, 1, "FD");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("OBSERVATIONS MORPHOLOGIQUES", 20, curY + 5.5);
+    curY += 13;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(30, 30, 30);
+    const obs = echo.echoFindings || echo.examFindings || echo.notes || "Examen echographique sans anomalie morphologique decelable. Activite cardiaque et mouvements foetaux presents. Liquide amniotique en quantite normale.";
+    const obsLines = pdf.splitTextToSize(obs, 170);
+    pdf.text(obsLines, 20, curY);
+    curY += obsLines.length * 5 + 6;
+
+    // Conclusion
+    pdf.setFillColor(248, 251, 255);
+    pdf.setDrawColor(192, 211, 232);
+    pdf.roundedRect(15, curY, 180, 8, 1, 1, "FD");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("CONCLUSION MEDICALE", 20, curY + 5.5);
+    curY += 13;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(26, 58, 92);
+    const concl = echo.echoConclusion || echo.diagnosis || "Grossesse evolutive sans anomalie morphologique decelable.";
+    const conclLines = pdf.splitTextToSize(concl, 170);
+    pdf.text(conclLines, 20, curY);
+
+    // Signature
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Le Medecin Echographiste", 135, 240);
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(clinicInfo.doctorName || "Dr N. BELBACHIR", 135, 246);
+
+    return { pdf, filename: `Echographie_${(echo.title || "CR").replace(/\s+/g, "_")}_${pName.replace(/\s+/g, "_")}.pdf` };
+  };
+
+  // Prévisualisation du compte-rendu d'échographie dans la modale
+  const handleViewEchography = (echo) => {
+    try {
+      if (echo.fileDataUrl) {
+        const isImg = (echo.fileType || "").includes("image") || echo.fileDataUrl.startsWith("data:image");
+        setPreviewModal({
+          title: echo.title || "Compte-rendu d'échographie",
+          url: echo.fileDataUrl,
+          type: isImg ? "image" : "pdf",
+          onDownload: () => {
+            const link = document.createElement("a");
+            link.href = echo.fileDataUrl;
+            link.download = `${echo.title || "Echographie"}.${isImg ? "jpg" : "pdf"}`;
+            link.click();
+          },
+        });
+        return;
+      }
+      const { pdf, filename } = createEchographyPdf(echo);
+      const blobUrl = pdf.output("bloburl");
+      setPreviewModal({
+        title: echo.title || "Compte-rendu d'échographie",
+        url: blobUrl,
+        type: "pdf",
+        onDownload: () => pdf.save(filename),
+      });
+    } catch (err) {
+      console.error("Erreur visualisation echographie :", err);
+    }
+  };
+
+  // Téléchargement du compte-rendu d'échographie en PDF
+  const handleDownloadEchography = (echo) => {
+    try {
+      if (echo.fileDataUrl) {
+        const link = document.createElement("a");
+        link.href = echo.fileDataUrl;
+        link.download = `${echo.title || "Echographie"}.pdf`;
+        link.click();
+        return;
+      }
+      const { pdf, filename } = createEchographyPdf(echo);
+      pdf.save(filename);
+    } catch (err) {
+      console.error("Erreur generation echographie PDF :", err);
+    }
+  };
+
+  // Création du PDF de facture
+  const createInvoicePdf = (inv) => {
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pName = authenticatedPatient
+      ? `${authenticatedPatient.lastName || ""} ${authenticatedPatient.firstName || ""}`.trim()
+      : (inv.patientName || patientName || "Patient");
+    const pFile = authenticatedPatient ? authenticatedPatient.fileNumber : (inv.fileNumber || "");
+
+    // En-tête officiel Cabinet
+    pdf.setDrawColor(26, 58, 92);
+    pdf.setLineWidth(0.8);
+    pdf.line(15, 28, 195, 28);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text((clinicInfo.clinicName || "CABINET DE GYNECOLOGIE OBSTETRIQUE").toUpperCase(), 15, 14);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(45, 106, 159);
+    pdf.text(clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA", 15, 19);
+
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(clinicInfo.specialty || "Medecin Specialiste en Gynecologie Obstetrique - Echographie", 15, 23);
+    pdf.text(`${clinicInfo.address || "Cite 500 Logements, Es-Senia, Oran"} | Tel : ${clinicInfo.secretaryPhone || clinicInfo.phone || "0550 50 50 25"}`, 15, 27);
+
+    // Titre
+    pdf.setFillColor(245, 249, 255);
+    pdf.setDrawColor(192, 211, 232);
+    pdf.roundedRect(15, 33, 180, 11, 2, 2, "FD");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("NOTE D'HONORAIRES / FACTURE MEDICALE", 105, 40, { align: "center" });
+
+    // Bloc Informations Patient
+    pdf.setFillColor(250, 250, 250);
+    pdf.setDrawColor(220, 225, 230);
+    pdf.roundedRect(15, 48, 180, 22, 1, 1, "FD");
+
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Patient(e) :", 20, 56);
+    pdf.text("N Dossier :", 20, 63);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(`${pName.toUpperCase()}`, 55, 56);
+    pdf.text(`${pFile || "-"}`, 55, 63);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("N Facture :", 115, 56);
+    pdf.text("Date d'emission :", 115, 63);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(`${inv.invoiceNumber || "FAC-" + inv.id}`, 145, 56);
+    pdf.text(`${inv.date || new Date().toISOString().split("T")[0]}`, 145, 63);
+
+    // Prestations
+    let curY = 76;
+    pdf.setFillColor(26, 58, 92);
+    pdf.rect(15, curY, 180, 9, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("DESIGNATION DE L'ACTE MEDICAL", 20, curY + 6);
+    pdf.text("MONTANT (DA)", 190, curY + 6, { align: "right" });
+    curY += 9;
+
+    pdf.setFillColor(255, 255, 255);
+    pdf.setDrawColor(220, 225, 230);
+    pdf.rect(15, curY, 180, 16, "FD");
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(30, 30, 30);
+    const cleanDesc = (inv.actDescription || "Consultation medicale & Echographie")
+      .replace(/[\u202F\u00A0\u2007\u2009]/g, " ");
+    pdf.text(cleanDesc, 20, curY + 7);
+
+    pdf.setFont("helvetica", "bold");
+    const numAmount = Math.round(Number(inv.amount || inv.patientRemaining || 0));
+    const formattedAmount = numAmount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " DA";
+    pdf.text(formattedAmount, 190, curY + 7, { align: "right" });
+    curY += 24;
+
+    // Total
+    pdf.setFillColor(245, 249, 255);
+    pdf.setDrawColor(192, 211, 232);
+    pdf.roundedRect(110, curY, 85, 20, 1, 1, "FD");
+
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Total Honoraires :", 115, curY + 7);
+    pdf.text("Reglement :", 115, curY + 14);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.text(formattedAmount, 190, curY + 7, { align: "right" });
+    pdf.setFont("helvetica", "normal");
+    const cleanPayment = (inv.paymentMethod || "Especes").replace(/[\u202F\u00A0\u2007\u2009]/g, " ");
+    pdf.text(cleanPayment, 190, curY + 14, { align: "right" });
+
+    // Signature
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Cachet & Signature", 140, 230);
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(clinicInfo.doctorName || "Dr N. BELBACHIR", 140, 236);
+
+    return { pdf, filename: `${inv.invoiceNumber || "Facture"}_${pName.replace(/\s+/g, "_")}.pdf` };
+  };
+
+  // Prévisualisation de la facture dans la modale
+  const handleViewInvoice = (inv) => {
+    try {
+      const { pdf, filename } = createInvoicePdf(inv);
+      const blobUrl = pdf.output("bloburl");
+      setPreviewModal({
+        title: inv.invoiceNumber || "Facture Médicale",
+        url: blobUrl,
+        type: "pdf",
+        onDownload: () => pdf.save(filename),
+      });
+    } catch (err) {
+      console.error("Erreur visualisation facture :", err);
+    }
+  };
+
+  // Téléchargement de la facture en PDF
+  const handleDownloadInvoice = (inv) => {
+    try {
+      const { pdf, filename } = createInvoicePdf(inv);
+      pdf.save(filename);
+    } catch (err) {
+      console.error("Erreur generation facture PDF :", err);
+    }
+  };
+
+  // Création du PDF de document médical
+  const createDocumentPdf = (doc) => {
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pName = authenticatedPatient
+      ? `${authenticatedPatient.lastName || ""} ${authenticatedPatient.firstName || ""}`.trim()
+      : (patientName || "Patient");
+    const pFile = authenticatedPatient ? authenticatedPatient.fileNumber : "";
+
+    // En-tête officiel Cabinet
+    pdf.setDrawColor(26, 58, 92);
+    pdf.setLineWidth(0.8);
+    pdf.line(15, 28, 195, 28);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text((clinicInfo.clinicName || "CABINET DE GYNECOLOGIE OBSTETRIQUE").toUpperCase(), 15, 14);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(45, 106, 159);
+    pdf.text(clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA", 15, 19);
+
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(clinicInfo.specialty || "Medecin Specialiste en Gynecologie Obstetrique - Echographie", 15, 23);
+    pdf.text(`${clinicInfo.address || "Cite 500 Logements, Es-Senia, Oran"} | Tel : ${clinicInfo.secretaryPhone || clinicInfo.phone || "0550 50 50 25"}`, 15, 27);
+
+    // Titre
+    pdf.setFillColor(245, 249, 255);
+    pdf.setDrawColor(192, 211, 232);
+    pdf.roundedRect(15, 33, 180, 11, 2, 2, "FD");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text((doc.title || "DOCUMENT MEDICAL").toUpperCase(), 105, 40, { align: "center" });
+
+    // Bloc Informations Patient
+    pdf.setFillColor(250, 250, 250);
+    pdf.setDrawColor(220, 225, 230);
+    pdf.roundedRect(15, 48, 180, 20, 1, 1, "FD");
+
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Patient(e) :", 20, 56);
+    pdf.text("Date du document :", 20, 63);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(`${pName.toUpperCase()} ${pFile ? "(" + pFile + ")" : ""}`, 55, 56);
+    pdf.text(`${doc.date || new Date().toISOString().split("T")[0]}`, 55, 63);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Categorie :", 115, 56);
+    pdf.text("Praticien :", 115, 63);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(30, 30, 30);
+    pdf.text(`${doc.category || "Medical"}`, 145, 56);
+    pdf.text(`${doc.author || clinicInfo.doctorName || "Dr N. BELBACHIR"}`, 145, 63);
+
+    // Contenu
+    pdf.setFillColor(248, 251, 255);
+    pdf.setDrawColor(192, 211, 232);
+    pdf.roundedRect(15, 75, 180, 8, 1, 1, "FD");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("DETAILS & OBSERVATIONS DU DOCUMENT", 20, 80.5);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(30, 30, 30);
+    const content = doc.notes || doc.description || "Document medical officiel delivre par le Cabinet Medical du Dr N. BELBACHIR OULD HENNIA.";
+    const contentLines = pdf.splitTextToSize(content, 170);
+    pdf.text(contentLines, 20, 92);
+
+    // Signature
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(26, 58, 92);
+    pdf.text("Le Medecin Traitant", 140, 240);
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(clinicInfo.doctorName || "Dr N. BELBACHIR", 140, 246);
+
+    return { pdf, filename: `${(doc.title || "Document").replace(/\s+/g, "_")}_${pName.replace(/\s+/g, "_")}.pdf` };
+  };
+
+  // Prévisualisation d'un document médical dans la modale
+  const handleViewDocument = (doc) => {
+    try {
+      if (doc.fileDataUrl || doc.filePath) {
+        const fileSrc = doc.fileDataUrl || doc.filePath;
+        const isImg = (doc.fileType || "").includes("image") || fileSrc.startsWith("data:image") || /\.(jpe?g|png|webp|gif)$/i.test(fileSrc);
+        setPreviewModal({
+          title: doc.title || "Document Médical",
+          url: fileSrc,
+          type: isImg ? "image" : "pdf",
+          onDownload: () => handleDownloadDocument(doc),
+        });
+        return;
+      }
+      const { pdf, filename } = createDocumentPdf(doc);
+      const blobUrl = pdf.output("bloburl");
+      setPreviewModal({
+        title: doc.title || "Document Médical",
+        url: blobUrl,
+        type: "pdf",
+        onDownload: () => pdf.save(filename),
+      });
+    } catch (err) {
+      console.error("Erreur visualisation document :", err);
+    }
+  };
+
+  // Téléchargement d'un document médical (fichier joint ou PDF généré)
+  const handleDownloadDocument = (doc) => {
+    try {
+      if (doc.fileDataUrl || doc.filePath) {
+        const link = document.createElement("a");
+        link.href = doc.fileDataUrl || doc.filePath;
+        const ext = (doc.fileType || "").toLowerCase().includes("png")
+          ? "png"
+          : (doc.fileType || "").toLowerCase().includes("jp")
+          ? "jpg"
+          : "pdf";
+        link.download = `${(doc.title || "document").replace(/\s+/g, "_")}.${ext}`;
+        link.click();
+        return;
+      }
+
+      const { pdf, filename } = createDocumentPdf(doc);
+      pdf.save(filename);
+    } catch (err) {
+      console.error("Erreur telechargement document :", err);
+    }
+  };
+
+  const handlePatientLogin = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setAuthError("");
+    setAuthSuccess("");
+
+    const cleanInputPhone = (patientPhone || "").replace(/\D/g, "");
+    const cleanInputPwd = (patientPassword || "").trim().toLowerCase();
+
+    if (!cleanInputPhone) {
+      setAuthError("Veuillez saisir votre numéro de téléphone.");
+      return;
+    }
+    if (!cleanInputPwd) {
+      setAuthError("Veuillez saisir votre mot de passe (indiqué sur votre ticket de caisse).");
+      return;
+    }
+
+    try {
+      setAuthLoading(true);
+      const resp = await fetch(getApiUrl("patients.php"));
+      const json = await resp.json();
+      const patientsList = json && json.data ? json.data : [];
+
+      const matched = patientsList.find((p) => {
+        const pDigits = (p.phone || "").replace(/\D/g, "");
+        const pPwd = (p.password || "").trim().toLowerCase();
+        const phoneMatch =
+          pDigits === cleanInputPhone ||
+          (pDigits.length >= 8 &&
+            cleanInputPhone.length >= 8 &&
+            (pDigits.endsWith(cleanInputPhone) || cleanInputPhone.endsWith(pDigits)));
+        return phoneMatch && pPwd === cleanInputPwd;
+      });
+
+      if (matched) {
+        setAuthenticatedPatient(matched);
+        const fullName = `${matched.firstName} ${matched.lastName}`.trim();
+        setPatientName(fullName);
+        localStorage.setItem("cabinet_patient_auth", JSON.stringify(matched));
+        setAuthSuccess(`Bienvenue ${fullName} ! Vous êtes connecté(e) à votre dossier.`);
+
+        // Charger factures, ordonnances et échographies
+        loadPatientMedicalData(matched);
+
+        // Charger les rendez-vous du patient depuis MySQL
+        try {
+          const aptsResp = await fetch(getApiUrl("appointments.php"));
+          const aptsJson = await aptsResp.json();
+          if (aptsJson && aptsJson.data) {
+            const myApts = aptsJson.data.filter((a) => {
+              const aDigits = (a.phone || "").replace(/\D/g, "");
+              return (
+                (a.patientId && Number(a.patientId) === Number(matched.id)) ||
+                (aDigits && aDigits === cleanInputPhone) ||
+                (a.patientName &&
+                  matched.lastName &&
+                  a.patientName.toLowerCase().includes(matched.lastName.toLowerCase()))
+              );
+            });
+            if (myApts.length > 0) {
+              setPatientAppointments(myApts);
+              localStorage.setItem("cabinet_client_appointments", JSON.stringify(myApts));
+            }
+          }
+        } catch (err) {
+          console.warn("Erreur chargement rendez-vous :", err);
+        }
+      } else {
+        setAuthError(
+          "Numéro de téléphone ou mot de passe incorrect. Le mot de passe est inscrit sur votre ticket de caisse."
+        );
+      }
+    } catch (err) {
+      console.error("Erreur connexion patient :", err);
+      setAuthError("Impossible de contacter le serveur. Veuillez réessayer.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handlePatientLogout = () => {
+    setAuthenticatedPatient(null);
+    setPatientPassword("");
+    setAuthSuccess("");
+    setAuthError("");
+    setPatientInvoices([]);
+    setPatientPrescriptions([]);
+    setPatientEchographies([]);
+    setPatientDocuments([]);
+    localStorage.removeItem("cabinet_patient_auth");
+  };
+
+  const consultationReason = "Consultation médicale";
+  const consultationPrice = 2500;
 
   // Confirmation state
   const [confirmedBooking, setConfirmedBooking] = useState(null);
@@ -360,10 +1392,10 @@ export default function PatientPortal() {
   // Assistant IA tiroir
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiQuestion, setAiQuestion] = useState("");
-  const [aiChat, setAiChat] = useState([
+  const [aiChat, setAiChat] = useState(() => [
     {
       sender: "ai",
-      text: "Bonjour ! Je suis l'assistant médical virtuel du Dr N. BELBACHIR OULD HENNIA. Comment puis-je vous aider dans votre prise de rendez-vous aujourd'hui ?",
+      text: "Bonjour ! Je suis l'assistant médical virtuel. Comment puis-je vous aider dans votre prise de rendez-vous aujourd'hui ?",
     },
   ]);
 
@@ -386,15 +1418,16 @@ export default function PatientPortal() {
     const bookingData = {
       id: "RDV-" + Math.floor(1000 + Math.random() * 9000),
       ticketNumber: ticketNumber, // Numéro de ticket / passage journalier (ex: 1 pour 09:00, 2 pour 09:30...)
-      doctorName: "Dr. N. BELBACHIR OULD HENNIA",
-      specialty: "Gynécologie Obstétrique & Échographie",
+      doctorName: clinicInfo.doctorName || "Dr. N. BELBACHIR OULD HENNIA",
+      specialty: clinicInfo.specialty || "Gynécologie Obstétrique & Échographie",
       date: `${selectedDay} ${MONTH_NAMES[selectedMonth]} ${selectedYear}`,
       time: selectedTime,
       patientName: patientName.trim(),
       patientPhone: patientPhone.trim(),
+      consultationType: consultationReason,
       reason: consultationReason,
-      price: "2 500 DA",
-      location: "Haï Essedikia, Avenue Seghier Benali, Oran",
+      price: `${Number(consultationPrice).toLocaleString("fr-FR")} DA`,
+      location: clinicInfo.address || "Haï Essedikia, Avenue Seghier Benali, Oran",
       createdAt: new Date().toISOString(),
     };
 
@@ -412,6 +1445,8 @@ export default function PatientPortal() {
           time: selectedTime,
           duration: "30 min",
           reason: consultationReason,
+          consultationType: consultationReason,
+          price: consultationPrice,
           status: "Confirmé",
           notes: `[Ticket N° ${ticketNumber}] Réservation en ligne depuis l'application patient`,
         }),
@@ -462,17 +1497,17 @@ export default function PatientPortal() {
 
     // Réponse intelligente simulée
     setTimeout(() => {
-      let reply = "Pour préparer votre consultation avec le Dr N. BELBACHIR OULD HENNIA, veuillez apporter vos anciennes échographies, bilans sanguins récents et votre carnet de santé.";
+      let reply = `Pour préparer votre consultation avec le ${clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA"}, veuillez apporter vos anciennes échographies, bilans sanguins récents et votre carnet de santé.`;
       const lower = userText.toLowerCase();
 
       if (lower.includes("tarif") || lower.includes("prix") || lower.includes("cout")) {
-        reply = "La consultation de gynécologie avec examen clinique est fixée à 2 500 DA. L'échographie obstétricale morphologique 3D/4D est également disponible au cabinet.";
+        reply = "La consultation avec examen clinique est assurée au cabinet. Des examens et échographies spécialisées sont également réalisés.";
       } else if (lower.includes("adresse") || lower.includes("où") || lower.includes("lieu") || lower.includes("localisation")) {
-        reply = "Le cabinet est situé à Haï Essedikia, Avenue Seghier Benali, Oran. Le secrétariat est joignable au 0560 06 74 66.";
+        reply = `Le cabinet est situé à ${clinicInfo.address || "Haï Essedikia, Avenue Seghier Benali, Oran"}. Le secrétariat est joignable au ${clinicInfo.secretaryPhone || clinicInfo.phone || "0560 06 74 66"}.`;
       } else if (lower.includes("urgence") || lower.includes("douleur") || lower.includes("urgent")) {
-        reply = "En cas d'urgence obstétrique ou de saignement aigu, rendez-vous immédiatement aux urgences de la maternité la plus proche ou contactez le cabinet directement au 0560 06 74 66.";
+        reply = `En cas d'urgence médicale aiguë, contactez directement le cabinet au ${clinicInfo.secretaryPhone || clinicInfo.phone || "0560 06 74 66"} ou rendez-vous au service d'urgence le plus proche.`;
       } else if (lower.includes("grossesse") || lower.includes("echo") || lower.includes("bébé")) {
-        reply = "Le cabinet est équipé d'un appareil d'échographie haute définition avec Doppler couleur et rendu 3D/4D pour le suivi optimal de votre grossesse.";
+        reply = "Le cabinet est équipé d'un appareil d'échographie haute définition avec Doppler couleur et rendu 3D/4D pour un suivi optimal.";
       }
 
       setAiChat((prev) => [...prev, { sender: "ai", text: reply }]);
@@ -503,15 +1538,16 @@ export default function PatientPortal() {
                   margin: 0,
                 }}
               >
-                Dr. N. BELBACHIR
-                <br />
-                <span style={{ color: "var(--text-secondary)", fontWeight: "600", fontSize: "20px" }}>
-                  OULD HENNIA
-                </span>
+                {clinicInfo.doctorName || "Dr. N. BELBACHIR OULD HENNIA"}
               </h2>
               <p style={{ color: "var(--accent-mint)", fontSize: "13px", fontWeight: "600", marginTop: "6px", marginBottom: 0 }}>
-                Spécialiste Gynécologie Obstétrique & Échographie
+                {clinicInfo.specialty || "Spécialiste Gynécologie Obstétrique & Échographie"}
               </p>
+              {clinicInfo.doctorNameAr && (
+                <p style={{ color: "var(--text-secondary)", fontSize: "12px", marginTop: "3px", marginBottom: 0 }}>
+                  {clinicInfo.doctorNameAr}
+                </p>
+              )}
             </div>
 
             {/* Carte Portrait du Médecin (Cliquable pour ouvrir le calendrier de réservation) */}
@@ -531,8 +1567,8 @@ export default function PatientPortal() {
             >
               <div className="doctor-img-container">
                 <img
-                  src="/doctor.jpg"
-                  alt="Dr. N. BELBACHIR OULD HENNIA"
+                  src={clinicInfo.doctorPhoto || "/doctor.jpg"}
+                  alt={clinicInfo.doctorName || "Dr. N. BELBACHIR OULD HENNIA"}
                   className="doctor-img"
                   onError={(e) => {
                     // Fallback élégant si l'image est indisponible
@@ -555,13 +1591,10 @@ export default function PatientPortal() {
                   color: "var(--text-secondary)",
                   lineHeight: "1.65",
                   margin: 0,
+                  whiteSpace: "pre-line",
                 }}
               >
-                Cabinet médical de gynécologie obstétrique et d'échographie du Dr N. BELBACHIR OULD HENNIA, situé à Haï Essedikia (Avenue Seghier Benali) à Oran.
-                <br /><br />
-                Dédié à la santé et au bien-être de la femme, notre cabinet assure un suivi bienveillant et personnalisé de votre grossesse, de la conception jusqu'au terme. Équipée des dernières technologies d'imagerie ultrasonore avec Doppler couleur et rendu 3D/4D HD Live, la praticienne réalise vos bilans morphologiques et diagnostics prénataux avec la plus haute précision.
-                <br /><br />
-                Nous assurons également les consultations de gynécologie générale, le dépistage précoce, les bilans de fertilité et la contraception, dans un cadre serein privilégiant l'écoute attentive, le respect du secret médical et la ponctualité.
+                {clinicInfo.aboutText || "Cabinet médical de gynécologie obstétrique et d'échographie du Dr N. BELBACHIR OULD HENNIA, situé à Haï Essedikia (Avenue Seghier Benali) à Oran."}
               </p>
             </div>
 
@@ -607,7 +1640,7 @@ export default function PatientPortal() {
                     color: "var(--text-primary)",
                   }}
                 >
-                  Dr. N. BELBACHIR
+                  {clinicInfo.doctorName || "Dr. N. BELBACHIR"}
                 </span>
                 <span
                   style={{
@@ -617,7 +1650,7 @@ export default function PatientPortal() {
                     fontWeight: "600",
                   }}
                 >
-                  Gynécologie Obstétrique
+                  {clinicInfo.specialty || "Gynécologie Obstétrique"}
                 </span>
               </div>
               <div style={{ width: "40px" }} />
@@ -819,7 +1852,7 @@ export default function PatientPortal() {
                         marginLeft: "1px",
                       }}
                     >
-                      (09h - 12h30)
+                      ({clinicInfo.slotStartMorning || "09:00"} - {clinicInfo.slotEndMorning || "12:30"})
                     </span>
                   </button>
 
@@ -853,7 +1886,7 @@ export default function PatientPortal() {
                         marginLeft: "1px",
                       }}
                     >
-                      (13h - 17h30)
+                      ({clinicInfo.slotStartEvening || "13:00"} - {clinicInfo.slotEndEvening || "18:00"})
                     </span>
                   </button>
                 </div>
@@ -890,7 +1923,9 @@ export default function PatientPortal() {
                         fontWeight: "700",
                       }}
                     >
-                      {timePeriod === "matin" ? "Matinée (09:00 - 12:30)" : "Après-midi (13:00 - 17:30)"}
+                      {timePeriod === "matin"
+                        ? `Matinée (${clinicInfo.slotStartMorning || "09:00"} - ${clinicInfo.slotEndMorning || "12:30"})`
+                        : `Après-midi (${clinicInfo.slotStartEvening || "13:00"} - ${clinicInfo.slotEndEvening || "18:00"})`}
                     </span>
                   </div>
 
@@ -903,7 +1938,7 @@ export default function PatientPortal() {
                       marginBottom: "8px",
                     }}
                   >
-                    {(timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).map((slot) => {
+                    {(timePeriod === "matin" ? morningSlots : eveningSlots).map((slot) => {
                       const isPast = isSlotPast(slot, selectedDay, selectedMonth, selectedYear);
                       const isSelected = selectedTime === slot && !isPast;
 
@@ -921,7 +1956,7 @@ export default function PatientPortal() {
                   </div>
 
                   {/* Message d'alerte contextuel si tous les créneaux de la période sont passés aujourd'hui */}
-                  {isTodaySelected && (timePeriod === "matin" ? MORNING_SLOTS : EVENING_SLOTS).every((s) => isSlotPast(s, selectedDay, selectedMonth, selectedYear)) && (
+                  {isTodaySelected && (timePeriod === "matin" ? morningSlots : eveningSlots).every((s) => isSlotPast(s, selectedDay, selectedMonth, selectedYear)) && (
                     <div
                       style={{
                         padding: "9px 12px",
@@ -941,7 +1976,7 @@ export default function PatientPortal() {
                       <span>
                         ⚠️ Créneaux {timePeriod === "matin" ? "du matin" : "de l'après-midi"} passés pour aujourd'hui.
                       </span>
-                      {timePeriod === "matin" && EVENING_SLOTS.some((s) => !isSlotPast(s, selectedDay)) && (
+                      {timePeriod === "matin" && eveningSlots.some((s) => !isSlotPast(s, selectedDay)) && (
                         <button
                           type="button"
                           onClick={() => handleSwitchPeriod("soir")}
@@ -1004,7 +2039,7 @@ export default function PatientPortal() {
                 />
               </div>
 
-              <div style={{ marginBottom: "18px" }}>
+              <div style={{ marginBottom: "16px" }}>
                 <label style={{ display: "block", fontSize: "11px", color: "var(--text-secondary)", marginBottom: "4px" }}>
                   Numéro de Téléphone (Mobile) *
                 </label>
@@ -1170,7 +2205,10 @@ export default function PatientPortal() {
                   {confirmedBooking.patientName} ({confirmedBooking.patientPhone})
                 </div>
                 <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                  Motif : {confirmedBooking.reason}
+                  Consultation : <strong>{confirmedBooking.reason}</strong>
+                </div>
+                <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                  Honoraires / Tarif : <strong style={{ color: "var(--accent-mint)" }}>{confirmedBooking.price}</strong>
                 </div>
               </div>
             </div>
@@ -1217,7 +2255,7 @@ export default function PatientPortal() {
                 display: "flex",
                 alignItems: "center",
                 gap: "14px",
-                border: "1px solid rgba(187, 247, 208, 0.2)",
+                border: authenticatedPatient ? "1px solid rgba(187, 247, 208, 0.4)" : "1px solid rgba(255, 255, 255, 0.1)",
               }}
             >
               <div
@@ -1225,12 +2263,14 @@ export default function PatientPortal() {
                   width: "52px",
                   height: "52px",
                   borderRadius: "50%",
-                  background: "linear-gradient(135deg, rgba(187, 247, 208, 0.25), rgba(16, 185, 129, 0.25))",
-                  border: "2px solid var(--accent-mint)",
+                  background: authenticatedPatient
+                    ? "linear-gradient(135deg, rgba(187, 247, 208, 0.35), rgba(16, 185, 129, 0.35))"
+                    : "linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))",
+                  border: authenticatedPatient ? "2px solid var(--accent-mint)" : "1px solid rgba(255, 255, 255, 0.2)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "var(--accent-mint)",
+                  color: authenticatedPatient ? "var(--accent-mint)" : "var(--text-secondary)",
                   flexShrink: 0,
                 }}
               >
@@ -1238,153 +2278,922 @@ export default function PatientPortal() {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: "16px", fontWeight: "700", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {patientName.trim() || "Patient(e)"}
+                  {authenticatedPatient
+                    ? `${authenticatedPatient.firstName} ${authenticatedPatient.lastName}`
+                    : (patientName.trim() || "Patient(e)")}
                 </div>
+                {authenticatedPatient ? (
+                  <div style={{ fontSize: "11.5px", color: "var(--accent-mint)", marginTop: "2px" }}>
+                    Dossier : <strong>{authenticatedPatient.fileNumber}</strong> • Tél : {authenticatedPatient.phone}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "2px" }}>
+                    Connectez-vous avec votre numéro et mot de passe
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Formulaire rapide pour compléter ses coordonnées */}
-            <div className="glass-panel" style={{ padding: "16px", marginBottom: "18px" }}>
-              <div style={{ fontSize: "13px", fontWeight: "700", color: "#fff", marginBottom: "12px" }}>
-                Mes Coordonnées de Contact
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <div>
-                  <label style={{ fontSize: "11px", color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
-                    Nom & Prénom
-                  </label>
-                  <input
-                    type="text"
-                    className="glass-input"
-                    value={patientName}
-                    onChange={(e) => setPatientName(e.target.value)}
-                    style={{ padding: "10px 12px", fontSize: "13px" }}
-                  />
+            {/* Formulaire de Connexion : Numéro de Téléphone et Mot de passe */}
+            <div className="glass-panel" style={{ padding: "18px 16px", marginBottom: "18px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", display: "flex", alignItems: "center", gap: "7px" }}>
+                  <Key size={16} color="var(--accent-mint)" />
+                  <span>Mes Identifiants (Téléphone & Mot de Passe)</span>
                 </div>
-                <div>
-                  <label style={{ fontSize: "11px", color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
-                    Numéro de Téléphone
-                  </label>
-                  <input
-                    type="tel"
-                    className="glass-input"
-                    value={patientPhone}
-                    onChange={(e) => setPatientPhone(e.target.value)}
-                    style={{ padding: "10px 12px", fontSize: "13px" }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Section Rendez-vous */}
-            <div style={{ marginBottom: "14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0 }}>
-                  Mes Rendez-vous ({patientAppointments.length})
-                </h4>
-                {patientAppointments.length > 0 && (
-                  <button
-                    onClick={() => {
-                      if (window.confirm("Voulez-vous effacer l'historique local de vos rendez-vous ?")) {
-                        localStorage.removeItem("cabinet_client_appointments");
-                        setPatientAppointments([]);
-                      }
-                    }}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "rgba(239, 68, 68, 0.8)",
-                      fontSize: "11px",
-                      cursor: "pointer",
-                      padding: 0,
-                    }}
-                  >
-                    Effacer
-                  </button>
+                {authenticatedPatient && (
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent-mint)", background: "rgba(187, 247, 208, 0.15)", padding: "2px 8px", borderRadius: "12px", border: "1px solid rgba(187, 247, 208, 0.3)" }}>
+                    ✓ Connecté(e)
+                  </span>
                 )}
               </div>
 
-              {patientAppointments.length === 0 ? (
-                <div
-                  className="glass-panel"
-                  style={{
-                    padding: "24px 16px",
-                    textAlign: "center",
-                    border: "1px dashed var(--border-subtle)",
-                  }}
-                >
-                  <Calendar size={32} color="var(--text-muted)" style={{ margin: "0 auto 8px" }} />
-                  <div style={{ fontSize: "13px", fontWeight: "600", color: "#fff", marginBottom: "4px" }}>
-                    Aucun rendez-vous enregistré
+              <form onSubmit={handlePatientLogin} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div>
+                  <label style={{ fontSize: "11.5px", color: "var(--text-secondary)", display: "block", marginBottom: "5px", fontWeight: "600" }}>
+                    Numéro de Téléphone *
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="tel"
+                      className="glass-input"
+                      placeholder="Numéro de téléphone"
+                      value={patientPhone}
+                      onChange={(e) => {
+                        setPatientPhone(e.target.value);
+                        setAuthError("");
+                      }}
+                      style={{ padding: "11px 12px 11px 36px", fontSize: "13.5px" }}
+                      required
+                    />
+                    <Phone size={15} color="var(--text-muted)" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
                   </div>
-                  <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "0 0 14px" }}>
-                    Vous n'avez pas encore de consultation programmée auprès du Dr N. BELBACHIR OULD HENNIA.
-                  </p>
-                  <button
-                    className="btn-primary-mint"
-                    onClick={() => setView("schedule")}
-                    style={{ padding: "12px 18px", fontSize: "13px" }}
-                  >
-                    <Calendar size={16} />
-                    <span>Prendre un Rendez-vous</span>
-                  </button>
                 </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {patientAppointments.map((apt, index) => (
-                    <div
-                      key={apt.id || index}
-                      className="glass-panel"
+
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
+                    <label style={{ fontSize: "11.5px", color: "var(--text-secondary)", margin: 0, fontWeight: "600" }}>
+                      Mot de passe *
+                    </label>
+                    <span style={{ fontSize: "10.5px", color: "var(--accent-mint)" }}>
+                      Sur votre ticket de caisse
+                    </span>
+                  </div>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      className="glass-input"
+                      placeholder="Mot de passe"
+                      value={patientPassword}
+                      onChange={(e) => {
+                        setPatientPassword(e.target.value);
+                        setAuthError("");
+                      }}
+                      style={{ padding: "11px 40px 11px 36px", fontSize: "13.5px", letterSpacing: showPassword ? "0.5px" : "2px" }}
+                      required
+                    />
+                    <Lock size={15} color="var(--text-muted)" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
                       style={{
-                        padding: "14px",
-                        borderLeft: "3px solid var(--accent-mint)",
+                        position: "absolute",
+                        right: "10px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "transparent",
+                        border: "none",
+                        color: "var(--text-muted)",
+                        cursor: "pointer",
+                        padding: "4px",
+                      }}
+                      title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {authError && (
+                  <div style={{ fontSize: "11.5px", color: "#fca5a5", background: "rgba(239, 68, 68, 0.12)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "8px", padding: "8px 10px" }}>
+                    {authError}
+                  </div>
+                )}
+
+                {authSuccess && (
+                  <div style={{ fontSize: "11.5px", color: "var(--accent-mint)", background: "rgba(187, 247, 208, 0.12)", border: "1px solid rgba(187, 247, 208, 0.3)", borderRadius: "8px", padding: "8px 10px" }}>
+                    {authSuccess}
+                  </div>
+                )}
+
+                {!authenticatedPatient ? (
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="btn-primary-mint"
+                    style={{ padding: "12px 16px", fontSize: "13px", marginTop: "4px" }}
+                  >
+                    <LogIn size={15} />
+                    <span>{authLoading ? "Connexion en cours..." : "Se connecter & Accéder à mon dossier"}</span>
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                    <button
+                      type="submit"
+                      disabled={authLoading}
+                      className="btn-primary-mint"
+                      style={{ flex: 1, padding: "10px 14px", fontSize: "12.5px" }}
+                    >
+                      <CheckCircle2 size={15} />
+                      <span>{authLoading ? "Actualisation..." : "Actualiser mes RDV"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePatientLogout}
+                      style={{
+                        background: "rgba(239, 68, 68, 0.15)",
+                        border: "1px solid rgba(239, 68, 68, 0.35)",
+                        color: "#f87171",
+                        borderRadius: "10px",
+                        padding: "10px 14px",
+                        fontSize: "12.5px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontSize: "11px", fontWeight: "800", color: "var(--accent-mint)" }}>
-                            {apt.id || "RDV"}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              padding: "2px 8px",
-                              borderRadius: "6px",
-                              background: "rgba(187, 247, 208, 0.18)",
-                              color: "var(--accent-mint)",
-                              fontWeight: "800",
-                              border: "1px solid rgba(187, 247, 208, 0.35)",
-                            }}
-                          >
-                            Ticket #{apt.ticketNumber || getTicketNumber(apt.time)}
-                          </span>
-                        </div>
-                        <span
+                      <LogOut size={15} />
+                      <span>Déconnexion</span>
+                    </button>
+                  </div>
+                )}
+              </form>
+            </div>
+
+            {/* Conteneur Cartes Médicales & Rendez-vous (Wishlist Glass Panel) */}
+            <div
+              className="glass-panel"
+              style={{
+                padding: "8px 14px",
+                marginBottom: "20px",
+              }}
+            >
+              {/* Section Rendez-vous */}
+              <div style={{ marginBottom: openSections.appointments ? "14px" : "0px" }}>
+                <div
+                  onClick={() => toggleSection("appointments")}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: openSections.appointments ? "10px" : "0px",
+                    cursor: "pointer",
+                    userSelect: "none",
+                    padding: "8px 4px",
+                    borderRadius: "10px",
+                    transition: "background 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Calendar size={15} color="var(--accent-mint)" />
+                    <span>Mes Rendez-vous ({patientAppointments.length})</span>
+                  </h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {patientAppointments.length > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm("Voulez-vous effacer l'historique local de vos rendez-vous ?")) {
+                            localStorage.removeItem("cabinet_client_appointments");
+                            setPatientAppointments([]);
+                          }
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "rgba(239, 68, 68, 0.8)",
+                          fontSize: "11px",
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                      >
+                        Effacer
+                      </button>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "6px",
+                        background: "rgba(255, 255, 255, 0.06)",
+                        color: "var(--accent-mint)",
+                      }}
+                    >
+                      {openSections.appointments ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                    </div>
+                  </div>
+                </div>
+
+                {openSections.appointments && (
+                  patientAppointments.length === 0 ? (
+                    <div
+                      style={{
+                        padding: "20px 16px",
+                        textAlign: "center",
+                        background: "rgba(12, 22, 16, 0.5)",
+                        border: "1px dashed var(--border-subtle)",
+                        borderRadius: "14px",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <Calendar size={30} color="var(--text-muted)" style={{ margin: "0 auto 8px" }} />
+                      <div style={{ fontSize: "13px", fontWeight: "600", color: "#fff", marginBottom: "4px" }}>
+                        Aucun rendez-vous enregistré
+                      </div>
+                      <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "0 0 12px" }}>
+                        Vous n'avez pas encore de consultation programmée auprès du {clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA"}.
+                      </p>
+                      <button
+                        className="btn-primary-mint"
+                        onClick={() => setView("schedule")}
+                        style={{ padding: "10px 18px", fontSize: "12.5px", margin: "0 auto" }}
+                      >
+                        <Calendar size={15} />
+                        <span>Prendre un Rendez-vous</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "6px" }}>
+                      {patientAppointments.map((apt, index) => (
+                        <div
+                          key={apt.id || index}
                           style={{
-                            fontSize: "10.5px",
-                            padding: "3px 8px",
-                            borderRadius: "999px",
-                            background: "rgba(187, 247, 208, 0.15)",
-                            color: "var(--accent-mint)",
-                            fontWeight: "700",
+                            padding: "13px 14px",
+                            background: "rgba(12, 22, 16, 0.65)",
+                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            borderLeft: "3px solid var(--accent-mint)",
+                            borderRadius: "12px",
                           }}
                         >
-                          Confirmé
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "var(--text-secondary)" }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <Calendar size={13} color="var(--accent-mint)" />
-                          {apt.date}
-                        </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <Clock size={13} color="var(--accent-mint)" />
-                          {apt.time}
-                        </span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontSize: "11px", fontWeight: "800", color: "var(--accent-mint)" }}>
+                                {apt.id || "RDV"}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  padding: "2px 8px",
+                                  borderRadius: "6px",
+                                  background: "rgba(187, 247, 208, 0.18)",
+                                  color: "var(--accent-mint)",
+                                  fontWeight: "800",
+                                  border: "1px solid rgba(187, 247, 208, 0.35)",
+                                }}
+                              >
+                                Ticket #{apt.ticketNumber || getTicketNumber(apt.time)}
+                              </span>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "10.5px",
+                                padding: "3px 8px",
+                                borderRadius: "999px",
+                                background: "rgba(187, 247, 208, 0.15)",
+                                color: "var(--accent-mint)",
+                                fontWeight: "700",
+                              }}
+                            >
+                              Confirmé
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "var(--text-secondary)" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                              <Calendar size={13} color="var(--accent-mint)" />
+                              {apt.date}
+                            </span>
+                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                              <Clock size={13} color="var(--accent-mint)" />
+                              {apt.time}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
+              </div>
+
+              {/* Sections Médicales : Factures, Ordonnances, Échographies, Documents */}
+              {authenticatedPatient && (
+                <>
+                  <div style={{ height: "1px", background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+
+                  {/* Section Factures */}
+                  <div style={{ marginBottom: openSections.invoices ? "14px" : "0px" }}>
+                    <div
+                      onClick={() => toggleSection("invoices")}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: openSections.invoices ? "10px" : "0px",
+                        cursor: "pointer",
+                        userSelect: "none",
+                        padding: "8px 4px",
+                        borderRadius: "10px",
+                        transition: "background 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                        <Receipt size={15} color="var(--accent-mint)" />
+                        <span>Mes Factures ({patientInvoices.length})</span>
+                      </h4>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "24px",
+                          height: "24px",
+                          borderRadius: "6px",
+                          background: "rgba(255, 255, 255, 0.06)",
+                          color: "var(--accent-mint)",
+                        }}
+                      >
+                        {openSections.invoices ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                       </div>
                     </div>
-                  ))}
-                </div>
+
+                    {openSections.invoices && (
+                      patientInvoices.length === 0 ? (
+                        <div
+                          style={{
+                            padding: "18px 16px",
+                            textAlign: "center",
+                            background: "rgba(12, 22, 16, 0.5)",
+                            border: "1px dashed var(--border-subtle)",
+                            borderRadius: "14px",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          <Receipt size={26} color="var(--text-muted)" style={{ margin: "0 auto 8px" }} />
+                          <div style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>
+                            Aucune facture enregistrée
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "6px" }}>
+                          {patientInvoices.map((inv, index) => (
+                            <div
+                              key={inv.id || index}
+                              style={{
+                                padding: "13px 14px",
+                                background: "rgba(12, 22, 16, 0.65)",
+                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                borderLeft: "3px solid var(--accent-mint)",
+                                borderRadius: "12px",
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                                <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", lineHeight: "1.35", wordBreak: "break-word" }}>
+                                    {inv.invoiceNumber || `FAC-${inv.id}`}
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 8px", fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}>
+                                      <Calendar size={13} color="var(--accent-mint)" />
+                                      <span>{inv.date}</span>
+                                    </span>
+                                    <span style={{ opacity: 0.4 }}>•</span>
+                                    <span style={{ color: "var(--accent-mint)", fontWeight: "700", whiteSpace: "nowrap" }}>
+                                      {Number(inv.amount || inv.patientRemaining || 0).toLocaleString("fr-FR")} DA
+                                    </span>
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, marginLeft: "auto" }}>
+                                  <button
+                                    onClick={() => handleViewInvoice(inv)}
+                                    style={{
+                                      background: "rgba(255, 255, 255, 0.08)",
+                                      color: "var(--text-primary)",
+                                      border: "1px solid rgba(255, 255, 255, 0.16)",
+                                      borderRadius: "8px",
+                                      padding: "7px 11px",
+                                      fontSize: "11.5px",
+                                      fontWeight: "700",
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      whiteSpace: "nowrap",
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = "rgba(187, 247, 208, 0.15)";
+                                      e.currentTarget.style.borderColor = "var(--accent-mint)";
+                                      e.currentTarget.style.color = "var(--accent-mint)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
+                                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
+                                      e.currentTarget.style.color = "var(--text-primary)";
+                                    }}
+                                    title="Visualiser la facture"
+                                  >
+                                    <Eye size={13} />
+                                    <span>Voir</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownloadInvoice(inv)}
+                                    style={{
+                                      background: "var(--accent-mint)",
+                                      color: "var(--accent-mint-dark)",
+                                      border: "none",
+                                      borderRadius: "8px",
+                                      padding: "7px 11px",
+                                      fontSize: "11.5px",
+                                      fontWeight: "700",
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      whiteSpace: "nowrap",
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    title="Télécharger la facture"
+                                  >
+                                    <Download size={13} />
+                                    <span>Télécharger</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  <div style={{ height: "1px", background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+
+                  {/* Section Ordonnances */}
+                  <div style={{ marginBottom: openSections.prescriptions ? "14px" : "0px" }}>
+                    <div
+                      onClick={() => toggleSection("prescriptions")}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: openSections.prescriptions ? "10px" : "0px",
+                        cursor: "pointer",
+                        userSelect: "none",
+                        padding: "8px 4px",
+                        borderRadius: "10px",
+                        transition: "background 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                        <FileText size={15} color="var(--accent-mint)" />
+                        <span>Mes Ordonnances ({patientPrescriptions.length})</span>
+                      </h4>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "24px",
+                          height: "24px",
+                          borderRadius: "6px",
+                          background: "rgba(255, 255, 255, 0.06)",
+                          color: "var(--accent-mint)",
+                        }}
+                      >
+                        {openSections.prescriptions ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                      </div>
+                    </div>
+
+                    {openSections.prescriptions && (
+                      patientPrescriptions.length === 0 ? (
+                        <div
+                          style={{
+                            padding: "18px 16px",
+                            textAlign: "center",
+                            background: "rgba(12, 22, 16, 0.5)",
+                            border: "1px dashed var(--border-subtle)",
+                            borderRadius: "14px",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          <FileText size={26} color="var(--text-muted)" style={{ margin: "0 auto 8px" }} />
+                          <div style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>
+                            Aucune ordonnance enregistrée
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "6px" }}>
+                          {patientPrescriptions.map((presc, index) => (
+                            <div
+                              key={presc.id || index}
+                              style={{
+                                padding: "13px 14px",
+                                background: "rgba(12, 22, 16, 0.65)",
+                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                borderLeft: "3px solid var(--accent-mint)",
+                                borderRadius: "12px",
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                                <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", lineHeight: "1.35", wordBreak: "break-word" }}>
+                                    {presc.prescriptionNumber || `ORD-${presc.id}`}
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 8px", fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}>
+                                      <Calendar size={13} color="var(--accent-mint)" />
+                                      <span>{presc.date}</span>
+                                    </span>
+                                    <span style={{ opacity: 0.4 }}>•</span>
+                                    <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                      {presc.doctorName || clinicInfo.doctorName || "Dr N. BELBACHIR"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, marginLeft: "auto" }}>
+                                  <button
+                                    onClick={() => handleViewPrescription(presc)}
+                                    style={{
+                                      background: "rgba(255, 255, 255, 0.08)",
+                                      color: "var(--text-primary)",
+                                      border: "1px solid rgba(255, 255, 255, 0.16)",
+                                      borderRadius: "8px",
+                                      padding: "7px 11px",
+                                      fontSize: "11.5px",
+                                      fontWeight: "700",
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      whiteSpace: "nowrap",
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = "rgba(187, 247, 208, 0.15)";
+                                      e.currentTarget.style.borderColor = "var(--accent-mint)";
+                                      e.currentTarget.style.color = "var(--accent-mint)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
+                                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
+                                      e.currentTarget.style.color = "var(--text-primary)";
+                                    }}
+                                    title="Visualiser l'ordonnance"
+                                  >
+                                    <Eye size={13} />
+                                    <span>Voir</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownloadPrescription(presc)}
+                                    style={{
+                                      background: "var(--accent-mint)",
+                                      color: "var(--accent-mint-dark)",
+                                      border: "none",
+                                      borderRadius: "8px",
+                                      padding: "7px 11px",
+                                      fontSize: "11.5px",
+                                      fontWeight: "700",
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      whiteSpace: "nowrap",
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    title="Télécharger l'ordonnance"
+                                  >
+                                    <Download size={13} />
+                                    <span>Télécharger</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  <div style={{ height: "1px", background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+
+                  {/* Section Échographies */}
+                  <div style={{ marginBottom: openSections.echographies ? "14px" : "0px" }}>
+                    <div
+                      onClick={() => toggleSection("echographies")}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: openSections.echographies ? "10px" : "0px",
+                        cursor: "pointer",
+                        userSelect: "none",
+                        padding: "8px 4px",
+                        borderRadius: "10px",
+                        transition: "background 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                        <Activity size={15} color="var(--accent-mint)" />
+                        <span>Mes Échographies ({patientEchographies.length})</span>
+                      </h4>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "24px",
+                          height: "24px",
+                          borderRadius: "6px",
+                          background: "rgba(255, 255, 255, 0.06)",
+                          color: "var(--accent-mint)",
+                        }}
+                      >
+                        {openSections.echographies ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                      </div>
+                    </div>
+
+                    {openSections.echographies && (
+                      patientEchographies.length === 0 ? (
+                        <div
+                          style={{
+                            padding: "18px 16px",
+                            textAlign: "center",
+                            background: "rgba(12, 22, 16, 0.5)",
+                            border: "1px dashed var(--border-subtle)",
+                            borderRadius: "14px",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          <Activity size={26} color="var(--text-muted)" style={{ margin: "0 auto 8px" }} />
+                          <div style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>
+                            Aucune échographie enregistrée
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "6px" }}>
+                          {patientEchographies.map((echo, index) => (
+                            <div
+                              key={echo.id || index}
+                              style={{
+                                padding: "13px 14px",
+                                background: "rgba(12, 22, 16, 0.65)",
+                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                borderLeft: "3px solid var(--accent-mint)",
+                                borderRadius: "12px",
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                                <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", lineHeight: "1.35", wordBreak: "break-word" }}>
+                                    {echo.title || echo.echoType || "Compte-rendu d'échographie"}
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 8px", fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}>
+                                      <Calendar size={13} color="var(--accent-mint)" />
+                                      <span>{echo.date}</span>
+                                    </span>
+                                    <span style={{ opacity: 0.4 }}>•</span>
+                                    <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                      {echo.author || echo.doctorName || clinicInfo.doctorName || "Dr N. BELBACHIR"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, marginLeft: "auto" }}>
+                                  <button
+                                    onClick={() => handleViewEchography(echo)}
+                                    style={{
+                                      background: "rgba(255, 255, 255, 0.08)",
+                                      color: "var(--text-primary)",
+                                      border: "1px solid rgba(255, 255, 255, 0.16)",
+                                      borderRadius: "8px",
+                                      padding: "7px 11px",
+                                      fontSize: "11.5px",
+                                      fontWeight: "700",
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      whiteSpace: "nowrap",
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = "rgba(187, 247, 208, 0.15)";
+                                      e.currentTarget.style.borderColor = "var(--accent-mint)";
+                                      e.currentTarget.style.color = "var(--accent-mint)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
+                                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
+                                      e.currentTarget.style.color = "var(--text-primary)";
+                                    }}
+                                    title="Visualiser le compte-rendu d'échographie"
+                                  >
+                                    <Eye size={13} />
+                                    <span>Voir</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownloadEchography(echo)}
+                                    style={{
+                                      background: "var(--accent-mint)",
+                                      color: "var(--accent-mint-dark)",
+                                      border: "none",
+                                      borderRadius: "8px",
+                                      padding: "7px 11px",
+                                      fontSize: "11.5px",
+                                      fontWeight: "700",
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      whiteSpace: "nowrap",
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    title="Télécharger le compte-rendu d'échographie"
+                                  >
+                                    <Download size={13} />
+                                    <span>Télécharger</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  <div style={{ height: "1px", background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+
+                  {/* Section Documents Médicaux */}
+                  <div style={{ marginBottom: openSections.documents ? "14px" : "0px" }}>
+                    <div
+                      onClick={() => toggleSection("documents")}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: openSections.documents ? "10px" : "0px",
+                        cursor: "pointer",
+                        userSelect: "none",
+                        padding: "8px 4px",
+                        borderRadius: "10px",
+                        transition: "background 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                        <Folder size={15} color="var(--accent-mint)" />
+                        <span>Mes Documents ({patientDocuments.length})</span>
+                      </h4>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "24px",
+                          height: "24px",
+                          borderRadius: "6px",
+                          background: "rgba(255, 255, 255, 0.06)",
+                          color: "var(--accent-mint)",
+                        }}
+                      >
+                        {openSections.documents ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                      </div>
+                    </div>
+
+                    {openSections.documents && (
+                      patientDocuments.length === 0 ? (
+                        <div
+                          style={{
+                            padding: "18px 16px",
+                            textAlign: "center",
+                            background: "rgba(12, 22, 16, 0.5)",
+                            border: "1px dashed var(--border-subtle)",
+                            borderRadius: "14px",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          <Folder size={26} color="var(--text-muted)" style={{ margin: "0 auto 8px" }} />
+                          <div style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>
+                            Aucun document enregistré
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "6px" }}>
+                          {patientDocuments.map((doc, index) => (
+                            <div
+                              key={doc.id || index}
+                              style={{
+                                padding: "13px 14px",
+                                background: "rgba(12, 22, 16, 0.65)",
+                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                borderLeft: "3px solid var(--accent-mint)",
+                                borderRadius: "12px",
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                                <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", lineHeight: "1.35", wordBreak: "break-word" }}>
+                                    {doc.title || "Document Médical"}
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 8px", fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}>
+                                      <Calendar size={13} color="var(--accent-mint)" />
+                                      <span>{doc.date || new Date().toISOString().split("T")[0]}</span>
+                                    </span>
+                                    <span style={{ opacity: 0.4 }}>•</span>
+                                    <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                      {doc.category || doc.author || clinicInfo.doctorName || "Dr N. BELBACHIR"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, marginLeft: "auto" }}>
+                                  <button
+                                    onClick={() => handleViewDocument(doc)}
+                                    style={{
+                                      background: "rgba(255, 255, 255, 0.08)",
+                                      color: "var(--text-primary)",
+                                      border: "1px solid rgba(255, 255, 255, 0.16)",
+                                      borderRadius: "8px",
+                                      padding: "7px 11px",
+                                      fontSize: "11.5px",
+                                      fontWeight: "700",
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      whiteSpace: "nowrap",
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = "rgba(187, 247, 208, 0.15)";
+                                      e.currentTarget.style.borderColor = "var(--accent-mint)";
+                                      e.currentTarget.style.color = "var(--accent-mint)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
+                                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
+                                      e.currentTarget.style.color = "var(--text-primary)";
+                                    }}
+                                    title="Visualiser le document"
+                                  >
+                                    <Eye size={13} />
+                                    <span>Voir</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownloadDocument(doc)}
+                                    style={{
+                                      background: "var(--accent-mint)",
+                                      color: "var(--accent-mint-dark)",
+                                      border: "none",
+                                      borderRadius: "8px",
+                                      padding: "7px 11px",
+                                      fontSize: "11.5px",
+                                      fontWeight: "700",
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      whiteSpace: "nowrap",
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    title="Télécharger le document"
+                                  >
+                                    <Download size={13} />
+                                    <span>Télécharger</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -1409,7 +3218,7 @@ export default function PatientPortal() {
                 À Propos du Cabinet
               </h2>
               <p style={{ color: "var(--accent-mint)", fontSize: "12.5px", fontWeight: "600", marginTop: "4px" }}>
-                Dr. N. BELBACHIR OULD HENNIA
+                {clinicInfo.doctorName || "Dr. N. BELBACHIR OULD HENNIA"}
               </p>
             </div>
 
@@ -1417,8 +3226,8 @@ export default function PatientPortal() {
             <div className="glass-panel" style={{ padding: "16px", marginBottom: "16px" }}>
               <div style={{ display: "flex", gap: "14px", alignItems: "center", marginBottom: "12px" }}>
                 <img
-                  src="/doctor.jpg"
-                  alt="Dr. N. BELBACHIR OULD HENNIA"
+                  src={clinicInfo.doctorPhoto || "/doctor.jpg"}
+                  alt={clinicInfo.doctorName || "Dr. N. BELBACHIR OULD HENNIA"}
                   style={{
                     width: "58px",
                     height: "58px",
@@ -1433,22 +3242,24 @@ export default function PatientPortal() {
                 />
                 <div>
                   <h4 style={{ fontSize: "15px", fontWeight: "800", color: "#fff", margin: 0 }}>
-                    Dr. N. BELBACHIR OULD HENNIA
+                    {clinicInfo.doctorName || "Dr. N. BELBACHIR OULD HENNIA"}
                   </h4>
                   <div style={{ fontSize: "12px", color: "var(--accent-mint)", fontWeight: "600", marginTop: "2px" }}>
-                    Spécialiste Gynécologie Obstétrique & Échographie
+                    {clinicInfo.specialty || "Spécialiste Gynécologie Obstétrique & Échographie"}
                   </div>
-                  <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                    الدكتورة ن. بلبشير ولد هنية • طبيبة مختصة
-                  </div>
+                  {clinicInfo.doctorNameAr && (
+                    <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                      {clinicInfo.doctorNameAr}
+                    </div>
+                  )}
                 </div>
               </div>
-              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.55", margin: 0 }}>
-                Cabinet médical moderne dédié à la santé féminine, au suivi complet de la grossesse, au diagnostic prénatal et aux échographies obstétricales et pelviennes de haute précision.
+              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.55", margin: 0, whiteSpace: "pre-line" }}>
+                {clinicInfo.aboutSummary || "Cabinet médical moderne dédié à la santé féminine, au suivi complet de la grossesse, au diagnostic prénatal et aux échographies obstétricales et pelviennes de haute précision."}
               </p>
             </div>
 
-            {/* Horaires d'Ouverture (09:00 jusqu'à 18:00) */}
+            {/* Horaires d'Ouverture */}
             <div className="glass-panel" style={{ padding: "16px", marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1467,18 +3278,28 @@ export default function PatientPortal() {
                     fontWeight: "700",
                   }}
                 >
-                  09:00 — 18:00
+                  {clinicInfo.slotStartMorning && clinicInfo.slotEndEvening
+                    ? `${clinicInfo.slotStartMorning} — ${clinicInfo.slotEndEvening}`
+                    : "09:00 — 18:00"}
                 </span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12.5px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-secondary)" }}>
-                  <span>Samedi — Jeudi</span>
-                  <span style={{ fontWeight: "700", color: "#fff" }}>09:00 — 18:00</span>
+                  <span>{clinicInfo.hours ? (clinicInfo.hours.includes(":") ? clinicInfo.hours.split(":")[0] : clinicInfo.hours) : "Samedi — Jeudi"}</span>
+                  <span style={{ fontWeight: "700", color: "#fff" }}>
+                    {clinicInfo.slotStartMorning && clinicInfo.slotEndEvening
+                      ? `${clinicInfo.slotStartMorning} — ${clinicInfo.slotEndEvening}`
+                      : "09:00 — 18:00"}
+                  </span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-muted)" }}>
-                  <span>Vendredi</span>
-                  <span style={{ color: "rgba(239, 68, 68, 0.85)", fontWeight: "600" }}>Fermé</span>
-                </div>
+                {clinicInfo.closedDays && (
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-muted)" }}>
+                    <span>{clinicInfo.closedDays.includes(":") ? clinicInfo.closedDays.split(":")[0] : clinicInfo.closedDays}</span>
+                    <span style={{ color: "rgba(239, 68, 68, 0.85)", fontWeight: "600" }}>
+                      {clinicInfo.closedDays.includes(":") ? clinicInfo.closedDays.split(":")[1].trim() : "Fermé"}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1490,17 +3311,14 @@ export default function PatientPortal() {
                   Adresse & Contact
                 </span>
               </div>
-              <div style={{ fontSize: "13px", color: "#ffffff", fontWeight: "700", lineHeight: "1.4", marginBottom: "3px" }}>
-                Haï Essedikia
-              </div>
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.5", marginBottom: "14px" }}>
-                Avenue Seghier Benali, Oran
+              <div style={{ fontSize: "13px", color: "#ffffff", fontWeight: "700", lineHeight: "1.4", marginBottom: "14px", whiteSpace: "pre-line" }}>
+                {clinicInfo.address || "Haï Essedikia (Avenue Seghier Benali), Oran"}
               </div>
 
               {/* Bouton d'appel direct */}
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <a
-                  href="tel:0560067466"
+                  href={`tel:${(clinicInfo.secretaryPhone || clinicInfo.phone || "0560067466").replace(/\s+/g, "")}`}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1520,7 +3338,9 @@ export default function PatientPortal() {
                     <Phone size={16} />
                     <span>Secrétariat & Rendez-vous</span>
                   </span>
-                  <span style={{ color: "#fff", letterSpacing: "0.5px" }}>0560 06 74 66</span>
+                  <span style={{ color: "#fff", letterSpacing: "0.5px" }}>
+                    {clinicInfo.secretaryPhone || clinicInfo.phone || "0560 06 74 66"}
+                  </span>
                 </a>
               </div>
             </div>
@@ -1535,7 +3355,7 @@ export default function PatientPortal() {
                   </span>
                 </div>
                 <a
-                  href="https://maps.google.com/?q=Gynecologue+Belbachir+Ouldhennia!5e0"
+                  href={clinicInfo.mapsUrl || "https://maps.google.com/?q=Gynecologue+Belbachir+Ouldhennia!5e0"}
                   target="_blank"
                   rel="noreferrer"
                   style={{
@@ -1566,8 +3386,8 @@ export default function PatientPortal() {
                 }}
               >
                 <iframe
-                  title="Localisation Cabinet Gynecologue Belbachir Ouldhennia"
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1362.0324598325215!2d-0.6038324575020871!3d35.714476270634655!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd7e88208f3036ef%3A0xe61f6a97eabb0912!2sGynecologue%20Belbachir%20Ouldhennia!5e0!3m2!1sfr!2sdz!4v1792679429928!5m2!1sfr!2sdz"
+                  title={`Localisation ${clinicInfo.clinicName || "Cabinet Médical"}`}
+                  src={clinicInfo.mapsIframe || "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1362.0324598325215!2d-0.6038324575020871!3d35.714476270634655!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd7e88208f3036ef%3A0xe61f6a97eabb0912!2sGynecologue%20Belbachir%20Ouldhennia!5e0!3m2!1sfr!2sdz!4v1792679429928!5m2!1sfr!2sdz"}
                   width="100%"
                   height="100%"
                   style={{ border: 0, display: "block" }}
@@ -1578,7 +3398,7 @@ export default function PatientPortal() {
               </div>
 
               <div style={{ marginTop: "10px", fontSize: "11.5px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px" }}>
-                <span>📍 Gynecologue Belbachir Ouldhennia — Oran</span>
+                <span>📍 {clinicInfo.clinicName || "Cabinet Médical"} — {clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA"}</span>
               </div>
             </div>
 
@@ -1716,7 +3536,7 @@ export default function PatientPortal() {
                   Assistant Médical IA
                 </h5>
                 <span style={{ fontSize: "10px", color: "var(--accent-mint)" }}>
-                  Dr N. BELBACHIR OULD HENNIA
+                  {clinicInfo.doctorName || "Dr N. BELBACHIR OULD HENNIA"}
                 </span>
               </div>
             </div>
@@ -1809,6 +3629,175 @@ export default function PatientPortal() {
               <Send size={18} />
             </button>
           </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modale de prévisualisation des documents médicaux */}
+      {previewModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.82)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            zIndex: 10000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+          onClick={() => setPreviewModal(null)}
+        >
+          <div
+            className="glass-panel"
+            style={{
+              width: "100%",
+              maxWidth: "850px",
+              height: "90vh",
+              maxHeight: "92vh",
+              display: "flex",
+              flexDirection: "column",
+              background: "#0c1711",
+              border: "1px solid var(--border-glow)",
+              borderRadius: "20px",
+              overflow: "hidden",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.85)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Modal */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "14px 18px",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                background: "rgba(18, 30, 22, 0.75)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    background: "rgba(187, 247, 208, 0.15)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--accent-mint)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Eye size={16} />
+                </div>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "14.5px",
+                    fontWeight: "700",
+                    color: "#fff",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {previewModal.title || "Aperçu du document"}
+                </h3>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                {previewModal.url && (
+                  <a
+                    href={previewModal.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.08)",
+                      color: "var(--text-primary)",
+                      padding: "7px 12px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      textDecoration: "none",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                    }}
+                    title="Ouvrir en plein écran dans un nouvel onglet"
+                  >
+                    <span>Plein écran</span>
+                  </a>
+                )}
+                {previewModal.onDownload && (
+                  <button
+                    onClick={previewModal.onDownload}
+                    style={{
+                      background: "var(--accent-mint)",
+                      color: "var(--accent-mint-dark)",
+                      border: "none",
+                      padding: "7px 12px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                    title="Télécharger"
+                  >
+                    <Download size={13} />
+                    <span>Télécharger</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setPreviewModal(null)}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.08)",
+                    border: "none",
+                    color: "#fff",
+                    borderRadius: "8px",
+                    width: "32px",
+                    height: "32px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                  }}
+                  title="Fermer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body Modal Preview */}
+            <div style={{ flex: 1, padding: "12px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0, background: "#08100b" }}>
+              {previewModal.type === "image" ? (
+                <img
+                  src={previewModal.url}
+                  alt={previewModal.title}
+                  style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: "8px" }}
+                />
+              ) : (
+                <iframe
+                  src={previewModal.url}
+                  title={previewModal.title}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                    borderRadius: "10px",
+                    background: "#fff",
+                  }}
+                />
+              )}
+            </div>
           </div>
         </div>
       )}

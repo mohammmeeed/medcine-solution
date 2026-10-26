@@ -46,6 +46,7 @@ const Header = ({ onNote }) => {
       "staff": "Personnel & Droits",
       "clinic": "Mon Cabinet",
       "settings": "Paramètres",
+      "smtp": "Configuration SMTP",
       "support": "Aide & Support",
       "profile": "Profil Praticien",
     };

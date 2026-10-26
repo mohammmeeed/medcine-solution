@@ -32,6 +32,18 @@
   --radius-full: 9999px;
 }
 
+/* Assurer un défilement fluide sans blocage */
+html, body {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow-y: auto !important;
+}
+
+#root {
+  min-height: 100%;
+  height: auto;
+}
+
 .patient-portal-page {
   font-family: var(--font-family);
   background-color: #0b140f;
@@ -42,8 +54,13 @@
   background-attachment: fixed;
   color: var(--text-primary);
   min-height: 100vh;
+  min-height: 100dvh;
+  height: auto;
   width: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
   padding: 0;
   margin: 0;
 }
@@ -68,6 +85,8 @@
 .app-device-wrapper {
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
+  height: auto;
   background: transparent;
   border-radius: 0;
   border: none;
@@ -85,7 +104,7 @@
   max-width: 640px;
   margin: 0 auto;
   overflow-y: visible;
-  padding: 28px 20px 120px;
+  padding: 28px 20px 160px;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -94,7 +113,7 @@
 @media (min-width: 768px) {
   .screen-scroll {
     max-width: 700px;
-    padding: 38px 24px 130px;
+    padding: 38px 24px 170px;
   }
 }
 

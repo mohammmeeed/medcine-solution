@@ -91,6 +91,8 @@ function handleGetAppointments($db) {
                 "time" => $timeShort,
                 "duration" => $r['duration'],
                 "reason" => $r['reason'],
+                "consultationType" => $r['consultation_type'] ?? 'Consultation générale',
+                "price" => isset($r['price']) ? (float)$r['price'] : 2500.0,
                 "status" => $r['status'],
                 "notes" => $r['notes']
             ];
@@ -130,13 +132,12 @@ function handleCreateAppointment($db) {
             }
         }
 
-        // RÈGLE : Lors d'une réservation (en ligne ou sans dossier patient),
-        // ON N'AJOUTE PAS le patient dans la table `patients`.
-        // Le rendez-vous est enregistré avec son nom et son téléphone, et patient_id reste NULL.
-        // Seul l'administrateur/médecin pourra créer manuellement le dossier patient dans `patients`.
+        $consultationType = $body['consultationType'] ?? ($body['consultation_type'] ?? ($body['reason'] ?? 'Consultation générale'));
+        $price = isset($body['price']) ? (float)$body['price'] : 2500.0;
+        $reason = $body['reason'] ?? $consultationType;
 
-        $sql = "INSERT INTO appointments (patient_id, patient_name, patient_phone, doctor_id, appointment_date, appointment_time, duration, reason, status, notes)
-                VALUES (:pid, :pname, :pphone, 1, :adate, :atime, :dur, :reason, :status, :notes)";
+        $sql = "INSERT INTO appointments (patient_id, patient_name, patient_phone, doctor_id, appointment_date, appointment_time, duration, reason, consultation_type, price, status, notes)
+                VALUES (:pid, :pname, :pphone, 1, :adate, :atime, :dur, :reason, :ctype, :price, :status, :notes)";
         $stmt = $db->prepare($sql);
         $stmt->execute([
             ':pid' => $patientId,
@@ -145,7 +146,9 @@ function handleCreateAppointment($db) {
             ':adate' => $date,
             ':atime' => strlen($time) === 5 ? ($time . ":00") : $time,
             ':dur' => $body['duration'] ?? '20 min',
-            ':reason' => $body['reason'] ?? 'Consultation générale',
+            ':reason' => $reason,
+            ':ctype' => $consultationType,
+            ':price' => $price,
             ':status' => $body['status'] ?? 'Confirmé',
             ':notes' => $body['notes'] ?? null
         ]);
@@ -215,6 +218,14 @@ function handleUpdateAppointment($db) {
         if (isset($body['reason'])) {
             $fields[] = "reason = :reason";
             $params[':reason'] = $body['reason'];
+        }
+        if (isset($body['consultationType']) || isset($body['consultation_type'])) {
+            $fields[] = "consultation_type = :ctype";
+            $params[':ctype'] = $body['consultationType'] ?? $body['consultation_type'];
+        }
+        if (isset($body['price'])) {
+            $fields[] = "price = :price";
+            $params[':price'] = (float)$body['price'];
         }
         if (isset($body['notes'])) {
             $fields[] = "notes = :notes";

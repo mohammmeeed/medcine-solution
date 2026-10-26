@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Button } from "react-bootstrap";
+import { Button, Modal } from "react-bootstrap";
 import Select from "react-select";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
@@ -16,10 +16,55 @@ import {
   initialMedications,
 } from "../../../services/CabinetData";
 
+const defaultConsultationTypesList = [
+  { id: 1, name: "Consultation de médecine générale", duration: "20 min", price: 2500, active: true },
+  { id: 2, name: "Consultation gynécologique / spécialisée", duration: "25 min", price: 3000, active: true },
+  { id: 3, name: "Suivi de grossesse / Maternité", duration: "20 min", price: 2500, active: true },
+  { id: 4, name: "Échographie obstétricale (T1 / T2 / T3)", duration: "30 min", price: 4000, active: true },
+  { id: 5, name: "Échographie pelvienne / gynécologique", duration: "25 min", price: 3500, active: true },
+  { id: 6, name: "Consultation avec frottis / acte", duration: "30 min", price: 3500, active: true },
+  { id: 7, name: "Visite de contrôle / Bilan", duration: "15 min", price: 1500, active: true },
+];
+
+const formatBillingCode = (name, price) => {
+  const p = Number(price) || 0;
+  return `${name} (${p.toLocaleString("fr-FR")} DA)`;
+};
+
+const getInitialCabinetSettings = () => {
+  try {
+    const raw = localStorage.getItem("cabinet_settings");
+    if (raw) {
+      const s = JSON.parse(raw);
+      const types = Array.isArray(s.consultationTypes) && s.consultationTypes.length > 0
+        ? s.consultationTypes
+        : defaultConsultationTypesList;
+      const defName = s.defaultConsultationType || types[0]?.name || "Consultation de médecine générale";
+      const matched = types.find((t) => t.name === defName);
+      const defPrice = matched ? matched.price : (s.consultationPrice !== undefined ? s.consultationPrice : 2500);
+      return {
+        types,
+        defaultBillingCode: formatBillingCode(defName, defPrice),
+        defaultReason: defName,
+      };
+    }
+  } catch (_) {}
+  return {
+    types: defaultConsultationTypesList,
+    defaultBillingCode: formatBillingCode("Consultation gynécologique / spécialisée", 3000),
+    defaultReason: "Consultation gynécologique / spécialisée",
+  };
+};
+
 const ConsultationsPage = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const patientIdQuery = searchParams.get("patientId");
+
+  const [initialSettingsInfo] = useState(() => getInitialCabinetSettings());
+  const [consultationTypes, setConsultationTypes] = useState(initialSettingsInfo.types);
+  const [defaultBillingCode, setDefaultBillingCode] = useState(initialSettingsInfo.defaultBillingCode);
+  const [defaultReason, setDefaultReason] = useState(initialSettingsInfo.defaultReason);
 
   const [consultations, setConsultations] = useState(initialConsultations);
   const [patients, setPatients] = useState([]);
@@ -33,13 +78,63 @@ const ConsultationsPage = () => {
   const [previewEchoReport, setPreviewEchoReport] = useState(null);
   const [selectedConsultation, setSelectedConsultation] = useState(null);
 
+  // Gestion des documents et pièces jointes rattachés au dossier médical de la consultation
+  const [attachedFiles, setAttachedFiles] = useState([]);
+  const [previewingDoc, setPreviewingDoc] = useState(null);
+  const consultFileInputRef = useRef(null);
+
+  const handleConsultFileUpload = (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      let sizeStr = "";
+      if (file.size < 1024 * 1024) {
+        sizeStr = `${Math.round(file.size / 1024)} Ko`;
+      } else {
+        sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} Mo`;
+      }
+
+      const ext = file.name.split(".").pop()?.toUpperCase() || "DOC";
+      let category = "Imagerie & Radiologie";
+      if (["PDF", "DOC", "DOCX"].includes(ext)) {
+        category = "Compte-Rendu & Analyse";
+      } else if (["JPG", "JPEG", "PNG", "WEBP", "DICOM"].includes(ext)) {
+        category = "Imagerie Médicale & Écho";
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setAttachedFiles((prev) => [
+          ...prev,
+          {
+            name: file.name,
+            size: sizeStr,
+            extension: ext,
+            type: file.type || "application/octet-stream",
+            dataUrl: event.target.result,
+            category: category,
+          },
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (consultFileInputRef.current) consultFileInputRef.current.value = "";
+  };
+
+  const handleRemoveAttachedFile = (idx) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   useEffect(() => {
     let isMounted = true;
     const loadFromApi = async () => {
       try {
-        const [apiConsults, apiPatients] = await Promise.all([
+        const [apiConsults, apiPatients, apiSettings] = await Promise.all([
           ApiService.getConsultations(),
           ApiService.getPatients(),
+          ApiService.getSettings().catch(() => null),
         ]);
         if (isMounted) {
           if (apiConsults && apiConsults.length > 0) {
@@ -56,6 +151,40 @@ const ConsultationsPage = () => {
             });
             setPatients(clean);
           }
+          if (apiSettings) {
+            const types = Array.isArray(apiSettings.consultationTypes) && apiSettings.consultationTypes.length > 0
+              ? apiSettings.consultationTypes
+              : defaultConsultationTypesList;
+            setConsultationTypes(types);
+
+            const defName = apiSettings.defaultConsultationType || types[0]?.name || "Consultation de médecine générale";
+            const matched = types.find((t) => t.name === defName);
+            const defPrice = matched ? matched.price : (apiSettings.consultationPrice !== undefined ? apiSettings.consultationPrice : 2500);
+            const code = formatBillingCode(defName, defPrice);
+
+            setDefaultBillingCode(code);
+            setDefaultReason(defName);
+
+            setFormConsult((prev) => {
+              const isDefaultOrOld =
+                !prev.billingCode ||
+                prev.billingCode === "Consultation générale (2 000 DA)" ||
+                prev.billingCode === initialSettingsInfo.defaultBillingCode;
+              if (isDefaultOrOld) {
+                return {
+                  ...prev,
+                  billingCode: code,
+                  reason:
+                    !prev.reason ||
+                    prev.reason === "Consultation générale de routine" ||
+                    prev.reason === initialSettingsInfo.defaultReason
+                      ? defName
+                      : prev.reason,
+                };
+              }
+              return prev;
+            });
+          }
         }
       } catch (err) {
         console.warn("Connexion API backend PHP : utilisation du mode local", err);
@@ -65,14 +194,14 @@ const ConsultationsPage = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [initialSettingsInfo]);
 
   const [formConsult, setFormConsult] = useState({
     patientId: patientIdQuery || "",
     date: new Date().toISOString().split("T")[0],
     time: `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`,
-    reason: "Consultation générale de routine",
-    billingCode: "Consultation générale (2 000 DA)",
+    reason: initialSettingsInfo.defaultReason || "Consultation générale de routine",
+    billingCode: initialSettingsInfo.defaultBillingCode,
     bp: "120/80",
     weight: "65",
     temperature: "37.0",
@@ -348,16 +477,39 @@ const ConsultationsPage = () => {
       prescriptionCreated: hasPrescription,
       prescriptionData: prescData,
       prescriptionItems: hasPrescription ? prescData.items : [],
+      documents: attachedFiles,
       status: "Clôturée",
     };
 
     setConsultations([newCs, ...consultations]);
     setShowNewModal(false);
-    setSelectedConsultation(newCs);
+    setSelectedConsultation(null);
 
+    // Réinitialiser le formulaire avec le type et la cotation par défaut configurés
+    setFormConsult({
+      patientId: "",
+      date: new Date().toISOString().split("T")[0],
+      time: `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`,
+      reason: defaultReason || "Consultation de routine",
+      billingCode: defaultBillingCode,
+      bp: "120/80",
+      weight: "65",
+      temperature: "37.0",
+      heartRate: "72",
+      symptoms: "",
+      examFindings: "",
+      diagnosis: "Bilan médical de contrôle normal",
+      recommendations: "Respecter les règles hygiéno-diététiques et le traitement prescrit.",
+      echoType: "Échographie pelvienne / gynécologique",
+      echoFindings: "",
+      echoConclusion: "",
+    });
+
+    let savedConsultId = newCs.id;
     try {
       const res = await ApiService.saveConsultation(newCs);
       if (res && res.data && res.data.id) {
+        savedConsultId = res.data.id;
         newCs.id = res.data.id;
         if (res.data.consultationNumber) {
           newCs.consultationNumber = res.data.consultationNumber;
@@ -367,12 +519,36 @@ const ConsultationsPage = () => {
       console.warn("Consultation enregistrée en local (MySQL hors ligne ou avertissement):", err.message);
     }
 
+    // Enregistrement des documents / fichiers joints dans medical_documents (Dossier Médical)
+    const nbFiles = attachedFiles.length;
+    if (nbFiles > 0) {
+      for (const fItem of attachedFiles) {
+        try {
+          await ApiService.saveDocument({
+            patientId: selPat.id,
+            consultationId: savedConsultId,
+            title: fItem.name,
+            category: fItem.category || "Imagerie & Radiologie",
+            date: formConsult.date || new Date().toISOString().split("T")[0],
+            author: initialDoctor.name,
+            filePath: fItem.dataUrl,
+            fileSize: fItem.size,
+            fileType: fItem.extension,
+            status: "Validé",
+          });
+        } catch (docErr) {
+          console.warn("Erreur enregistrement document dans dossier médical :", docErr);
+        }
+      }
+    }
+    setAttachedFiles([]);
+
     Swal.fire({
       icon: "success",
       title: "Consultation Enregistrée !",
-      text: prescData
-        ? `Consultation enregistrée avec succès pour ${selPat.firstName} ${selPat.lastName}. Ordonnance médicale générée.`
-        : `Consultation enregistrée avec succès dans le dossier de ${selPat.firstName} ${selPat.lastName}.`,
+      text: `${selPat.firstName} ${selPat.lastName} : Consultation archivée avec succès.` +
+        (nbFiles > 0 ? ` ${nbFiles} document(s) enregistré(s) dans son dossier médical.` : "") +
+        (prescData ? " Ordonnance médicale émise." : ""),
       confirmButtonColor: "#1e60d5",
     });
   };
@@ -425,7 +601,8 @@ const ConsultationsPage = () => {
 
     setConsultations([newCs, ...consultations]);
     setShowNewModal(false);
-    setSelectedConsultation(newCs);
+    setShowFullCREcho(false);
+    setSelectedConsultation(null);
 
     try {
       const res = await ApiService.saveConsultation(newCs);
@@ -486,9 +663,33 @@ const ConsultationsPage = () => {
             if (nextShow) {
               setSelectedConsultation(null);
               setShowFullCREcho(false);
+
+              // Recharger les paramètres depuis le localStorage au cas où modifiés sur /settings
+              let activeCode = defaultBillingCode;
+              let activeReason = defaultReason;
+              try {
+                const raw = localStorage.getItem("cabinet_settings");
+                if (raw) {
+                  const s = JSON.parse(raw);
+                  if (Array.isArray(s.consultationTypes) && s.consultationTypes.length > 0) {
+                    setConsultationTypes(s.consultationTypes);
+                  }
+                  if (s.defaultConsultationType) {
+                    const matched = (s.consultationTypes || []).find((t) => t.name === s.defaultConsultationType);
+                    const pr = matched ? matched.price : (s.consultationPrice !== undefined ? s.consultationPrice : 2500);
+                    activeCode = formatBillingCode(s.defaultConsultationType, pr);
+                    activeReason = s.defaultConsultationType;
+                    setDefaultBillingCode(activeCode);
+                    setDefaultReason(activeReason);
+                  }
+                }
+              } catch (_) {}
+
               setFormConsult((prev) => ({
                 ...prev,
                 patientId: patientIdQuery || "",
+                billingCode: activeCode || prev.billingCode,
+                reason: prev.reason || activeReason,
               }));
             }
           }}
@@ -651,16 +852,34 @@ const ConsultationsPage = () => {
                     <select
                       className="form-control"
                       value={formConsult.billingCode}
-                      onChange={(e) =>
-                        setFormConsult({ ...formConsult, billingCode: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const newCode = e.target.value;
+                        const matched = consultationTypes.find(
+                          (t) => formatBillingCode(t.name, t.price) === newCode
+                        );
+                        setFormConsult({
+                          ...formConsult,
+                          billingCode: newCode,
+                          reason: matched ? matched.name : formConsult.reason,
+                        });
+                      }}
                     >
-                      <option value="Consultation générale (2 000 DA)">Consultation générale (2 000 DA)</option>
-                      <option value="Consultation spécialisée (2 500 DA)">Consultation spécialisée (2 500 DA)</option>
-                      <option value="Consultation + Échographie (4 000 DA)">Consultation + Échographie (4 000 DA)</option>
-                      <option value="Échographie pelvienne (3 500 DA)">Échographie pelvienne (3 500 DA)</option>
-                      <option value="Consultation + Frottis / Acte (3 500 DA)">Consultation + Frottis / Acte (3 500 DA)</option>
-                      <option value="Visite de contrôle (1 500 DA)">Visite de contrôle (1 500 DA)</option>
+                      {consultationTypes
+                        .filter((t) => t.active !== false)
+                        .map((t) => {
+                          const label = formatBillingCode(t.name, t.price);
+                          return (
+                            <option key={t.id || t.name} value={label}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                      {formConsult.billingCode &&
+                        !consultationTypes.some(
+                          (t) => formatBillingCode(t.name, t.price) === formConsult.billingCode
+                        ) && (
+                          <option value={formConsult.billingCode}>{formConsult.billingCode}</option>
+                        )}
                     </select>
                   </div>
                 </div>
@@ -961,8 +1180,48 @@ const ConsultationsPage = () => {
 
               {/* Card Footer */}
               <div className="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2 border-top">
-                <div className="text-muted fs-12">
-                  Cabinet Médical Dr N. BELBACHIR OULD HENNIA • Consultation Clinique
+                {/* Zone Téléversement de fichier vers le dossier médical (remplace le texte supprimé) */}
+                <div className="d-flex align-items-center flex-wrap gap-2">
+                  <input
+                    type="file"
+                    ref={consultFileInputRef}
+                    style={{ display: "none" }}
+                    multiple
+                    accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                    onChange={handleConsultFileUpload}
+                  />
+                  <Button
+                    variant="outline-primary"
+                    type="button"
+                    className="d-flex align-items-center btn-sm rounded font-w600"
+                    onClick={() => consultFileInputRef.current && consultFileInputRef.current.click()}
+                    title="Téléverser un document ou fichier d'examen qui sera archivé dans le dossier médical du patient"
+                  >
+                    <i className="flaticon-381-upload me-1"></i>
+                    Joindre un fichier / Document
+                  </Button>
+
+                  {/* Fichiers joints en attente d'enregistrement */}
+                  {attachedFiles.map((f, idx) => (
+                    <span
+                      key={idx}
+                      className="badge bg-light text-dark border d-flex align-items-center gap-1 py-1 px-2 fs-12"
+                      style={{ background: "#f8fafc", borderColor: "#cbd5e1" }}
+                    >
+                      <i className="flaticon-381-file-1 text-primary me-1"></i>
+                      <span className="text-truncate" style={{ maxWidth: "160px" }}>
+                        {f.name}
+                      </span>
+                      <small className="text-muted ms-1">({f.size})</small>
+                      <button
+                        type="button"
+                        className="btn-close btn-close-sm ms-1"
+                        style={{ fontSize: "8px" }}
+                        onClick={() => handleRemoveAttachedFile(idx)}
+                        title="Retirer ce fichier"
+                      ></button>
+                    </span>
+                  ))}
                 </div>
                 <div className="d-flex gap-2 align-items-center flex-wrap">
                   <Button
@@ -1197,6 +1456,43 @@ const ConsultationsPage = () => {
                   <i className="fa fa-info-circle me-1 text-primary"></i> Aucune ordonnance médicamenteuse prescrite lors de cette consultation.
                 </div>
               )}
+              {/* 5. Documents & Fichiers joints (Dossier Médical) */}
+              <h6 className="text-primary font-w600 mb-2 border-bottom pb-1">
+                <i className="flaticon-381-folder-1 me-1"></i> 5. Documents & Justificatifs rattachés au Dossier Médical
+              </h6>
+              {selectedConsultation.documents && selectedConsultation.documents.length > 0 ? (
+                <div className="d-flex flex-wrap gap-2 mb-3">
+                  {selectedConsultation.documents.map((doc, dIdx) => (
+                    <div
+                      key={dIdx}
+                      className="p-2 border rounded bg-white d-flex align-items-center justify-content-between gap-3 shadow-sm"
+                      style={{ minWidth: "260px" }}
+                    >
+                      <div className="d-flex align-items-center gap-2">
+                        <i className="flaticon-381-file-1 fs-20 text-primary"></i>
+                        <div>
+                          <strong className="d-block fs-13 text-dark">{doc.title}</strong>
+                          <small className="text-muted fs-11">{doc.category || "Document"} • {doc.fileSize || "PDF"}</small>
+                        </div>
+                      </div>
+                      {doc.filePath && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-primary p-1 px-2 rounded"
+                          onClick={() => setPreviewingDoc(doc)}
+                          title="Visualiser le document"
+                        >
+                          <i className="flaticon-381-view me-1"></i> Voir
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-3 bg-light rounded text-muted fs-13 border mb-3">
+                  <i className="fa fa-info-circle me-1 text-primary"></i> Aucun document ou fichier spécifique n'a été rattaché lors de cette consultation.
+                </div>
+              )}
             </div>
 
             <div className="card-footer d-flex justify-content-between align-items-center border-top flex-wrap gap-2">
@@ -1361,6 +1657,51 @@ const ConsultationsPage = () => {
         consultation={previewEchoReport}
         doctor={initialDoctor}
       />
+
+      {/* Modal Visualisation Document / Justificatif joint */}
+      <Modal
+        show={!!previewingDoc}
+        onHide={() => setPreviewingDoc(null)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title className="fs-16 font-w700">
+            Document Médical : {previewingDoc?.title || previewingDoc?.name}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center p-3">
+          {previewingDoc?.filePath && (previewingDoc.filePath.startsWith("data:application/pdf") || previewingDoc.filePath.endsWith(".pdf")) ? (
+            <iframe
+              src={previewingDoc.filePath}
+              title="Aperçu PDF"
+              width="100%"
+              height="550px"
+              style={{ border: "none" }}
+            ></iframe>
+          ) : (
+            <img
+              src={previewingDoc?.filePath}
+              alt="Document"
+              style={{ maxWidth: "100%", maxHeight: "550px", objectFit: "contain" }}
+            />
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setPreviewingDoc(null)}>
+            Fermer
+          </Button>
+          {previewingDoc?.filePath && (
+            <a
+              href={previewingDoc.filePath}
+              download={previewingDoc.title || previewingDoc.name || "document"}
+              className="btn btn-primary"
+            >
+              Télécharger
+            </a>
+          )}
+        </Modal.Footer>
+      </Modal>
 
       {/* Datalist pour saisie rapide des médicaments */}
       <datalist id="consult-medications-datalist">

@@ -24,15 +24,39 @@ switch ($method) {
         sendResponse("error", null, "Méthode non autorisée", 405);
 }
 
+function calculateWaitingTicketNumber($timeStr) {
+    if (empty($timeStr)) return 1;
+    $slots = [
+        "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+        "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"
+    ];
+    $norm = str_pad(substr(trim($timeStr), 0, 5), 5, "0", STR_PAD_LEFT);
+    $idx = array_search($norm, $slots);
+    if ($idx !== false) {
+        return $idx + 1;
+    }
+    $parts = explode(':', $timeStr);
+    $h = intval($parts[0] ?? 0);
+    $m = intval($parts[1] ?? 0);
+    $diff = ($h * 60 + $m) - (9 * 60);
+    if ($diff >= 0) {
+        return floor($diff / 30) + 1;
+    }
+    return 1;
+}
+
 function handleGetWaitingRoom($db) {
     try {
         $sql = "SELECT w.*, 
                        COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))), ''), NULLIF(TRIM(w.patient_name), ''), 'Patient') AS patient_name,
                        p.dob AS patient_dob,
                        p.file_number AS patient_file_number,
-                       COALESCE(NULLIF(TRIM(p.phone), ''), NULLIF(TRIM(w.patient_phone), ''), '') AS patient_phone
+                       COALESCE(NULLIF(TRIM(p.phone), ''), NULLIF(TRIM(w.patient_phone), ''), '') AS patient_phone,
+                       a.notes AS appointment_notes,
+                       a.appointment_time AS apt_time
                 FROM waiting_room w
                 LEFT JOIN patients p ON w.patient_id = p.id
+                LEFT JOIN appointments a ON w.appointment_id = a.id
                 WHERE w.status != 'Terminé'
                 ORDER BY w.arrival_time DESC, w.id DESC";
 
@@ -47,8 +71,23 @@ function handleGetWaitingRoom($db) {
                 $age = (new DateTime())->diff($dob)->y;
             }
 
+            $ticketNumber = !empty($r['ticket_number']) ? intval($r['ticket_number']) : null;
+            if (!$ticketNumber && !empty($r['appointment_notes']) && preg_match('/\[Ticket N°\s*(\d+)\]/i', $r['appointment_notes'], $m)) {
+                $ticketNumber = intval($m[1]);
+            }
+            if (!$ticketNumber) {
+                $refTime = !empty($r['appointment_time']) ? $r['appointment_time'] : (!empty($r['apt_time']) ? $r['apt_time'] : null);
+                if ($refTime) {
+                    $ticketNumber = calculateWaitingTicketNumber($refTime);
+                }
+            }
+            if (!$ticketNumber) {
+                $ticketNumber = 1;
+            }
+
             $list[] = [
                 "id" => intval($r['id']),
+                "ticketNumber" => $ticketNumber,
                 "appointmentId" => !empty($r['appointment_id']) ? intval($r['appointment_id']) : null,
                 "patientId" => !empty($r['patient_id']) ? intval($r['patient_id']) : null,
                 "patientName" => $r['patient_name'],
@@ -96,20 +135,38 @@ function handleCreateArrival($db) {
             }
         }
 
-        $sql = "INSERT INTO waiting_room (patient_id, patient_name, patient_phone, appointment_id, appointment_time, arrival_time, reason, status) 
-                VALUES (:pid, :pname, :pphone, :aid, :atime, :artime, :reason, 'En attente')";
+        $ticketNumber = !empty($body['ticketNumber']) ? intval($body['ticketNumber']) : null;
+        if (!$ticketNumber && $appId) {
+            $stmtNotes = $db->prepare("SELECT notes, appointment_time FROM appointments WHERE id = :aid");
+            $stmtNotes->execute([':aid' => $appId]);
+            $apt = $stmtNotes->fetch();
+            if ($apt) {
+                if (!empty($apt['notes']) && preg_match('/\[Ticket N°\s*(\d+)\]/i', $apt['notes'], $m)) {
+                    $ticketNumber = intval($m[1]);
+                } else if (!empty($apt['appointment_time'])) {
+                    $ticketNumber = calculateWaitingTicketNumber($apt['appointment_time']);
+                }
+            }
+        }
+        if (!$ticketNumber && !empty($appTime)) {
+            $ticketNumber = calculateWaitingTicketNumber($appTime);
+        }
+
+        $sql = "INSERT INTO waiting_room (patient_id, patient_name, patient_phone, appointment_id, ticket_number, appointment_time, arrival_time, reason, status) 
+                VALUES (:pid, :pname, :pphone, :aid, :tnum, :atime, :artime, :reason, 'En attente')";
         $stmt = $db->prepare($sql);
         $stmt->execute([
             ':pid' => $patientId,
             ':pname' => $patientName ?: null,
             ':pphone' => $patientPhone ?: null,
             ':aid' => $appId,
+            ':tnum' => $ticketNumber,
             ':atime' => strlen($appTime) === 5 ? ($appTime . ":00") : $appTime,
             ':artime' => strlen($arrTime) === 5 ? ($arrTime . ":00") : $arrTime,
             ':reason' => $reason
         ]);
 
-        sendResponse("success", ["id" => intval($db->lastInsertId())], "Arrivée enregistrée avec succès", 201);
+        sendResponse("success", ["id" => intval($db->lastInsertId()), "ticketNumber" => $ticketNumber], "Arrivée enregistrée avec succès", 201);
     } catch (Exception $e) {
         sendResponse("error", null, "Erreur enregistrement arrivée : " . $e->getMessage(), 500);
     }

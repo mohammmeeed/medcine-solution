@@ -3,32 +3,41 @@ import { Link } from "react-router-dom";
 
 import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
-import {
-  initialConsultations,
-} from "../../../services/CabinetData";
-
 const MedicalRecordsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [patients, setPatients] = useState([]);
+  const [consultations, setConsultations] = useState([]);
 
   useEffect(() => {
-    const fetchPatients = async () => {
+    let isMounted = true;
+    const fetchData = async () => {
       try {
-        const data = await ApiService.getPatients();
-        const clean = (Array.isArray(data) ? data : []).filter((p) => {
-          const last = (p.lastName || "").toLowerCase().trim();
-          const first = (p.firstName || "").toLowerCase().trim();
-          return (
-            !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
-            !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
-          );
-        });
-        setPatients(clean);
+        const [patientsData, consultsData] = await Promise.all([
+          ApiService.getPatients(),
+          ApiService.getConsultations().catch(() => []),
+        ]);
+        if (isMounted) {
+          const clean = (Array.isArray(patientsData) ? patientsData : []).filter((p) => {
+            const last = (p.lastName || "").toLowerCase().trim();
+            const first = (p.firstName || "").toLowerCase().trim();
+            return (
+              !["dubois", "lemoine", "bernard", "moreau", "belkacem"].includes(last) &&
+              !["claire", "marc", "sophie", "lucas", "yasmine"].includes(first)
+            );
+          });
+          setPatients(clean);
+          if (Array.isArray(consultsData)) {
+            setConsultations(consultsData);
+          }
+        }
       } catch (err) {
         console.warn("Erreur chargement dossiers médicaux :", err);
       }
     };
-    fetchPatients();
+    fetchData();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const filteredPatients = patients.filter((p) => {
@@ -113,7 +122,19 @@ const MedicalRecordsPage = () => {
       {/* Cartes récapitulatives des dossiers patients */}
       <div className="row">
         {filteredPatients.map((p) => {
-          const patientConsults = initialConsultations.filter((c) => c.patientId === p.id);
+          const patientConsults = consultations.filter((c) => {
+            if (c.patientId && String(c.patientId) === String(p.id)) return true;
+            if (c.patientDetails && c.patientDetails.fileNumber && c.patientDetails.fileNumber === p.fileNumber) return true;
+            if (c.patientName && p.lastName && p.firstName) {
+              const cName = c.patientName.toLowerCase();
+              if (cName.includes(p.lastName.toLowerCase()) && cName.includes(p.firstName.toLowerCase())) return true;
+            }
+            return false;
+          });
+          const consultCount = typeof p.consultationsCount === "number" && p.consultationsCount > 0
+            ? Math.max(p.consultationsCount, patientConsults.length)
+            : patientConsults.length;
+          const latestVisitDate = (patientConsults.length > 0 && patientConsults[0].date) || p.lastVisit || "N/A";
           const hasAllergies = p.allergies && p.allergies.length > 0 && p.allergies[0] !== "Aucune allergie connue";
 
           return (
@@ -203,12 +224,12 @@ const MedicalRecordsPage = () => {
 
                   {/* Historique récent des consultations */}
                   <div className="border-top pt-2 d-flex justify-content-between align-items-center flex-wrap fs-12 text-muted">
-                    <span>
+                    <span className={consultCount > 0 ? "text-primary font-w600" : ""}>
                       <i className="flaticon-381-notepad me-1 text-primary"></i>
-                      {patientConsults.length} consultation(s) archivée(s)
+                      {consultCount} consultation(s) archivée(s)
                     </span>
                     <span>
-                      Dernière visite : <strong>{p.lastVisit || "N/A"}</strong>
+                      Dernière visite : <strong>{latestVisitDate}</strong>
                     </span>
                   </div>
                 </div>

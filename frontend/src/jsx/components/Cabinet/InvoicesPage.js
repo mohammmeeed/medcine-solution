@@ -59,6 +59,26 @@ const InvoicesPage = () => {
     fetchData();
   }, []);
 
+  const getPatientPassword = (inv) => {
+    if (!inv) return "";
+    if (inv.patientPassword) return inv.patientPassword;
+    const pat = patients.find((p) => p.id === inv.patientId);
+    if (pat?.password) return pat.password;
+    if (pat) {
+      const l = (pat.lastName || "").trim().charAt(0).toLowerCase() || "p";
+      const f = (pat.firstName || "").trim().charAt(0).toLowerCase() || "a";
+      const digits = (pat.phone || "").replace(/\D/g, "");
+      const d3 = digits.length >= 3 ? digits.slice(-3) : digits.padStart(3, "0");
+      return `${l}${f}${d3}`;
+    }
+    const nameParts = (inv.patientName || "").trim().split(" ");
+    const l = nameParts[0]?.charAt(0).toLowerCase() || "p";
+    const f = nameParts[1]?.charAt(0).toLowerCase() || "a";
+    const phoneDigits = (inv.patientPhone || "").replace(/\D/g, "");
+    const d3 = phoneDigits.length >= 3 ? phoneDigits.slice(-3) : "123";
+    return `${l}${f}${d3}`;
+  };
+
   const handleActChange = (act) => {
     switch (act) {
       case "G":
@@ -278,6 +298,11 @@ const InvoicesPage = () => {
                         >
                           {inv.patientName}
                         </Link>
+                        {getPatientPassword(inv) && (
+                          <span className="badge badge-xs badge-info light ms-2" title="Mot de passe portail client">
+                            🔑 {getPatientPassword(inv)}
+                          </span>
+                        )}
                       </td>
                       <td>
                         <span className="text-dark fs-13">{inv.actDescription}</span>
@@ -454,8 +479,8 @@ const InvoicesPage = () => {
                 </div>
               </div>
 
-              {/* Informations Essentielles : Patient, Facture N°, Date & Heure */}
-              <div className="bg-light p-3 rounded mb-4 border">
+              {/* Informations Essentielles : Patient, Facture N°, Date & Heure, Mot de passe */}
+              <div className="bg-light p-3 rounded mb-3 border">
                 <div className="row g-3">
                   <div className="col-sm-6">
                     <span className="text-muted fs-12 d-block text-uppercase">Patient(e) / المريض(ة)</span>
@@ -465,11 +490,45 @@ const InvoicesPage = () => {
                     <span className="text-muted fs-12 d-block text-uppercase">N° Facture / رقم الفاتورة</span>
                     <strong className="fs-15 text-primary">{previewInvoice.invoiceNumber}</strong>
                   </div>
-                  <div className="col-12">
+                  <div className="col-sm-6">
                     <span className="text-muted fs-12 d-block text-uppercase">Date & Heure / التاريخ والوقت</span>
                     <span className="fs-14 text-dark font-w600">
                       📅 {previewInvoice.date} • 🕒 {previewInvoice.time || "10:30"}
                     </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Banderole Accès Portail Patient pour le Ticket de Caisse */}
+              <div
+                className="p-3 mb-3 rounded border d-flex justify-content-between align-items-center flex-wrap gap-2"
+                style={{
+                  backgroundColor: "#eff6ff",
+                  borderColor: "#93c5fd",
+                  borderStyle: "dashed",
+                  borderWidth: "1.5px",
+                }}
+              >
+                <div>
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <span className="fs-16">🔑</span>
+                    <strong className="text-primary fs-14">
+                      Espace Patient en Ligne • فضاء المريض
+                    </strong>
+                  </div>
+                  <small className="text-muted d-block fs-12">
+                    Identifiant : <strong>{previewInvoice.patientPhone || patients.find((p) => p.id === previewInvoice.patientId)?.phone || "N° Téléphone"}</strong> • Mot de passe :
+                  </small>
+                </div>
+                <div className="text-end">
+                  <span className="text-muted fs-11 d-block text-uppercase font-w600">
+                    Mot de passe / كلمة السر
+                  </span>
+                  <div
+                    className="badge bg-primary text-white font-w800 fs-16 px-3 py-1 mt-1 shadow-sm"
+                    style={{ letterSpacing: "2px", fontFamily: "monospace" }}
+                  >
+                    {getPatientPassword(previewInvoice)}
                   </div>
                 </div>
               </div>

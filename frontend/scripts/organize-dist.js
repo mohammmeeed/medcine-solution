@@ -2,11 +2,20 @@ const fs = require('fs');
 const path = require('path');
 
 const distDir = path.join(__dirname, '..', 'dist');
+const buildDir = path.join(__dirname, '..', 'build');
+
+if (fs.existsSync(buildDir)) {
+  if (fs.existsSync(distDir)) {
+    fs.rmSync(distDir, { recursive: true, force: true });
+  }
+  fs.renameSync(buildDir, distDir);
+}
+
 const staticDir = path.join(distDir, 'static');
 const assetsDir = path.join(distDir, 'assets');
 
 if (!fs.existsSync(distDir)) {
-  console.log('No dist directory found.');
+  console.log('No dist or build directory found.');
   process.exit(0);
 }
 

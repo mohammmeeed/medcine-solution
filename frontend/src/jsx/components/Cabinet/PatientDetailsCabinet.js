@@ -4,6 +4,7 @@ import { Modal } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PrescriptionPreviewModal from "./PrescriptionPreviewModal";
 import EchoReportPrintModal from "./EchoReportPrintModal";
+import { generatePatientPassword } from "./PatientsPage";
 import ApiService from "../../../services/ApiService";
 import { jsPDF } from "jspdf";
 import {
@@ -1435,7 +1436,33 @@ const PatientDetailsCabinet = () => {
               </div>
               <div style={{ minWidth: 0 }}>
                 <p className="patient-cell-label">Courriel</p>
-                <p className="patient-cell-val">{patient.email}</p>
+                <p className="patient-cell-val">{patient.email || "Non renseigné"}</p>
+              </div>
+            </div>
+
+            {/* Card 4: Mot de passe Portail Patient */}
+            <div className="patient-demographic-cell" style={{ background: "rgba(240, 249, 255, 0.95)", border: "1px solid #bae6fd" }}>
+              <div className="patient-cell-icon-wrap" style={{ background: "#e0f2fe", color: "#0284c7" }}>
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="7.5" cy="15.5" r="5.5" />
+                  <path d="m21 2-9.6 9.6" />
+                  <path d="m15.5 7.5 3 3L22 7l-3-3" />
+                </svg>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p className="patient-cell-label" style={{ color: "#0284c7" }}>Mot de passe portail</p>
+                <p className="patient-cell-val" style={{ color: "#0369a1", fontFamily: "monospace", fontSize: "14px", letterSpacing: "1px" }}>
+                  {patient.password || generatePatientPassword(patient.lastName, patient.firstName, patient.phone)}
+                </p>
               </div>
             </div>
           </div>

@@ -248,14 +248,26 @@ const DashboardCabinet = () => {
 
       {/* Rangée Principale : Graphiques & Activités du Cabinet */}
       <div className="row">
-        {/* Graphique de fréquentation des consultations */}
+        {/* Graphique de fréquentation du site public en temps réel */}
         <div className="col-xl-6 col-xxl-6 col-lg-12">
           <div className="card">
-            <div className="card-header border-0 pb-0">
+            <div className="card-header border-0 pb-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
               <div>
-                <h4 className="card-title mb-1">Activité des Consultations</h4>
-                <p className="mb-0 text-muted fs-13">Volume hebdomadaire des patients reçus</p>
+                <h4 className="card-title mb-0">Visites du Site Public</h4>
+                <p className="mb-0 text-muted fs-13 mt-1">
+                  Fréquentation et volume des visiteurs du portail patient
+                </p>
               </div>
+              <a
+                href="/patient-portal"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-outline-primary btn-xxs"
+                style={{ borderRadius: "20px", fontSize: "11.5px", padding: "3px 10px" }}
+                title="Tester le site public dans un nouvel onglet"
+              >
+                <i className="fa fa-external-link me-1"></i> Portail Patient
+              </a>
             </div>
             <div className="card-body px-3 pt-2 pb-0">
               <div id="chartStrock">

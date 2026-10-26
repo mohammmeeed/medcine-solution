@@ -9,6 +9,26 @@ import {
   initialPatients,
 } from "../../../services/CabinetData";
 
+// Créneaux horaires officiels pour calcul du ticket réservé
+const ALL_DAY_SLOTS = [
+  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+  "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"
+];
+
+const calculateTicketNumber = (timeStr) => {
+  if (!timeStr) return 1;
+  const normalized = timeStr.trim().substring(0, 5).padStart(5, "0");
+  const idx = ALL_DAY_SLOTS.indexOf(normalized);
+  if (idx !== -1) return idx + 1;
+  const [h, m] = timeStr.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return 1;
+  const totalMin = h * 60 + m;
+  const startMin = 9 * 60; // 09:00
+  const diff = totalMin - startMin;
+  if (diff < 0) return 1;
+  return Math.floor(diff / 30) + 1;
+};
+
 const WaitingRoomPage = () => {
   const navigate = useNavigate();
   const [waitingList, setWaitingList] = useState(() => {
@@ -122,9 +142,12 @@ const WaitingRoomPage = () => {
       console.warn("Erreur mise à jour statut MySQL :", e)
     );
 
+    const ticketNum = patient.ticketNumber || calculateTicketNumber(patient.appointmentTime);
     const callPayload = {
       patientId: patient.patientId || patient.id,
       patientName: patient.patientName,
+      ticketNumber: ticketNum,
+      appointmentTime: patient.appointmentTime,
       doctorName: "Dr N. BELBACHIR OULD HENNIA",
       room: "Cabinet de Consultation N° 1",
       calledAt: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
@@ -307,6 +330,7 @@ const WaitingRoomPage = () => {
             <table className="table table-responsive-md table-hover">
               <thead>
                 <tr>
+                  <th><strong>TICKET</strong></th>
                   <th><strong>ARRIVÉE</strong></th>
                   <th><strong>RDV PRÉVU</strong></th>
                   <th><strong>PATIENT</strong></th>
@@ -318,7 +342,7 @@ const WaitingRoomPage = () => {
               <tbody>
                 {waitingList.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-5 text-muted">
+                    <td colSpan="7" className="text-center py-5 text-muted">
                       <i className="flaticon-381-clock fs-36 d-block mb-2 text-primary"></i>
                       La salle d'attente est actuellement vide.
                     </td>
@@ -329,6 +353,11 @@ const WaitingRoomPage = () => {
                       key={p.id}
                       className={p.status === "En consultation" ? "bg-light-primary" : ""}
                     >
+                      <td>
+                        <span className="badge badge-info light font-w800" style={{ fontSize: "13px" }}>
+                          #{p.ticketNumber || calculateTicketNumber(p.appointmentTime)}
+                        </span>
+                      </td>
                       <td>
                         <span className="font-w600 text-primary">
                           {p.arrivalTime}

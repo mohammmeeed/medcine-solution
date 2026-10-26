@@ -42,7 +42,9 @@ import PaymentsPage from "./components/Cabinet/PaymentsPage";
 import ReportsPage from "./components/Cabinet/ReportsPage";
 import StaffPage from "./components/Cabinet/StaffPage";
 import ClinicProfilePage from "./components/Cabinet/ClinicProfilePage";
+import CashflowPage from "./components/Cabinet/CashflowPage";
 import SettingsPage from "./components/Cabinet/SettingsPage";
+import SmtpConfigPage from "./components/Cabinet/SmtpConfigPage";
 import SupportPage from "./components/Cabinet/SupportPage";
 import ProfileCabinetPage from "./components/Cabinet/ProfileCabinetPage";
 import AffichageSalleAttente from "./components/Cabinet/AffichageSalleAttente";
@@ -141,12 +143,17 @@ const Markup = () => {
     { url: "medical-documents", component: <MedicalDocumentsPage /> },
     { url: "examinations", component: <Navigate to="/consultations" replace /> },
     { url: "invoices", component: <InvoicesPage /> },
+    { url: "cashflow", component: <CashflowPage /> },
+    { url: "journal-caisse", component: <CashflowPage /> },
     { url: "payments", component: <PaymentsPage /> },
     { url: "reports", component: <ReportsPage /> },
     { url: "notifications", component: <Navigate to="/dashboard" replace /> },
     { url: "staff", component: <StaffPage /> },
+    { url: "staff-new", component: <StaffPage initialView="account-form" /> },
+    { url: "staff-role-new", component: <StaffPage initialView="role-form" /> },
     { url: "clinic", component: <ClinicProfilePage /> },
     { url: "settings", component: <SettingsPage /> },
+    { url: "smtp", component: <SmtpConfigPage /> },
     { url: "support", component: <SupportPage /> },
     { url: "profile", component: <ProfileCabinetPage /> },
 
@@ -233,7 +240,19 @@ const Markup = () => {
   return (    
     <>     
         <Routes >
+          {/* Portail Public & Patient avec URLs dédiées pour chaque page */}
           <Route path='/' element={<PatientPortal />} />
+          <Route path='/accueil' element={<PatientPortal />} />
+          <Route path='/patient-portal' element={<PatientPortal />} />
+          <Route path='/agenda' element={<PatientPortal />} />
+          <Route path='/rendez-vous' element={<PatientPortal />} />
+          <Route path='/profil' element={<PatientPortal />} />
+          <Route path='/espace-patient' element={<PatientPortal />} />
+          <Route path='/mon-dossier' element={<PatientPortal />} />
+          <Route path='/a-propos' element={<PatientPortal />} />
+          <Route path='/about' element={<PatientPortal />} />
+          <Route path='/confirmation' element={<PatientPortal />} />
+
           <Route path='page-login' element= {<Login />} />
           <Route path='login' element= {<Login />} />
           <Route path='admin' element= {<Login />} />

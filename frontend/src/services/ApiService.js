@@ -66,6 +66,17 @@ export const ApiService = {
     return {
       defaultDuration: "20 min",
       slotInterval: "15 min",
+      defaultConsultationType: "Consultation de médecine générale",
+      consultationPrice: 2500,
+      consultationTypes: [
+        { id: 1, name: "Consultation de médecine générale", duration: "20 min", price: 2500, active: true },
+        { id: 2, name: "Consultation gynécologique / spécialisée", duration: "25 min", price: 3000, active: true },
+        { id: 3, name: "Suivi de grossesse / Maternité", duration: "20 min", price: 2500, active: true },
+        { id: 4, name: "Échographie obstétricale (T1 / T2 / T3)", duration: "30 min", price: 4000, active: true },
+        { id: 5, name: "Échographie pelvienne / gynécologique", duration: "25 min", price: 3500, active: true },
+        { id: 6, name: "Consultation avec frottis / acte", duration: "30 min", price: 3500, active: true },
+        { id: 7, name: "Visite de contrôle / Bilan", duration: "15 min", price: 1500, active: true },
+      ],
       smsReminders: true,
       emailReminders: true,
       reminderHoursBefore: "24",
@@ -82,6 +93,63 @@ export const ApiService = {
       return res.data;
     } catch (err) {
       console.error("Erreur enregistrement paramètres dans MySQL :", err.message);
+      throw err;
+    }
+  },
+
+  // ----------------------------------------------------
+  // CONFIGURATION SERVEUR SMTP
+  // ----------------------------------------------------
+  async getSmtpSettings() {
+    try {
+      const res = await apiClient.get("/smtp.php");
+      if (res.data && res.data.status === "success" && res.data.data) {
+        return res.data.data;
+      }
+    } catch (err) {
+      console.warn("Backend PHP non disponible pour SMTP :", err.message);
+    }
+    return {
+      enabled: true,
+      host: "smtp.gmail.com",
+      port: 587,
+      encryption: "tls",
+      username: "dr.belbachir@cabinet-medical.dz",
+      password: "",
+      fromName: "Cabinet Médical Dr Belbachir",
+      replyTo: "dr.belbachir@cabinet-medical.dz",
+      triggerBookingConfirm: true,
+      triggerAdminAlert: true,
+      triggerReminder: true,
+    };
+  },
+
+  async updateSmtpSettings(smtpData) {
+    try {
+      const res = await apiClient.post("/smtp.php", smtpData);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur enregistrement SMTP :", err.message);
+      throw err;
+    }
+  },
+
+  async testSmtpConnection(smtpData) {
+    try {
+      const res = await apiClient.post("/smtp.php?action=test_connection", smtpData);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur test connexion SMTP :", err.message);
+      throw err;
+    }
+  },
+
+  async sendTestSmtpEmail(smtpData) {
+    try {
+      const res = await apiClient.post("/smtp.php?action=send_test", smtpData);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur envoi email test :", err.message);
       throw err;
     }
   },
@@ -115,6 +183,7 @@ export const ApiService = {
       phone: initialDoctor.phone,
       address: initialDoctor.address,
       hours: initialDoctor.hours,
+      doctorPhoto: "/doctor.jpg",
       legalNotice:
         "Membre d'une association de gestion agréée par l'administration fiscale, acceptant à ce titre le règlement des honoraires par chèque et carte bancaire.",
     };
@@ -530,6 +599,104 @@ export const ApiService = {
       throw err;
     }
   },
+
+  // ----------------------------------------------------
+  // STATISTIQUES & VISITES DU SITE PUBLIC EN TEMPS RÉEL
+  // ----------------------------------------------------
+  async getSiteVisits() {
+    try {
+      const res = await apiClient.get("/site_visits.php");
+      if (res.data && res.data.status === "success" && res.data.data) {
+        return res.data.data;
+      }
+    } catch (err) {
+      console.warn("Backend PHP non disponible pour visites du site :", err.message);
+    }
+    return null;
+  },
+
+  async recordSiteVisit(page = "/patient-portal", device = "desktop") {
+    try {
+      const res = await apiClient.post("/site_visits.php", {
+        page,
+        device,
+      });
+      return res.data;
+    } catch (err) {
+      console.warn("Erreur enregistrement visite site :", err.message);
+      return null;
+    }
+  },
+
+  // ----------------------------------------------------
+  // JOURNAL DE CAISSE & COMPTABILITÉ (CASHFLOW)
+  // ----------------------------------------------------
+  async getCashflow(action = "all") {
+    try {
+      const res = await apiClient.get(`/cashflow.php?action=${action}`);
+      if (res.data && res.data.status === "success" && res.data.data) {
+        return res.data.data;
+      }
+    } catch (err) {
+      console.warn("Backend PHP non disponible pour le journal de caisse :", err.message);
+    }
+    return {
+      entries: [],
+      categories: { all: [], recettes: [], depenses: [] },
+      summary: {
+        totalRecettes: 0,
+        totalDepenses: 0,
+        soldeCaisse: 0,
+        todayRecettes: 0,
+        todayDepenses: 0,
+        beneficeJour: 0,
+        monthRecettes: 0,
+        monthDepenses: 0,
+        totalEntries: 0,
+      },
+    };
+  },
+
+  async saveCashEntry(entryData) {
+    try {
+      const res = await apiClient.post("/cashflow.php", entryData);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur enregistrement écriture caisse dans MySQL :", err.message);
+      throw err;
+    }
+  },
+
+  async deleteCashEntry(id) {
+    try {
+      const res = await apiClient.delete(`/cashflow.php?id=${id}`);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur suppression écriture caisse dans MySQL :", err.message);
+      throw err;
+    }
+  },
+
+  async saveCashCategory(categoryData) {
+    try {
+      const res = await apiClient.post("/cashflow.php?action=category", categoryData);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur enregistrement catégorie caisse :", err.message);
+      throw err;
+    }
+  },
+
+  async deleteCashCategory(id) {
+    try {
+      const res = await apiClient.delete(`/cashflow.php?action=category&id=${id}`);
+      return res.data;
+    } catch (err) {
+      console.error("Erreur suppression catégorie caisse :", err.message);
+      throw err;
+    }
+  },
 };
 
 export default ApiService;
+

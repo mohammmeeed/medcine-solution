@@ -5,6 +5,27 @@ import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
 
+export const generatePatientPassword = (lastName, firstName, phone) => {
+  const cleanLast = (lastName || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const cleanFirst = (firstName || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  const lastInitial = cleanLast.charAt(0) || "p";
+  const firstInitial = cleanFirst.charAt(0) || "a";
+
+  const digits = (phone || "").replace(/\D/g, "");
+  const last3 = digits.length >= 3 ? digits.slice(-3) : (digits + "000").slice(-3);
+
+  return `${lastInitial}${firstInitial}${last3}`;
+};
+
 const PatientsPage = () => {
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
@@ -21,6 +42,8 @@ const PatientsPage = () => {
     gender: "Féminin",
     phone: "",
     email: "",
+    password: "",
+    customPassword: false,
     address: "",
     secuNumber: "",
     bloodGroup: "A+",
@@ -61,6 +84,8 @@ const PatientsPage = () => {
       gender: "Féminin",
       phone: "",
       email: "",
+      password: "",
+      customPassword: false,
       address: "",
       secuNumber: "",
       bloodGroup: "A+",
@@ -83,6 +108,8 @@ const PatientsPage = () => {
       gender: p.gender || "Féminin",
       phone: p.phone || "",
       email: p.email || "",
+      password: p.password || generatePatientPassword(p.lastName, p.firstName, p.phone),
+      customPassword: false,
       address: p.address || "",
       secuNumber: p.secuNumber || "",
       bloodGroup: p.bloodGroup || "A+",
@@ -96,6 +123,22 @@ const PatientsPage = () => {
     }, 50);
   };
 
+  const handleNameOrPhoneChange = (field, val) => {
+    setFormData((prev) => {
+      const nextLast = field === "lastName" ? val : prev.lastName;
+      const nextFirst = field === "firstName" ? val : prev.firstName;
+      const nextPhone = field === "phone" ? val : prev.phone;
+      const autoPass = !prev.customPassword
+        ? generatePatientPassword(nextLast, nextFirst, nextPhone)
+        : prev.password;
+      return {
+        ...prev,
+        [field]: val,
+        password: autoPass,
+      };
+    });
+  };
+
   const handleSavePatient = async (e) => {
     e.preventDefault();
     try {
@@ -106,6 +149,8 @@ const PatientsPage = () => {
         ? formData.chronicDiseases.split(",").map((s) => s.trim()).filter(Boolean)
         : [];
 
+      const patientPass = formData.password || generatePatientPassword(formData.lastName, formData.firstName, formData.phone);
+
       if (editId) {
         await ApiService.updatePatient({
           id: editId,
@@ -115,6 +160,7 @@ const PatientsPage = () => {
           gender: formData.gender,
           phone: formData.phone,
           email: formData.email,
+          password: patientPass,
           address: formData.address,
           secuNumber: formData.secuNumber,
           bloodGroup: formData.bloodGroup,
@@ -139,6 +185,7 @@ const PatientsPage = () => {
           gender: formData.gender,
           phone: formData.phone,
           email: formData.email,
+          password: patientPass,
           address: formData.address,
           secuNumber: formData.secuNumber,
           bloodGroup: formData.bloodGroup,
@@ -151,9 +198,23 @@ const PatientsPage = () => {
         Swal.fire({
           icon: "success",
           title: "Patient enregistré avec succès",
-          text: "Le nouveau patient a été enregistré dans la base de données MySQL.",
-          timer: 1800,
-          showConfirmButton: false,
+          html: `
+            <p class="mb-3">Le nouveau patient a été enregistré dans la base de données MySQL.</p>
+            <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid #38bdf8; border-radius: 12px; padding: 14px; text-align: left;">
+              <div style="color: #0284c7; font-weight: 700; font-size: 13px; text-transform: uppercase; margin-bottom: 6px;">
+                <i class="fa fa-key me-1"></i> Accès Portail Patient Généré :
+              </div>
+              <div style="font-size: 14px; color: #1e293b;">
+                • Patient : <strong>${formData.lastName.toUpperCase()} ${formData.firstName}</strong><br/>
+                • Mot de passe généré : <strong style="font-size: 20px; color: #0284c7; letter-spacing: 1.5px; font-family: monospace;">${patientPass}</strong>
+              </div>
+              <small class="text-muted d-block mt-2">
+                Format : 1ère lettre Nom (<strong>"${(formData.lastName[0] || '').toLowerCase()}"</strong>) + 1ère lettre Prénom (<strong>"${(formData.firstName[0] || '').toLowerCase()}"</strong>) + 3 derniers chiffres tél (<strong>"${(formData.phone.replace(/\\D/g, '').slice(-3))}"</strong>)
+              </small>
+            </div>
+          `,
+          confirmButtonText: "D'accord, compris",
+          confirmButtonColor: "#0d6efd",
         });
       }
     } catch (err) {
@@ -284,7 +345,7 @@ const PatientsPage = () => {
                     type="text"
                     className="form-control"
                     value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    onChange={(e) => handleNameOrPhoneChange("lastName", e.target.value)}
                     required
                   />
                 </div>
@@ -294,7 +355,7 @@ const PatientsPage = () => {
                     type="text"
                     className="form-control"
                     value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    onChange={(e) => handleNameOrPhoneChange("firstName", e.target.value)}
                     required
                   />
                 </div>
@@ -350,7 +411,7 @@ const PatientsPage = () => {
                     className="form-control"
                     placeholder="06 00 00 00 00"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => handleNameOrPhoneChange("phone", e.target.value)}
                     required
                   />
                 </div>
@@ -363,6 +424,45 @@ const PatientsPage = () => {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   />
+                </div>
+              </div>
+
+              <div className="row">
+                <div className="col-md-6 mb-3">
+                  <label className="form-label d-flex justify-content-between align-items-center">
+                    <span>
+                      <i className="fa fa-key text-primary me-1"></i> Mot de passe Portail Patient *
+                    </span>
+                    <span className="badge badge-xs badge-info light">1ère lettre Nom + Prénom + 3 chiffres tél</span>
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text bg-light text-primary font-w700">
+                      <i className="fa fa-lock"></i>
+                    </span>
+                    <input
+                      type="text"
+                      className="form-control font-w700 text-primary"
+                      style={{ fontSize: "15px", letterSpacing: "1px", fontFamily: "monospace" }}
+                      placeholder="Ex: gm109"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value, customPassword: true })}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary"
+                      onClick={() => {
+                        const auto = generatePatientPassword(formData.lastName, formData.firstName, formData.phone);
+                        setFormData({ ...formData, password: auto, customPassword: false });
+                      }}
+                      title="Régénérer automatiquement selon Nom, Prénom et Téléphone"
+                    >
+                      <i className="fa fa-sync-alt me-1"></i> Auto
+                    </button>
+                  </div>
+                  <small className="text-muted fs-11">
+                    Généré automatiquement (ex : <code>gm109</code>). Ce mot de passe est remis au patient pour son accès en ligne.
+                  </small>
                 </div>
               </div>
 
@@ -453,7 +553,17 @@ const PatientsPage = () => {
                         >
                           {(p.lastName || "").toUpperCase()} {p.firstName || ""}
                         </Link>
-                        <span className="d-block text-muted fs-12">{p.gender || "—"}</span>
+                        <div className="d-flex align-items-center gap-2 mt-1">
+                          <span className="text-muted fs-12">{p.gender || "—"}</span>
+                          <span
+                            className="badge badge-xs badge-info light"
+                            title="Mot de passe d'accès portail patient"
+                            style={{ fontFamily: "monospace", fontSize: "11px", letterSpacing: "0.5px" }}
+                          >
+                            <i className="fa fa-key me-1 text-primary"></i>
+                            {p.password || generatePatientPassword(p.lastName, p.firstName, p.phone)}
+                          </span>
+                        </div>
                       </td>
                       <td>
                         {p.dob || "—"}{" "}
