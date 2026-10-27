@@ -1,28 +1,31 @@
 /* =====================================================================
-   DESIGN SYSTEM & THEME — DOCU VERSE / HEALTH UPDATES (Dark Green Glow)
-   Inspired directly by the mobile capture
+   DESIGN SYSTEM & THEME — CLINIQUE MÉDICALE SÉRÉNITÉ (Option 2)
+   Palette : Bleu Océan Médical / Cyan Azur & Blanc Pur / Bleu Ardoise
+   Spécialement adapté pour le Cabinet de Gynécologie Obstétrique & Échographie
    ===================================================================== */
 
 :root {
-  --bg-gradient: radial-gradient(130% 120% at 50% 0%, #15291d 0%, #0d1611 45%, #070c09 100%);
-  --bg-surface: rgba(22, 33, 26, 0.78);
-  --bg-surface-elevated: rgba(29, 44, 34, 0.85);
-  --bg-surface-card: rgba(24, 36, 28, 0.72);
+  --bg-gradient: radial-gradient(130% 120% at 50% 0%, #e0f2fe 0%, #f0f7ff 45%, #f8fafc 100%);
+  --bg-surface: rgba(255, 255, 255, 0.88);
+  --bg-surface-elevated: rgba(255, 255, 255, 0.96);
+  --bg-surface-card: rgba(255, 255, 255, 0.85);
   
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-glow: rgba(187, 247, 208, 0.25);
-  --border-active: rgba(187, 247, 208, 0.6);
+  --border-subtle: rgba(2, 132, 199, 0.14);
+  --border-glow: rgba(2, 132, 199, 0.35);
+  --border-active: rgba(2, 132, 199, 0.75);
 
-  --accent-mint: #bbf7d0;
-  --accent-mint-glow: rgba(187, 247, 208, 0.45);
-  --accent-mint-dark: #0d2315;
-  --accent-emerald: #10b981;
-  --accent-coral: #ff5e57;
-  --accent-gold: #fbbf24;
+  /* Couleur Principale d'Action : Bleu Océan Médical */
+  --accent-mint: #0284c7;
+  --accent-mint-glow: rgba(2, 132, 199, 0.4);
+  --accent-mint-dark: #ffffff;
+  --accent-emerald: #0ea5e9;
+  --accent-coral: #ef4444;
+  --accent-gold: #f59e0b;
 
-  --text-primary: #f1f5f3;
-  --text-secondary: #9cb0a3;
-  --text-muted: #697d70;
+  /* Typographie : Bleu ardoise profond, haute lisibilité médicale */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
 
   --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --radius-xl: 32px;
@@ -46,11 +49,11 @@ html, body {
 
 .patient-portal-page {
   font-family: var(--font-family);
-  background-color: #0b140f;
+  background-color: #f8fafc;
   background-image: 
-    radial-gradient(ellipse 90% 50% at 50% 0%, rgba(187, 247, 208, 0.08), transparent 70%),
-    radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.04), transparent 50%),
-    linear-gradient(180deg, #0e1912 0%, #080f0b 100%);
+    radial-gradient(ellipse 90% 50% at 50% 0%, rgba(14, 165, 233, 0.12), transparent 70%),
+    radial-gradient(circle at 100% 100%, rgba(2, 132, 199, 0.08), transparent 50%),
+    linear-gradient(180deg, #f8fafc 0%, #edf4fc 100%);
   background-attachment: fixed;
   color: var(--text-primary);
   min-height: 100vh;
@@ -65,6 +68,27 @@ html, body {
   margin: 0;
 }
 
+/* Forcer la couleur des titres sur le fond clair */
+.patient-portal-page h1,
+.patient-portal-page h2,
+.patient-portal-page h3,
+.patient-portal-page h4,
+.patient-portal-page h5,
+.patient-portal-page h6 {
+  color: var(--text-primary) !important;
+}
+
+/* Assurer la parfaite visibilité des textes de cartes */
+.patient-portal-page .glass-panel strong,
+.patient-portal-page .glass-panel b {
+  color: var(--text-primary);
+}
+
+.patient-portal-page .glass-panel [style*="color: #fff"]:not(.btn-primary-mint *):not(.time-slot-pill.selected *):not(.calendar-day-cell.selected *):not(.btn-ai-assistant *),
+.patient-portal-page .glass-panel [style*="color: #ffffff"]:not(.btn-primary-mint *):not(.time-slot-pill.selected *):not(.calendar-day-cell.selected *):not(.btn-ai-assistant *) {
+  color: var(--text-primary) !important;
+}
+
 /* Global scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -74,14 +98,14 @@ html, body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(187, 247, 208, 0.2);
+  background: rgba(2, 132, 199, 0.25);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(187, 247, 208, 0.4);
+  background: rgba(2, 132, 199, 0.45);
 }
 
-/* App Container - Responsive Web Portal (Pas de cadre étriqué de smartphone) */
+/* App Container - Responsive Web Portal */
 .app-device-wrapper {
   width: 100%;
   min-height: 100vh;
@@ -97,14 +121,13 @@ html, body {
   align-items: center;
 }
 
-/* Scrollable Content Container - Largeur de lecture confortable et centrée */
+/* Scrollable Content Container */
 .screen-scroll {
-  flex: 1;
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
   overflow-y: visible;
-  padding: 28px 20px 160px;
+  padding: 24px 20px 96px;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -113,7 +136,7 @@ html, body {
 @media (min-width: 768px) {
   .screen-scroll {
     max-width: 700px;
-    padding: 38px 24px 170px;
+    padding: 32px 24px 104px;
   }
 }
 
@@ -126,32 +149,34 @@ html, body {
 }
 
 .screen-scroll::-webkit-scrollbar-thumb {
-  background: rgba(187, 247, 208, 0.2);
+  background: rgba(2, 132, 199, 0.25);
   border-radius: 999px;
 }
 
 .screen-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(187, 247, 208, 0.45);
+  background: rgba(2, 132, 199, 0.45);
 }
 
-/* Glassmorphic Surfaces */
+/* Glassmorphic Surfaces (Clinique Haut de Gamme) */
 .glass-panel {
   background: var(--bg-surface-card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
+  box-shadow: 0 10px 30px -5px rgba(2, 132, 199, 0.07), 0 4px 12px rgba(15, 23, 42, 0.03);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-panel:hover {
   border-color: var(--border-glow);
+  box-shadow: 0 14px 34px -4px rgba(2, 132, 199, 0.12);
 }
 
-/* Buttons */
+/* Grand Bouton Principal (Réserver un Rendez-vous) */
 .btn-primary-mint {
-  background: var(--accent-mint);
-  color: var(--accent-mint-dark);
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff !important;
   font-weight: 700;
   font-size: 15px;
   padding: 15px 24px;
@@ -162,15 +187,19 @@ html, body {
   justify-content: center;
   gap: 10px;
   cursor: pointer;
-  box-shadow: 0 10px 25px -5px var(--accent-mint-glow);
+  box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.45);
   transition: all 0.2s ease;
   width: 100%;
 }
 
+.btn-primary-mint * {
+  color: #ffffff !important;
+}
+
 .btn-primary-mint:hover {
   transform: translateY(-2px);
-  box-shadow: 0 15px 30px -5px rgba(187, 247, 208, 0.6);
-  background: #cbf9dc;
+  box-shadow: 0 15px 30px -5px rgba(2, 132, 199, 0.6);
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
 }
 
 .btn-primary-mint:active {
@@ -181,20 +210,22 @@ html, body {
   width: 44px;
   height: 44px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(2, 132, 199, 0.18);
   color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.06);
 }
 
 .btn-icon-circle:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: #ffffff;
+  border-color: #0284c7;
+  color: #0284c7;
+  transform: translateY(-1px);
 }
 
 /* Doctor Portrait Card */
@@ -204,14 +235,15 @@ html, body {
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(2, 132, 199, 0.18);
+  box-shadow: 0 10px 30px -5px rgba(2, 132, 199, 0.1), 0 4px 12px rgba(15, 23, 42, 0.04);
   cursor: pointer;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .doctor-hero-card:hover {
-  border-color: rgba(187, 247, 208, 0.35);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 15px rgba(187, 247, 208, 0.12);
+  border-color: rgba(2, 132, 199, 0.4);
+  box-shadow: 0 14px 35px rgba(2, 132, 199, 0.18), 0 0 15px rgba(2, 132, 199, 0.12);
   transform: translateY(-2px);
 }
 
@@ -220,7 +252,7 @@ html, body {
   height: 240px;
   position: relative;
   overflow: hidden;
-  background: #101c15;
+  background: #e2e8f0;
 }
 
 .doctor-img {
@@ -238,17 +270,17 @@ html, body {
 .doctor-img-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(13, 22, 17, 0) 30%, rgba(13, 22, 17, 0.95) 100%);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0) 40%, rgba(15, 23, 42, 0.65) 100%);
 }
 
 .doctor-available-badge {
   position: absolute;
   top: 14px;
   left: 14px;
-  background: rgba(13, 22, 17, 0.7);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(187, 247, 208, 0.3);
-  color: var(--accent-mint);
+  border: 1px solid rgba(2, 132, 199, 0.3);
+  color: #0369a1;
   font-size: 11px;
   font-weight: 700;
   padding: 6px 12px;
@@ -256,14 +288,15 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.12);
 }
 
 .pulse-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent-mint);
-  box-shadow: 0 0 8px var(--accent-mint);
+  background: #0284c7;
+  box-shadow: 0 0 8px #0284c7;
   animation: pulseDot 2s infinite;
 }
 
@@ -273,7 +306,7 @@ html, body {
   100% { transform: scale(0.9); opacity: 0.7; }
 }
 
-/* Key Info Row: Heart | Price | Location (Exactly like capture) */
+/* Key Info Row: Heart | Price | Location */
 .info-row-grid {
   display: grid;
   grid-template-columns: 50px 1fr 1fr;
@@ -291,6 +324,7 @@ html, body {
   flex-direction: column;
   justify-content: center;
   transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.05);
 }
 
 .info-card-pill.heart-pill {
@@ -299,8 +333,8 @@ html, body {
 }
 
 .info-card-pill.heart-pill:hover {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.35);
 }
 
 .info-card-value {
@@ -320,7 +354,7 @@ html, body {
 }
 
 /* =====================================================================
-   CALENDAR & SCHEDULE STYLING (Screen 3 Right from Capture)
+   CALENDAR & SCHEDULE STYLING (Bleu Médical & Blanc)
    ===================================================================== */
 .schedule-header {
   display: flex;
@@ -378,35 +412,36 @@ html, body {
   user-select: none;
 }
 
-/* Available dates (e.g. 10, 17, 18, 21, 22, 25, 26 as in screenshot) */
+/* Available dates */
 .calendar-day-cell.available {
   color: var(--text-primary);
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(187, 247, 208, 0.18);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(2, 132, 199, 0.18);
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.05);
 }
 
 .calendar-day-cell.available:hover {
-  background: rgba(187, 247, 208, 0.15);
-  border-color: rgba(187, 247, 208, 0.45);
-  color: var(--accent-mint);
+  background: rgba(2, 132, 199, 0.12);
+  border-color: rgba(2, 132, 199, 0.45);
+  color: #0284c7;
   transform: scale(1.05);
 }
 
-/* Selected active date (Glowing mint green pill as in screenshot) */
+/* Selected active date (Glowing medical blue pill) */
 .calendar-day-cell.selected {
-  background: var(--accent-mint) !important;
-  color: var(--accent-mint-dark) !important;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  color: #ffffff !important;
   font-weight: 800 !important;
   border-radius: 14px !important;
-  box-shadow: 0 0 20px var(--accent-mint-glow);
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45);
   transform: scale(1.08);
 }
 
-/* Jours passés : grisés et non sélectionnables */
+/* Jours passés */
 .calendar-day-cell.past {
-  opacity: 0.22 !important;
-  color: rgba(255, 255, 255, 0.2) !important;
+  opacity: 0.25 !important;
+  color: #94a3b8 !important;
   cursor: not-allowed !important;
   text-decoration: line-through !important;
   pointer-events: none !important;
@@ -414,13 +449,13 @@ html, body {
 
 /* Jours fermés (Vendredi) */
 .calendar-day-cell.closed {
-  opacity: 0.28 !important;
-  color: rgba(239, 68, 68, 0.55) !important;
+  opacity: 0.35 !important;
+  color: #ef4444 !important;
   cursor: not-allowed !important;
   pointer-events: none !important;
 }
 
-/* Time Slots 2x3 Grid with Carousel (09:00 to 17:00 every 15 min) */
+/* Time Slots 2x3 Grid with Carousel */
 .time-slots-carousel-header {
   display: flex;
   justify-content: space-between;
@@ -440,8 +475,8 @@ html, body {
 .time-slot-pill {
   padding: 12px 6px;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(2, 132, 199, 0.18);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.3px;
@@ -453,37 +488,42 @@ html, body {
   align-items: center;
   justify-content: center;
   user-select: none;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.04);
 }
 
 .time-slot-pill:hover {
-  background: rgba(187, 247, 208, 0.12);
-  border-color: rgba(187, 247, 208, 0.35);
-  color: var(--accent-mint);
+  background: rgba(2, 132, 199, 0.1);
+  border-color: rgba(2, 132, 199, 0.4);
+  color: #0284c7;
   transform: translateY(-1px);
 }
 
 .time-slot-pill.selected {
-  background: #bbf7d0 !important;
-  border-color: #bbf7d0 !important;
-  color: #0d2315 !important;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  border-color: #0284c7 !important;
+  color: #ffffff !important;
   font-weight: 800 !important;
-  box-shadow: 0 0 20px rgba(187, 247, 208, 0.5) !important;
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45) !important;
   transform: scale(1.02);
+}
+
+.time-slot-pill.selected * {
+  color: #ffffff !important;
 }
 
 .time-slot-pill.selected .slot-badge {
   opacity: 1 !important;
   font-weight: 800 !important;
-  color: #064e3b !important;
+  color: #ffffff !important;
 }
 
-/* Créneaux horaires passés : désactivés et barrés */
+/* Créneaux passés désactivés */
 .time-slot-pill.disabled {
-  opacity: 0.22 !important;
+  opacity: 0.25 !important;
   cursor: not-allowed !important;
   text-decoration: line-through !important;
-  background: rgba(255, 255, 255, 0.02) !important;
-  border: 1px dashed rgba(255, 255, 255, 0.08) !important;
+  background: rgba(241, 245, 249, 0.6) !important;
+  border: 1px dashed rgba(100, 116, 139, 0.25) !important;
   color: var(--text-muted) !important;
   pointer-events: none !important;
   transform: none !important;
@@ -502,7 +542,7 @@ html, body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(2, 132, 199, 0.2);
   cursor: pointer;
   transition: all 0.25s ease;
 }
@@ -511,30 +551,30 @@ html, body {
   width: 22px;
   height: 6px;
   border-radius: 999px;
-  background: var(--accent-mint);
-  box-shadow: 0 0 10px var(--accent-mint);
+  background: #0284c7;
+  box-shadow: 0 0 10px rgba(2, 132, 199, 0.4);
 }
 
-/* Bottom Floating Navigation Bar (Centrée et fixe) */
+/* Bottom Floating Navigation Bar (Toujours fixée et visible à l'écran) */
 .bottom-floating-nav {
   position: fixed;
-  bottom: 20px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 32px);
   max-width: 460px;
   height: 64px;
-  background: rgba(14, 24, 18, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-radius: var(--radius-full);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(2, 132, 199, 0.22);
   display: flex;
   align-items: center;
   justify-content: space-around;
   padding: 6px 12px;
-  z-index: 90;
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(16, 185, 129, 0.12);
+  z-index: 1000;
+  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.12), 0 0 20px rgba(2, 132, 199, 0.08);
 }
 
 .nav-icon-btn {
@@ -552,15 +592,15 @@ html, body {
 }
 
 .nav-icon-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
+  color: #0284c7;
+  background: rgba(2, 132, 199, 0.08);
 }
 
 .nav-icon-btn.active {
-  color: var(--accent-mint);
+  color: #0284c7;
 }
 
-/* Bottom Navigation Tab Buttons (Home, Agenda, Profile, About) */
+/* Bottom Navigation Tab Buttons */
 .nav-tab-btn {
   background: transparent;
   border: none;
@@ -581,24 +621,24 @@ html, body {
 }
 
 .nav-tab-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
+  color: #0284c7;
+  background: rgba(2, 132, 199, 0.06);
 }
 
 .nav-tab-btn.active {
-  color: var(--accent-mint);
-  background: rgba(187, 247, 208, 0.14);
+  color: #0284c7;
+  background: rgba(2, 132, 199, 0.12);
   font-weight: 700;
 }
 
 .nav-tab-btn.active svg {
-  filter: drop-shadow(0 0 8px rgba(187, 247, 208, 0.5));
+  filter: drop-shadow(0 0 6px rgba(2, 132, 199, 0.35));
 }
 
-/* AI Assistant Center Button (from screenshot) */
+/* AI Assistant Center Button */
 .btn-ai-assistant {
-  background: rgba(187, 247, 208, 0.85);
-  color: var(--accent-mint-dark);
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
   font-size: 13px;
   font-weight: 800;
   padding: 8px 18px;
@@ -608,12 +648,12 @@ html, body {
   align-items: center;
   gap: 7px;
   cursor: pointer;
-  box-shadow: 0 0 20px var(--accent-mint-glow);
+  box-shadow: 0 4px 15px rgba(2, 132, 199, 0.35);
   transition: all 0.2s ease;
 }
 
 .btn-ai-assistant:hover {
-  background: #cbf9dc;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   transform: scale(1.04);
 }
 
@@ -636,8 +676,8 @@ html, body {
 /* Form controls in modal/schedule */
 .glass-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #ffffff;
+  border: 1px solid rgba(2, 132, 199, 0.22);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: 12px 14px;
@@ -645,16 +685,25 @@ html, body {
   outline: none;
   font-family: inherit;
   transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.04);
 }
 
 .glass-input:focus {
-  border-color: var(--accent-mint);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 12px rgba(187, 247, 208, 0.2);
+  border-color: #0284c7;
+  background: #ffffff;
+  box-shadow: 0 0 12px rgba(2, 132, 199, 0.22);
 }
 
 .glass-input::placeholder {
   color: var(--text-muted);
+}
+
+/* Modals & Dialogs */
+.patient-portal-page .modal-dialog .glass-panel,
+.patient-portal-page .modal-content {
+  background: #ffffff !important;
+  border-color: rgba(2, 132, 199, 0.25) !important;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.2) !important;
 }
 
 /* =====================================================================
@@ -715,6 +764,5 @@ html, body {
 
 .slots-swipe-hint:hover {
   opacity: 1;
-  color: var(--accent-mint);
+  color: #0284c7;
 }
-

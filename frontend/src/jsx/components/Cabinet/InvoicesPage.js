@@ -9,6 +9,7 @@ import {
   initialPatients,
   initialInvoices,
 } from "../../../services/CabinetData";
+import qrPortalImg from "../../../images/qr-portal.png";
 
 const InvoicesPage = () => {
   const [invoices, setInvoices] = useState(initialInvoices);
@@ -173,8 +174,8 @@ const InvoicesPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <div className="input-group search-area w-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
+          <div className="input-group search-area w-100 w-sm-auto">
             <input
               type="text"
               className="form-control"
@@ -190,7 +191,7 @@ const InvoicesPage = () => {
 
         <Button
           variant="primary"
-          className="btn-rounded"
+          className="btn-rounded w-100 w-sm-auto"
           onClick={() => setShowNewModal(true)}
         >
           <i className="flaticon-381-add-1 me-2"></i> Émettre une Facture
@@ -263,15 +264,15 @@ const InvoicesPage = () => {
         </div>
         <div className="card-body">
           <div className="table-responsive">
-            <table className="table table-responsive-md table-hover">
+            <table className="table table-hover mb-0" style={{ width: "100%" }}>
               <thead>
                 <tr>
-                  <th><strong>N° FACTURE</strong></th>
-                  <th><strong>DATE & HEURE</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>N° FACTURE</strong></th>
+                  <th style={{ minWidth: "85px" }}><strong>DATE</strong></th>
                   <th><strong>PATIENT</strong></th>
-                  <th><strong>ACTE MÉDICAL</strong></th>
-                  <th><strong>MONTANT</strong></th>
-                  <th><strong>ACTIONS</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>ACTE MÉDICAL</strong></th>
+                  <th style={{ minWidth: "80px" }}><strong>MONTANT</strong></th>
+                  <th className="text-end" style={{ width: "95px" }}><strong>ACTIONS</strong></th>
                 </tr>
               </thead>
               <tbody>
@@ -284,7 +285,7 @@ const InvoicesPage = () => {
                 ) : (
                   filteredInvoices.map((inv) => (
                     <tr key={inv.id}>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <strong className="text-primary">{inv.invoiceNumber}</strong>
                       </td>
                       <td>
@@ -298,26 +299,26 @@ const InvoicesPage = () => {
                         >
                           {inv.patientName}
                         </Link>
-                        {getPatientPassword(inv) && (
-                          <span className="badge badge-xs badge-info light ms-2" title="Mot de passe portail client">
-                            🔑 {getPatientPassword(inv)}
-                          </span>
-                        )}
+                        {/* Numéro de facture visible sur mobile sous le patient */}
+                        <div className="d-block d-md-none text-muted fs-11 mt-1">
+                          {inv.invoiceNumber}
+                        </div>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <span className="text-dark fs-13">{inv.actDescription}</span>
                       </td>
                       <td>
-                        <strong className="text-success fs-15">{inv.amount.toLocaleString("fr-DZ")} DA</strong>
+                        <strong className="text-success fs-13 fs-md-15">{inv.amount.toLocaleString("fr-DZ")} DA</strong>
                       </td>
-                      <td>
+                      <td style={{ width: "95px", whiteSpace: "nowrap" }} className="text-end pe-0">
                         <button
                           type="button"
                           className="btn btn-outline-primary btn-xs"
                           onClick={() => setPreviewInvoice(inv)}
                           title="Imprimer / Voir la facture"
                         >
-                          <i className="flaticon-381-print me-1"></i> Facture
+                          <i className="flaticon-381-print me-1"></i>
+                          <span className="d-none d-sm-inline">Facture</span>
                         </button>
                       </td>
                     </tr>
@@ -499,9 +500,9 @@ const InvoicesPage = () => {
                 </div>
               </div>
 
-              {/* Banderole Accès Portail Patient pour le Ticket de Caisse */}
+              {/* Banderole Accès Portail Patient pour le Ticket de Caisse avec QR Code exact */}
               <div
-                className="p-3 mb-3 rounded border d-flex justify-content-between align-items-center flex-wrap gap-2"
+                className="p-3 mb-3 rounded border d-flex justify-content-between align-items-center flex-wrap gap-3"
                 style={{
                   backgroundColor: "#eff6ff",
                   borderColor: "#93c5fd",
@@ -509,27 +510,62 @@ const InvoicesPage = () => {
                   borderWidth: "1.5px",
                 }}
               >
-                <div>
+                <div style={{ flex: "1 1 210px", minWidth: "200px" }}>
                   <div className="d-flex align-items-center gap-2 mb-1">
                     <span className="fs-16">🔑</span>
                     <strong className="text-primary fs-14">
                       Espace Patient en Ligne • فضاء المريض
                     </strong>
                   </div>
-                  <small className="text-muted d-block fs-12">
-                    Identifiant : <strong>{previewInvoice.patientPhone || patients.find((p) => p.id === previewInvoice.patientId)?.phone || "N° Téléphone"}</strong> • Mot de passe :
-                  </small>
-                </div>
-                <div className="text-end">
-                  <span className="text-muted fs-11 d-block text-uppercase font-w600">
-                    Mot de passe / كلمة السر
-                  </span>
-                  <div
-                    className="badge bg-primary text-white font-w800 fs-16 px-3 py-1 mt-1 shadow-sm"
-                    style={{ letterSpacing: "2px", fontFamily: "monospace" }}
-                  >
-                    {getPatientPassword(previewInvoice)}
+                  <div className="text-muted fs-12 mb-2">
+                    Identifiant : <strong className="text-dark">{previewInvoice.patientPhone || patients.find((p) => p.id === previewInvoice.patientId)?.phone || "N° Téléphone"}</strong>
                   </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="text-muted fs-11 text-uppercase font-w600">
+                      Mot de passe / كلمة السر :
+                    </span>
+                    <span
+                      className="badge bg-primary text-white font-w800 fs-15 px-3 py-1 shadow-sm"
+                      style={{ letterSpacing: "1.5px", fontFamily: "monospace" }}
+                    >
+                      {getPatientPassword(previewInvoice)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* QR Code exact pour accès direct (https://belbachir.azizbtph.com/profil) */}
+                <div className="d-flex flex-column align-items-center justify-content-center text-center" style={{ flexShrink: 0 }}>
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      padding: "4px",
+                      borderRadius: "8px",
+                      border: "1px solid #bfdbfe",
+                      boxShadow: "0 2px 6px rgba(37, 99, 235, 0.08)",
+                      display: "inline-flex",
+                    }}
+                  >
+                    <img
+                      src={qrPortalImg}
+                      alt="QR Code Espace Patient"
+                      style={{
+                        width: "82px",
+                        height: "82px",
+                        display: "block",
+                      }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: "700",
+                      color: "#1d4ed8",
+                      marginTop: "3px",
+                      letterSpacing: "0.2px",
+                    }}
+                  >
+                    Scanner pour accéder
+                  </span>
                 </div>
               </div>
 

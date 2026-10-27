@@ -321,8 +321,8 @@ const MedicalDocumentsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <div className="input-group search-area w-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
+          <div className="input-group search-area w-100 w-sm-auto">
             <input
               type="text"
               className="form-control"
@@ -336,7 +336,7 @@ const MedicalDocumentsPage = () => {
           </div>
 
           <select
-            className="form-control w-auto default-select"
+            className="form-control w-100 w-sm-auto default-select"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
           >
@@ -350,7 +350,7 @@ const MedicalDocumentsPage = () => {
 
         <Button
           variant="primary"
-          className="btn-rounded"
+          className="btn-rounded w-100 w-sm-auto"
           onClick={() => setShowAddModal(true)}
         >
           <i className="flaticon-381-add-1 me-2"></i> Ajouter un Document
@@ -369,17 +369,17 @@ const MedicalDocumentsPage = () => {
         </div>
         <div className="card-body">
           <div className="table-responsive">
-            <table className="table table-responsive-md table-hover">
+            <table className="table table-hover mb-0" style={{ width: "100%" }}>
               <thead>
                 <tr>
                   <th><strong>TITRE DU DOCUMENT</strong></th>
                   <th><strong>PATIENT ASSOCIÉ</strong></th>
-                  <th><strong>CATÉGORIE</strong></th>
-                  <th><strong>DATE D'AJOUT</strong></th>
-                  <th><strong>ÉMETTEUR / AUTEUR</strong></th>
-                  <th><strong>TAILLE</strong></th>
-                  <th><strong>STATUT</strong></th>
-                  <th><strong>ACTIONS</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>CATÉGORIE</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>DATE D'AJOUT</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>ÉMETTEUR / AUTEUR</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>TAILLE</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>STATUT</strong></th>
+                  <th className="text-end" style={{ width: "95px" }}><strong>ACTIONS</strong></th>
                 </tr>
               </thead>
               <tbody>
@@ -398,6 +398,10 @@ const MedicalDocumentsPage = () => {
                           <div>
                             <strong className="text-dark">{doc.title}</strong>
                             <span className="d-block text-muted fs-11">Format {doc.type}</span>
+                            {/* Date et catégorie visibles sur mobile sous le titre */}
+                            <div className="d-block d-md-none text-muted fs-11 mt-1">
+                              {doc.date} • {doc.category}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -409,21 +413,21 @@ const MedicalDocumentsPage = () => {
                           {doc.patientName}
                         </Link>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <Badge bg="light" text="dark" className="border">
                           {doc.category}
                         </Badge>
                       </td>
-                      <td>{doc.date}</td>
-                      <td>
+                      <td className="d-none d-md-table-cell">{doc.date}</td>
+                      <td className="d-none d-md-table-cell">
                         <span className="text-muted fs-13">{doc.author}</span>
                       </td>
-                      <td>{doc.fileSize}</td>
-                      <td>
+                      <td className="d-none d-md-table-cell">{doc.fileSize}</td>
+                      <td className="d-none d-md-table-cell">
                         <Badge bg="success" className="light">{doc.status}</Badge>
                       </td>
-                      <td>
-                        <div className="d-flex gap-1">
+                      <td style={{ width: "95px", whiteSpace: "nowrap" }} className="text-end pe-0">
+                        <div className="d-flex gap-1 justify-content-end">
                           <button
                             className="btn btn-outline-primary btn-xs"
                             onClick={() => handleDownload(doc)}

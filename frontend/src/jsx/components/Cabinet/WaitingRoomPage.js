@@ -296,7 +296,7 @@ const WaitingRoomPage = () => {
 
         <div className="d-flex align-items-center gap-2 flex-wrap">
           <a
-            href="/affichage-salle-attente"
+            href="/admin/affichage-salle-attente"
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-outline-info btn-rounded"
@@ -326,17 +326,17 @@ const WaitingRoomPage = () => {
           </div>
         </div>
         <div className="card-body">
-          <div className="table-responsive">
-            <table className="table table-responsive-md table-hover">
+          <div className="table-responsive" style={{ overflowX: "hidden" }}>
+            <table className="table table-hover mb-0" style={{ width: "100%" }}>
               <thead>
                 <tr>
-                  <th><strong>TICKET</strong></th>
-                  <th><strong>ARRIVÉE</strong></th>
-                  <th><strong>RDV PRÉVU</strong></th>
+                  <th style={{ width: "65px", minWidth: "55px" }}><strong>TICKET</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>ARRIVÉE</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>RDV PRÉVU</strong></th>
                   <th><strong>PATIENT</strong></th>
-                  <th><strong>MOTIF</strong></th>
-                  <th><strong>STATUT</strong></th>
-                  <th><strong>ACTIONS</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>MOTIF</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>STATUT</strong></th>
+                  <th className="text-end text-md-start" style={{ width: "95px" }}><strong>ACTIONS</strong></th>
                 </tr>
               </thead>
               <tbody>
@@ -354,16 +354,20 @@ const WaitingRoomPage = () => {
                       className={p.status === "En consultation" ? "bg-light-primary" : ""}
                     >
                       <td>
-                        <span className="badge badge-info light font-w800" style={{ fontSize: "13px" }}>
+                        <span className="badge badge-info light font-w800" style={{ fontSize: "12px", padding: "4px 8px" }}>
                           #{p.ticketNumber || calculateTicketNumber(p.appointmentTime)}
                         </span>
+                        {/* Heure d'arrivée visible sous le ticket uniquement sur mobile */}
+                        <div className="d-block d-md-none text-primary font-w600 mt-1" style={{ fontSize: "11px" }}>
+                          {p.arrivalTime}
+                        </div>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <span className="font-w600 text-primary">
                           {p.arrivalTime}
                         </span>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <span className="text-muted">{p.appointmentTime}</span>
                       </td>
                       <td>
@@ -380,16 +384,30 @@ const WaitingRoomPage = () => {
                             <span className="badge badge-xs badge-info light ms-1">En ligne</span>
                           </span>
                         )}
+                        {/* Motif et statut visibles sous le nom uniquement sur mobile */}
+                        <div className="d-block d-md-none mt-1">
+                          {p.reason && (
+                            <div className="text-muted fs-11 text-truncate" style={{ maxWidth: "150px" }}>
+                              {p.reason}
+                            </div>
+                          )}
+                          <div className="mt-1">
+                            <span className="appointment-status-badge" style={{ padding: "2px 6px", fontSize: "10px" }}>
+                              <span className="status-dot"></span>
+                              {p.status}
+                            </span>
+                          </div>
+                        </div>
                       </td>
-                      <td>{p.reason}</td>
-                      <td>
+                      <td className="d-none d-md-table-cell">{p.reason}</td>
+                      <td className="d-none d-md-table-cell">
                         <span className="appointment-status-badge">
                           <span className="status-dot"></span>
                           {p.status}
                         </span>
                       </td>
                       <td>
-                        <div className="d-flex align-items-center">
+                        <div className="d-flex align-items-center justify-content-end justify-content-md-start">
                           {p.status === "En attente" && (
                             <button
                               type="button"

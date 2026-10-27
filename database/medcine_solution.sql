@@ -32,6 +32,7 @@ CREATE TABLE `appointments` (
   `patient_id` int(11) DEFAULT NULL,
   `patient_name` varchar(150) DEFAULT NULL,
   `patient_phone` varchar(50) DEFAULT NULL,
+  `patient_email` varchar(150) DEFAULT NULL,
   `doctor_id` int(11) DEFAULT NULL,
   `appointment_date` date NOT NULL,
   `appointment_time` time NOT NULL,

@@ -75,7 +75,8 @@
             }
             .slimScrollDiv,
             .deznav-scroll {
-                overflow: visible !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
             }
             .metismenu {
 			

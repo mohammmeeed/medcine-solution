@@ -5,6 +5,16 @@ import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
 import { initialDoctor } from "../../../services/CabinetData";
 
+const DAYS_OF_WEEK = [
+  { key: "samedi", label: "Samedi" },
+  { key: "dimanche", label: "Dimanche" },
+  { key: "lundi", label: "Lundi" },
+  { key: "mardi", label: "Mardi" },
+  { key: "mercredi", label: "Mercredi" },
+  { key: "jeudi", label: "Jeudi" },
+  { key: "vendredi", label: "Vendredi" },
+];
+
 const ClinicProfilePage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -41,6 +51,36 @@ const ClinicProfilePage = () => {
     legalNotice:
       "Membre d'une association de gestion agréée par l'administration fiscale, acceptant à ce titre le règlement des honoraires par chèque et carte bancaire.",
   });
+
+  // Gestion de la sélection interactive des jours de fermeture
+  const toggleClosedDay = (dayKey) => {
+    const current = (clinic.closedDays || "").toLowerCase();
+    const order = ["samedi", "dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi"];
+    
+    let activeKeys = order.filter((k) => current.includes(k));
+    
+    if (activeKeys.includes(dayKey)) {
+      activeKeys = activeKeys.filter((k) => k !== dayKey);
+    } else {
+      activeKeys.push(dayKey);
+      activeKeys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    }
+    
+    if (activeKeys.length === 0) {
+      setClinic({ ...clinic, closedDays: "Aucun (Ouvert 7j/7)" });
+    } else {
+      const labels = activeKeys.map((k) => {
+        const found = DAYS_OF_WEEK.find((d) => d.key === k);
+        return found ? found.label : k;
+      });
+      const formatted = labels.length === 1 
+        ? `${labels[0]}: Fermé`
+        : labels.length === 2 
+          ? `${labels[0]} & ${labels[1]}: Fermé`
+          : `${labels.join(", ")}: Fermé`;
+      setClinic({ ...clinic, closedDays: formatted });
+    }
+  };
 
   // Gestion du téléversement et compression automatique de la photo
   const handlePhotoUpload = (e) => {
@@ -472,14 +512,80 @@ const ClinicProfilePage = () => {
                       />
                     </div>
                     <div className="col-md-4 mb-2">
-                      <label className="form-label font-w500">Jour de fermeture</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Vendredi: Fermé"
-                        value={clinic.closedDays || ""}
-                        onChange={(e) => setClinic({ ...clinic, closedDays: e.target.value })}
-                      />
+                      <label className="form-label font-w500">
+                        <i className="fa fa-calendar-times text-danger me-1"></i>
+                        Jour(s) de fermeture (Liste rapide)
+                      </label>
+                      <select
+                        className="form-control font-w500"
+                        value={
+                          [
+                            "Vendredi: Fermé",
+                            "Vendredi & Samedi: Fermé",
+                            "Vendredi & Dimanche: Fermé",
+                            "Samedi & Dimanche: Fermé",
+                            "Samedi: Fermé",
+                            "Dimanche: Fermé",
+                            "Aucun (Ouvert 7j/7)",
+                          ].includes(clinic.closedDays)
+                            ? clinic.closedDays
+                            : "custom"
+                        }
+                        onChange={(e) => {
+                          if (e.target.value !== "custom") {
+                            setClinic({ ...clinic, closedDays: e.target.value });
+                          }
+                        }}
+                      >
+                        <option value="Vendredi: Fermé">Vendredi uniquement (Vendredi: Fermé)</option>
+                        <option value="Vendredi & Samedi: Fermé">Vendredi & Samedi (Week-end algérien)</option>
+                        <option value="Vendredi & Dimanche: Fermé">Vendredi & Dimanche</option>
+                        <option value="Samedi & Dimanche: Fermé">Samedi & Dimanche (Week-end standard)</option>
+                        <option value="Samedi: Fermé">Samedi uniquement</option>
+                        <option value="Dimanche: Fermé">Dimanche uniquement</option>
+                        <option value="Aucun (Ouvert 7j/7)">Aucun (Ouvert 7j/7)</option>
+                        <option value="custom">Sélection personnalisée (jours ci-dessous)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Sélecteur visuel interactif des jours fermés */}
+                  <div className="mb-4 p-3 bg-white rounded border" style={{ borderColor: "#e2e8f0" }}>
+                    <div className="d-flex flex-wrap justify-content-between align-items-center mb-2">
+                      <label className="form-label font-w600 mb-0 text-dark">
+                        <i className="fa fa-calendar-check text-primary me-2"></i>
+                        Sélection des jours fermés (Cliquez pour cocher / décocher) :
+                      </label>
+                      <span className="badge badge-primary px-3 py-1 font-w600" style={{ fontSize: "13px" }}>
+                        Actuel : {clinic.closedDays || "Vendredi: Fermé"}
+                      </span>
+                    </div>
+                    <div className="d-flex flex-wrap gap-2 mt-2">
+                      {DAYS_OF_WEEK.map((d) => {
+                        const isClosed = (clinic.closedDays || "").toLowerCase().includes(d.key);
+                        return (
+                          <button
+                            key={d.key}
+                            type="button"
+                            className={`btn btn-sm ${isClosed ? "btn-danger shadow-sm" : "btn-outline-secondary"}`}
+                            style={{
+                              borderRadius: "20px",
+                              padding: "6px 14px",
+                              fontWeight: "600",
+                              transition: "all 0.2s ease",
+                            }}
+                            onClick={() => toggleClosedDay(d.key)}
+                          >
+                            {isClosed ? `✕ ${d.label} (Fermé)` : `+ ${d.label}`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 pt-2 border-top" style={{ borderColor: "#f1f5f9" }}>
+                      <small className="text-muted">
+                        <i className="fa fa-info-circle me-1 text-info"></i>
+                        Les jours marqués en rouge <strong>(Fermé)</strong> bloquent automatiquement les réservations sur le portail patient.
+                      </small>
                     </div>
                   </div>
 

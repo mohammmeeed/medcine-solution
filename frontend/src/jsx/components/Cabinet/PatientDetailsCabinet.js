@@ -656,7 +656,7 @@ const PatientDetailsCabinet = () => {
         <h4 className="text-muted">Aucun dossier patient sélectionné</h4>
         <p>Veuillez sélectionner ou créer un patient depuis le répertoire des patients.</p>
         <div>
-          <Link to="/patients" className="btn btn-primary">
+          <Link to="/admin/patients" className="btn btn-primary">
             <i className="fa fa-arrow-left me-2"></i> Aller au répertoire des patients
           </Link>
         </div>
@@ -1098,6 +1098,46 @@ const PatientDetailsCabinet = () => {
           overflow-x: auto;
           margin-bottom: 24px;
           padding-bottom: 0;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+        }
+        .patient-tabs-nav-bar::-webkit-scrollbar {
+          display: none;
+        }
+        @media (max-width: 768px) {
+          .patient-tabs-nav-bar {
+            gap: 6px;
+            padding-bottom: 6px;
+            flex-wrap: nowrap !important;
+          }
+          .patient-tab-btn {
+            padding: 8px 12px !important;
+            font-size: 11.5px !important;
+            flex-shrink: 0;
+          }
+          .patient-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+          .patient-toolbar-left,
+          .patient-toolbar-right {
+            width: 100%;
+            justify-content: space-between;
+          }
+          .patient-btn-back,
+          .patient-selector-box,
+          .patient-btn-primary,
+          .patient-btn-emerald {
+            width: 100%;
+            justify-content: center;
+          }
+          .patient-card-inner {
+            padding: 16px !important;
+          }
+          .patient-panel-card {
+            padding: 16px !important;
+          }
         }
         .patient-tab-btn {
           display: inline-flex;
@@ -1203,7 +1243,7 @@ const PatientDetailsCabinet = () => {
       <nav aria-label="Breadcrumb" className="patient-breadcrumb-bar">
         <ol className="patient-breadcrumb-list">
           <li>
-            <Link to="/patients">Patients</Link>
+            <Link to="/admin/patients">Patients</Link>
           </li>
           <li className="separator">/</li>
           <li className="current">Dossier Patient</li>
@@ -1218,7 +1258,7 @@ const PatientDetailsCabinet = () => {
       <div className="patient-toolbar">
         {/* Left: Retour + Sélecteur de Dossier */}
         <div className="patient-toolbar-left">
-          <Link to="/patients" className="patient-btn-back">
+          <Link to="/admin/patients" className="patient-btn-back">
             <svg
               width="15"
               height="15"
@@ -2278,9 +2318,9 @@ const PatientDetailsCabinet = () => {
                 <thead style={{ background: "#f8fafc" }}>
                   <tr>
                     <th>Titre du document</th>
-                    <th>Catégorie</th>
-                    <th>Date</th>
-                    <th>Émetteur</th>
+                    <th className="d-none d-md-table-cell">Catégorie</th>
+                    <th className="d-none d-md-table-cell">Date</th>
+                    <th className="d-none d-md-table-cell">Émetteur</th>
                     <th className="text-end">Actions</th>
                   </tr>
                 </thead>
@@ -2352,17 +2392,21 @@ const PatientDetailsCabinet = () => {
                             )}
                             <div>
                               <strong className="text-dark d-block">{doc.title}</strong>
-                              <small className="text-muted">
+                              <small className="text-muted d-block">
                                 {doc.fileSize || "Document"} • {doc.type || "PDF"}
                               </small>
+                              <div className="d-block d-md-none mt-1">
+                                <span className="badge badge-xs badge-info light me-1">{doc.category}</span>
+                                <span className="text-muted fs-11">{doc.date}</span>
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td>
+                        <td className="d-none d-md-table-cell">
                           <span className="patient-med-tag">{doc.category}</span>
                         </td>
-                        <td>{doc.date}</td>
-                        <td>{doc.author}</td>
+                        <td className="d-none d-md-table-cell">{doc.date}</td>
+                        <td className="d-none d-md-table-cell">{doc.author}</td>
                         <td className="text-end">
                           <div className="d-inline-flex align-items-center gap-2">
                             <button
@@ -2415,8 +2459,8 @@ const PatientDetailsCabinet = () => {
                   <tr>
                     <th>N° Facture</th>
                     <th>Date</th>
-                    <th>Description de l'acte</th>
-                    <th>Montant</th>
+                    <th className="d-none d-md-table-cell">Description de l'acte</th>
+                    <th className="text-end">Montant</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2432,10 +2476,11 @@ const PatientDetailsCabinet = () => {
                       <tr key={inv.id}>
                         <td>
                           <strong>{inv.invoiceNumber}</strong>
+                          <div className="d-block d-md-none text-muted fs-11">{inv.actDescription}</div>
                         </td>
                         <td style={{ whiteSpace: "nowrap" }}>{inv.date}</td>
-                        <td>{inv.actDescription}</td>
-                        <td>
+                        <td className="d-none d-md-table-cell">{inv.actDescription}</td>
+                        <td className="text-end">
                           <strong className="text-dark">
                             {inv.amount.toLocaleString("fr-DZ")} DA
                           </strong>

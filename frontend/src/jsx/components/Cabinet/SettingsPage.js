@@ -241,7 +241,7 @@ const SettingsPage = () => {
         <button type="button" className="btn btn-sm btn-primary btn-rounded px-3 py-2">
           <i className="flaticon-381-settings-2 me-1"></i> Tarifs & Consultations
         </button>
-        <Link to="/smtp" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
+        <Link to="/admin/smtp" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
           <i className="flaticon-381-email me-1"></i> Configuration SMTP
         </Link>
       </div>
@@ -258,15 +258,70 @@ const SettingsPage = () => {
             </div>
           ) : (
             <form onSubmit={handleSave}>
+              {/* Styles pour éliminer complètement les fonds gris de Bootstrap */}
+              <style>{`
+                .settings-top-box {
+                  background-color: #ffffff !important;
+                  background: #ffffff !important;
+                  border: 1px solid #edf2f7 !important;
+                  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+                }
+                .settings-table-card {
+                  background-color: #ffffff !important;
+                  background: #ffffff !important;
+                  border: 1px solid #edf2f7 !important;
+                  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+                }
+                .settings-table {
+                  --bs-table-bg: #ffffff !important;
+                  --bs-table-accent-bg: transparent !important;
+                  --bs-table-striped-bg: transparent !important;
+                  background-color: #ffffff !important;
+                }
+                .settings-table thead,
+                .settings-table thead tr,
+                .settings-table thead th {
+                  background-color: #ffffff !important;
+                  background: #ffffff !important;
+                  color: #1e293b !important;
+                  border-bottom: 2px solid #edf2f7 !important;
+                  font-weight: 600 !important;
+                  padding: 14px 12px !important;
+                }
+                .settings-table tbody tr {
+                  background-color: #ffffff !important;
+                  background: #ffffff !important;
+                }
+                .settings-table tbody td {
+                  background-color: #ffffff !important;
+                  background: #ffffff !important;
+                  border-color: #f1f5f9 !important;
+                  vertical-align: middle !important;
+                  padding: 12px 12px !important;
+                }
+                .settings-table tbody tr.active-item {
+                  background-color: #f0f7ff !important;
+                  background: #f0f7ff !important;
+                }
+                .settings-table tbody tr.active-item td {
+                  background-color: #f0f7ff !important;
+                  background: #f0f7ff !important;
+                }
+                .settings-table tbody tr:hover td {
+                  background-color: #f8fbff !important;
+                  background: #f8fbff !important;
+                }
+              `}</style>
+
               {/* Type de consultation et Prix de cette consultation */}
-              <div className="row mb-4 p-3 rounded" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0" }}>
+              <div className="row mb-4 p-3 rounded settings-top-box">
                 <div className="col-md-6 mb-2">
                   <label className="form-label font-w600 text-dark d-flex align-items-center gap-1">
                     <i className="flaticon-381-notepad text-primary"></i>
                     <span>Type de consultation</span>
                   </label>
                   <select
-                    className="form-control font-w500"
+                    className="form-control font-w500 bg-white"
                     value={settings.defaultConsultationType}
                     onChange={(e) => handleConsultationTypeChange(e.target.value)}
                   >
@@ -288,7 +343,7 @@ const SettingsPage = () => {
                       type="number"
                       step="100"
                       min="0"
-                      className="form-control font-w700 text-primary fs-16"
+                      className="form-control font-w700 text-primary fs-16 bg-white"
                       value={settings.consultationPrice}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value) || 0;
@@ -305,8 +360,8 @@ const SettingsPage = () => {
               </div>
 
               {/* Grille Tarifaire Complète des Types de Consultation */}
-              <div className="card mb-4" style={{ border: "1px solid #e2e8f0", boxShadow: "none" }}>
-                <div className="card-header bg-light py-2 px-3 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div className="card mb-4 settings-table-card">
+                <div className="card-header bg-white py-3 px-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
                   <div>
                     <h6 className="mb-0 font-w600 text-dark">
                       <i className="flaticon-381-list-1 me-2 text-primary"></i>
@@ -324,10 +379,10 @@ const SettingsPage = () => {
                 </div>
                 <div className="card-body p-0">
                   <div className="table-responsive">
-                    <table className="table table-sm table-hover mb-0">
-                      <thead className="table-light">
+                    <table className="table table-sm mb-0 settings-table">
+                      <thead>
                         <tr>
-                          <th className="ps-3">Type de Consultation / Acte</th>
+                          <th className="ps-3">Type De Consultation / Acte</th>
                           <th>Prix (DA)</th>
                           <th className="text-end pe-3">Action</th>
                         </tr>
@@ -336,7 +391,10 @@ const SettingsPage = () => {
                         {(settings.consultationTypes || defaultConsultationTypesList).map((item) => {
                           const isDefault = item.name === settings.defaultConsultationType;
                           return (
-                            <tr key={item.id || item.name} className={isDefault ? "table-active" : ""}>
+                            <tr
+                              key={item.id || item.name}
+                              className={isDefault ? "active-item" : ""}
+                            >
                               <td className="ps-3 font-w600 text-dark">
                                 {item.name}
                               </td>
@@ -345,11 +403,11 @@ const SettingsPage = () => {
                                   <input
                                     type="number"
                                     step="100"
-                                    className="form-control form-control-sm font-w600 text-primary py-0"
+                                    className="form-control form-control-sm font-w600 text-primary py-0 bg-white"
                                     value={item.price}
                                     onChange={(e) => handleUpdateTypePrice(item.id, e.target.value)}
                                   />
-                                  <span className="input-group-text py-0 bg-white">DA</span>
+                                  <span className="input-group-text py-0 bg-white text-dark">DA</span>
                                 </div>
                               </td>
                               <td className="text-end pe-3">
@@ -364,7 +422,7 @@ const SettingsPage = () => {
                                       Choisir
                                     </button>
                                   ) : (
-                                    <span className="text-primary font-w600 fs-12">
+                                    <span className="badge badge-sm badge-primary light font-w600">
                                       <i className="fa fa-check me-1"></i> Actuel
                                     </span>
                                   )}

@@ -8,27 +8,28 @@ export const MenuList = [
     },
     {
         title: "Tableau de bord",
-        to: "dashboard",
+        to: "admin/dashboard",
         iconStyle: <i className="flaticon-381-networking" />
     },
     {
         title: "Agenda & RDV",
-        to: "appointments",
+        to: "admin/appointments",
         iconStyle: <i className="flaticon-381-calendar-1" />
     },
     {
         title: "Patients",
-        to: "patients",
+        to: "admin/patients",
         iconStyle: <i className="flaticon-381-user-7" />
     },
     {
         title: "Salle d'attente",
-        to: "waiting-room",
+        to: "admin/waiting-room",
         iconStyle: <i className="flaticon-381-clock-1" />
     },
     {
         title: "Écran Salle d'attente",
-        to: "affichage-salle-attente",
+        to: "admin/affichage-salle-attente",
+        target: "_blank",
         iconStyle: <i className="flaticon-381-television" />
     },
 
@@ -39,17 +40,17 @@ export const MenuList = [
     },
     {
         title: "Consultations",
-        to: "consultations",
+        to: "admin/consultations",
         iconStyle: <i className="flaticon-381-notepad" />
     },
     {
         title: "Dossiers médicaux",
-        to: "medical-records",
+        to: "admin/medical-records",
         iconStyle: <i className="flaticon-381-folder" />
     },
     {
         title: "Ordonnances",
-        to: "prescriptions",
+        to: "admin/prescriptions",
         iconStyle: <i className="flaticon-381-file-1" />
     },
 
@@ -60,18 +61,18 @@ export const MenuList = [
     },
     {
         title: "Factures",
-        to: "invoices",
+        to: "admin/invoices",
         iconStyle: <i className="flaticon-381-calculator" />
     },
     {
         title: "Journal de Caisse",
-        to: "cashflow",
+        to: "admin/cashflow",
         iconStyle: <i className="flaticon-381-notebook-1" />
     },
 
     {
         title: "Rapports & Stats",
-        to: "reports",
+        to: "admin/reports",
         iconStyle: <i className="flaticon-381-controls-3" />
     },
 
@@ -82,27 +83,22 @@ export const MenuList = [
     },
     {
         title: "Personnel & Droits",
-        to: "staff",
+        to: "admin/staff",
         iconStyle: <i className="flaticon-381-user-9" />
     },
     {
         title: "Mon cabinet",
-        to: "clinic",
+        to: "admin/clinic",
         iconStyle: <i className="flaticon-381-home-2" />
     },
     {
         title: "Paramètres",
-        to: "settings",
+        to: "admin/settings",
         iconStyle: <i className="flaticon-381-settings-2" />
     },
     {
-        title: "Configuration SMTP",
-        to: "smtp",
-        iconStyle: <i className="flaticon-381-send" />
-    },
-    {
         title: "Aide & Support",
-        to: "support",
+        to: "admin/support",
         iconStyle: <i className="flaticon-381-help" />
     }
 ];

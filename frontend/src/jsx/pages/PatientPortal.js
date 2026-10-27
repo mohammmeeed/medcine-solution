@@ -14,6 +14,7 @@ import {
   Sparkles,
   CheckCircle2,
   Phone,
+  Mail,
   User,
   Lock,
   Key,
@@ -210,10 +211,39 @@ export default function PatientPortal() {
   const [calendarYear, setCalendarYear] = useState(now.getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
 
-  // Vérifie si un jour est un vendredi (cabinet fermé tous les vendredis)
-  const isFriday = (day, month = calendarMonth, year = calendarYear) => {
-    return new Date(year, month, day).getDay() === 5;
+  // Vérifie si un jour fait partie des jours de fermeture du cabinet configurés dans Mon Cabinet
+  const isClosedDay = (day, month = calendarMonth, year = calendarYear) => {
+    const d = new Date(year, month, day).getDay(); // 0 = Dimanche, 1 = Lundi, ... 5 = Vendredi, 6 = Samedi
+    const closedStr = (clinicInfo.closedDays || "Vendredi: Fermé").toLowerCase();
+
+    // Si le cabinet est ouvert 7j/7
+    if (closedStr.includes("aucun") || closedStr.includes("ouvert 7")) return false;
+
+    if (d === 0 && (closedStr.includes("dimanche") || closedStr.includes("dim"))) return true;
+    if (d === 1 && (closedStr.includes("lundi") || closedStr.includes("lun"))) return true;
+    if (d === 2 && (closedStr.includes("mardi") || closedStr.includes("mar"))) return true;
+    if (d === 3 && (closedStr.includes("mercredi") || closedStr.includes("mer"))) return true;
+    if (d === 4 && (closedStr.includes("jeudi") || closedStr.includes("jeu"))) return true;
+    if (d === 5 && (closedStr.includes("vendredi") || closedStr.includes("ven"))) return true;
+    if (d === 6 && (closedStr.includes("samedi") || closedStr.includes("sam"))) return true;
+
+    return false;
   };
+
+  const isWeekdayClosed = (dayIndex) => {
+    const closedStr = (clinicInfo.closedDays || "Vendredi: Fermé").toLowerCase();
+    if (closedStr.includes("aucun") || closedStr.includes("ouvert 7")) return false;
+    if (dayIndex === 0 && (closedStr.includes("dimanche") || closedStr.includes("dim"))) return true;
+    if (dayIndex === 1 && (closedStr.includes("lundi") || closedStr.includes("lun"))) return true;
+    if (dayIndex === 2 && (closedStr.includes("mardi") || closedStr.includes("mar"))) return true;
+    if (dayIndex === 3 && (closedStr.includes("mercredi") || closedStr.includes("mer"))) return true;
+    if (dayIndex === 4 && (closedStr.includes("jeudi") || closedStr.includes("jeu"))) return true;
+    if (dayIndex === 5 && (closedStr.includes("vendredi") || closedStr.includes("ven"))) return true;
+    if (dayIndex === 6 && (closedStr.includes("samedi") || closedStr.includes("sam"))) return true;
+    return false;
+  };
+
+  const isFriday = isClosedDay;
 
   // Vérifie si un jour est déjà passé par rapport à aujourd'hui
   const isDayPast = (day, month = calendarMonth, year = calendarYear) => {
@@ -477,6 +507,16 @@ export default function PatientPortal() {
       const auth = JSON.parse(localStorage.getItem("cabinet_patient_auth") || "null");
       if (auth && auth.phone) {
         return auth.phone;
+      }
+    } catch {}
+    return "";
+  });
+
+  const [patientEmail, setPatientEmail] = useState(() => {
+    try {
+      const auth = JSON.parse(localStorage.getItem("cabinet_patient_auth") || "null");
+      if (auth && auth.email) {
+        return auth.email;
       }
     } catch {}
     return "";
@@ -1329,6 +1369,9 @@ export default function PatientPortal() {
         setAuthenticatedPatient(matched);
         const fullName = `${matched.firstName} ${matched.lastName}`.trim();
         setPatientName(fullName);
+        if (matched.email) {
+          setPatientEmail(matched.email);
+        }
         localStorage.setItem("cabinet_patient_auth", JSON.stringify(matched));
         setAuthSuccess(`Bienvenue ${fullName} ! Vous êtes connecté(e) à votre dossier.`);
 
@@ -1374,6 +1417,7 @@ export default function PatientPortal() {
   const handlePatientLogout = () => {
     setAuthenticatedPatient(null);
     setPatientPassword("");
+    setPatientEmail("");
     setAuthSuccess("");
     setAuthError("");
     setPatientInvoices([]);
@@ -1424,6 +1468,8 @@ export default function PatientPortal() {
       time: selectedTime,
       patientName: patientName.trim(),
       patientPhone: patientPhone.trim(),
+      patientEmail: patientEmail.trim(),
+      email: patientEmail.trim(),
       consultationType: consultationReason,
       reason: consultationReason,
       price: `${Number(consultationPrice).toLocaleString("fr-FR")} DA`,
@@ -1441,6 +1487,8 @@ export default function PatientPortal() {
         body: JSON.stringify({
           patientName: patientName.trim(),
           patientPhone: patientPhone.trim(),
+          patientEmail: patientEmail.trim(),
+          email: patientEmail.trim(),
           date: `${selectedYear}-${monthStr}-${dayStr}`,
           time: selectedTime,
           duration: "30 min",
@@ -1475,7 +1523,7 @@ export default function PatientPortal() {
         particleCount: 80,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ["#bbf7d0", "#86efac", "#10b981", "#ffffff"],
+        colors: ["#0284c7", "#38bdf8", "#0ea5e9", "#ffffff"],
       });
     } catch (e) {
       // fallback
@@ -1534,13 +1582,13 @@ export default function PatientPortal() {
                   fontWeight: "800",
                   letterSpacing: "-0.5px",
                   lineHeight: "1.2",
-                  color: "#ffffff",
+                  color: "var(--text-primary)",
                   margin: 0,
                 }}
               >
                 {clinicInfo.doctorName || "Dr. N. BELBACHIR OULD HENNIA"}
               </h2>
-              <p style={{ color: "var(--accent-mint)", fontSize: "13px", fontWeight: "600", marginTop: "6px", marginBottom: 0 }}>
+              <p style={{ color: "#0284c7", fontSize: "13.5px", fontWeight: "700", marginTop: "6px", marginBottom: 0 }}>
                 {clinicInfo.specialty || "Spécialiste Gynécologie Obstétrique & Échographie"}
               </p>
               {clinicInfo.doctorNameAr && (
@@ -1576,10 +1624,6 @@ export default function PatientPortal() {
                   }}
                 />
                 <div className="doctor-img-overlay"></div>
-                <div className="doctor-available-badge">
-                  <span className="pulse-dot"></span>
-                  <span>Consultations Ouvertes</span>
-                </div>
               </div>
             </div>
 
@@ -1694,7 +1738,7 @@ export default function PatientPortal() {
                       <ChevronLeft size={16} />
                     </button>
 
-                    <span style={{ minWidth: "115px", textAlign: "center", fontWeight: "700", color: "#fff", fontSize: "13px" }}>
+                    <span style={{ minWidth: "115px", textAlign: "center", fontWeight: "700", color: "var(--text-primary)", fontSize: "13px" }}>
                       {MONTH_NAMES[calendarMonth]} {calendarYear}
                     </span>
 
@@ -1723,13 +1767,26 @@ export default function PatientPortal() {
 
                 {/* En-tête des jours de la semaine en français : L M M J V S D */}
                 <div className="calendar-weekdays">
-                  <span title="Lundi">L</span>
-                  <span title="Mardi">M</span>
-                  <span title="Mercredi">M</span>
-                  <span title="Jeudi">J</span>
-                  <span title="Vendredi (Fermé)" style={{ color: "rgba(239, 68, 68, 0.8)", fontWeight: "700" }}>V</span>
-                  <span title="Samedi">S</span>
-                  <span title="Dimanche">D</span>
+                  {[
+                    { l: "L", title: "Lundi", idx: 1 },
+                    { l: "M", title: "Mardi", idx: 2 },
+                    { l: "M", title: "Mercredi", idx: 3 },
+                    { l: "J", title: "Jeudi", idx: 4 },
+                    { l: "V", title: "Vendredi", idx: 5 },
+                    { l: "S", title: "Samedi", idx: 6 },
+                    { l: "D", title: "Dimanche", idx: 0 },
+                  ].map((w) => {
+                    const closed = isWeekdayClosed(w.idx);
+                    return (
+                      <span
+                        key={w.title}
+                        title={closed ? `${w.title} (Cabinet fermé)` : w.title}
+                        style={closed ? { color: "rgba(239, 68, 68, 0.8)", fontWeight: "700" } : undefined}
+                      >
+                        {w.l}
+                      </span>
+                    );
+                  })}
                 </div>
 
                 {/* Grille dynamique du calendrier selon le mois et l'année avec animation fluide */}
@@ -1773,7 +1830,7 @@ export default function PatientPortal() {
                       cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Passé - non réservable)`;
                     } else if (isDayFriday) {
                       cellClass += " closed";
-                      cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Vendredi - Cabinet fermé)`;
+                      cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Cabinet fermé)`;
                     } else if (isToday && !hasFutureSlotsToday) {
                       cellClass += " past";
                       cellTitle = `Aujourd'hui (${d} ${MONTH_NAMES[calendarMonth]}) : Plus aucun créneau disponible`;
@@ -1838,22 +1895,13 @@ export default function PatientPortal() {
                       fontWeight: timePeriod === "matin" ? "800" : "600",
                       fontSize: "12.5px",
                       transition: "all 0.25s ease",
-                      background: timePeriod === "matin" ? "#bbf7d0" : "transparent",
-                      color: timePeriod === "matin" ? "#0d2315" : "var(--text-secondary)",
-                      boxShadow: timePeriod === "matin" ? "0 4px 15px rgba(187, 247, 208, 0.35)" : "none",
+                      background: timePeriod === "matin" ? "#0284c7" : "transparent",
+                      color: timePeriod === "matin" ? "#ffffff" : "var(--text-secondary)",
+                      boxShadow: timePeriod === "matin" ? "0 4px 15px rgba(2, 132, 199, 0.35)" : "none",
                     }}
                   >
-                    <Sun size={15} color={timePeriod === "matin" ? "#0d2315" : "#eab308"} />
+                    <Sun size={15} color={timePeriod === "matin" ? "#ffffff" : "#eab308"} />
                     <span>Matin</span>
-                    <span
-                      style={{
-                        fontSize: "9.5px",
-                        opacity: timePeriod === "matin" ? 0.75 : 0.6,
-                        marginLeft: "1px",
-                      }}
-                    >
-                      ({clinicInfo.slotStartMorning || "09:00"} - {clinicInfo.slotEndMorning || "12:30"})
-                    </span>
                   </button>
 
                   <button
@@ -1872,22 +1920,13 @@ export default function PatientPortal() {
                       fontWeight: timePeriod === "soir" ? "800" : "600",
                       fontSize: "12.5px",
                       transition: "all 0.25s ease",
-                      background: timePeriod === "soir" ? "#bbf7d0" : "transparent",
-                      color: timePeriod === "soir" ? "#0d2315" : "var(--text-secondary)",
-                      boxShadow: timePeriod === "soir" ? "0 4px 15px rgba(187, 247, 208, 0.35)" : "none",
+                      background: timePeriod === "soir" ? "#0284c7" : "transparent",
+                      color: timePeriod === "soir" ? "#ffffff" : "var(--text-secondary)",
+                      boxShadow: timePeriod === "soir" ? "0 4px 15px rgba(2, 132, 199, 0.35)" : "none",
                     }}
                   >
-                    <Sunset size={15} color={timePeriod === "soir" ? "#0d2315" : "#f59e0b"} />
+                    <Sunset size={15} color={timePeriod === "soir" ? "#ffffff" : "#f59e0b"} />
                     <span>Après-midi</span>
-                    <span
-                      style={{
-                        fontSize: "9.5px",
-                        opacity: timePeriod === "soir" ? 0.75 : 0.6,
-                        marginLeft: "1px",
-                      }}
-                    >
-                      ({clinicInfo.slotStartEvening || "13:00"} - {clinicInfo.slotEndEvening || "18:00"})
-                    </span>
                   </button>
                 </div>
 
@@ -1923,9 +1962,7 @@ export default function PatientPortal() {
                         fontWeight: "700",
                       }}
                     >
-                      {timePeriod === "matin"
-                        ? `Matinée (${clinicInfo.slotStartMorning || "09:00"} - ${clinicInfo.slotEndMorning || "12:30"})`
-                        : `Après-midi (${clinicInfo.slotStartEvening || "13:00"} - ${clinicInfo.slotEndEvening || "18:00"})`}
+                      {timePeriod === "matin" ? "Matin" : "Après-midi"}
                     </span>
                   </div>
 
@@ -2030,26 +2067,86 @@ export default function PatientPortal() {
                 <label style={{ display: "block", fontSize: "11px", color: "var(--text-secondary)", marginBottom: "4px" }}>
                   Nom & Prénom de la Patiente *
                 </label>
-                <input
-                  type="text"
-                  className="glass-input"
-                  value={patientName}
-                  onChange={(e) => setPatientName(e.target.value)}
-                  required
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    className="glass-input"
+                    placeholder=""
+                    value={patientName}
+                    onChange={(e) => setPatientName(e.target.value)}
+                    style={{ paddingLeft: "36px" }}
+                    required
+                  />
+                  <User
+                    size={16}
+                    color="var(--accent-mint)"
+                    style={{
+                      position: "absolute",
+                      left: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      pointerEvents: "none",
+                      opacity: 0.85,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ display: "block", fontSize: "11px", color: "var(--text-secondary)", marginBottom: "4px" }}>
+                  Numéro de Téléphone (Mobile) *
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="tel"
+                    className="glass-input"
+                    placeholder=""
+                    value={patientPhone}
+                    onChange={(e) => setPatientPhone(e.target.value)}
+                    style={{ paddingLeft: "36px" }}
+                    required
+                  />
+                  <Phone
+                    size={16}
+                    color="var(--accent-mint)"
+                    style={{
+                      position: "absolute",
+                      left: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      pointerEvents: "none",
+                      opacity: 0.85,
+                    }}
+                  />
+                </div>
               </div>
 
               <div style={{ marginBottom: "16px" }}>
                 <label style={{ display: "block", fontSize: "11px", color: "var(--text-secondary)", marginBottom: "4px" }}>
-                  Numéro de Téléphone (Mobile) *
+                  Adresse E-mail
                 </label>
-                <input
-                  type="tel"
-                  className="glass-input"
-                  value={patientPhone}
-                  onChange={(e) => setPatientPhone(e.target.value)}
-                  required
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="email"
+                    className="glass-input"
+                    placeholder=""
+                    value={patientEmail}
+                    onChange={(e) => setPatientEmail(e.target.value)}
+                    style={{ paddingLeft: "36px" }}
+                  />
+                  <Mail
+                    size={16}
+                    color="var(--accent-mint)"
+                    style={{
+                      position: "absolute",
+                      left: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      pointerEvents: "none",
+                      opacity: 0.85,
+                    }}
+                  />
+                </div>
               </div>
 
 
@@ -2090,7 +2187,7 @@ export default function PatientPortal() {
               <CheckCircle2 size={36} color="var(--accent-mint)" />
             </div>
 
-            <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#fff", marginBottom: "6px" }}>
+            <h3 style={{ fontSize: "22px", fontWeight: "800", color: "var(--text-primary)", marginBottom: "6px" }}>
               Rendez-vous Confirmé !
             </h3>
             <p style={{ color: "var(--text-secondary)", fontSize: "13px", marginBottom: "20px" }}>
@@ -2131,18 +2228,18 @@ export default function PatientPortal() {
                   width: "80px",
                   height: "80px",
                   borderRadius: "50%",
-                  background: "var(--accent-mint)",
-                  color: "#072813",
+                  background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                  color: "#ffffff",
                   fontSize: "38px",
                   fontWeight: "900",
                   margin: "6px auto",
-                  boxShadow: "0 0 30px rgba(187, 247, 208, 0.6)",
+                  boxShadow: "0 0 30px rgba(2, 132, 199, 0.45)",
                 }}
               >
                 {confirmedBooking.ticketNumber || getTicketNumber(confirmedBooking.time)}
               </div>
 
-              <div style={{ fontSize: "16px", fontWeight: "800", color: "#ffffff", marginTop: "8px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-primary)", marginTop: "8px" }}>
                 Ticket N° {confirmedBooking.ticketNumber || getTicketNumber(confirmedBooking.time)} ({confirmedBooking.time})
               </div>
               <div style={{ fontSize: "12.5px", color: "var(--text-secondary)", marginTop: "4px" }}>
@@ -2170,7 +2267,7 @@ export default function PatientPortal() {
               </div>
 
               <div style={{ borderBottom: "1px solid var(--border-subtle)", paddingBottom: "12px", marginBottom: "12px" }}>
-                <div style={{ fontSize: "15px", fontWeight: "700", color: "#fff" }}>
+                <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-primary)" }}>
                   {confirmedBooking.doctorName}
                 </div>
                 <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
@@ -2181,7 +2278,7 @@ export default function PatientPortal() {
               <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
                 <div>
                   <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Date</span>
-                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#fff" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
                     {confirmedBooking.date}
                   </div>
                 </div>
@@ -2201,8 +2298,9 @@ export default function PatientPortal() {
 
               <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "12px" }}>
                 <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Patiente</span>
-                <div style={{ fontSize: "13px", fontWeight: "600", color: "#fff" }}>
+                <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)" }}>
                   {confirmedBooking.patientName} ({confirmedBooking.patientPhone})
+                  {confirmedBooking.patientEmail ? ` • ${confirmedBooking.patientEmail}` : ""}
                 </div>
                 <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
                   Consultation : <strong>{confirmedBooking.reason}</strong>
@@ -2235,7 +2333,7 @@ export default function PatientPortal() {
                   fontSize: "22px",
                   fontWeight: "800",
                   letterSpacing: "-0.5px",
-                  color: "#ffffff",
+                  color: "var(--text-primary)",
                   margin: 0,
                 }}
               >
@@ -2277,7 +2375,7 @@ export default function PatientPortal() {
                 <User size={26} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "16px", fontWeight: "700", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {authenticatedPatient
                     ? `${authenticatedPatient.firstName} ${authenticatedPatient.lastName}`
                     : (patientName.trim() || "Patient(e)")}
@@ -2297,7 +2395,7 @@ export default function PatientPortal() {
             {/* Formulaire de Connexion : Numéro de Téléphone et Mot de passe */}
             <div className="glass-panel" style={{ padding: "18px 16px", marginBottom: "18px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-                <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", display: "flex", alignItems: "center", gap: "7px" }}>
+                <div style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "7px" }}>
                   <Key size={16} color="var(--accent-mint)" />
                   <span>Mes Identifiants (Téléphone & Mot de Passe)</span>
                 </div>
@@ -2458,7 +2556,7 @@ export default function PatientPortal() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                  <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                     <Calendar size={15} color="var(--accent-mint)" />
                     <span>Mes Rendez-vous ({patientAppointments.length})</span>
                   </h4>
@@ -2507,14 +2605,14 @@ export default function PatientPortal() {
                       style={{
                         padding: "20px 16px",
                         textAlign: "center",
-                        background: "rgba(12, 22, 16, 0.5)",
+                        background: "rgba(241, 245, 249, 0.7)",
                         border: "1px dashed var(--border-subtle)",
                         borderRadius: "14px",
                         marginBottom: "6px",
                       }}
                     >
                       <Calendar size={30} color="var(--text-muted)" style={{ margin: "0 auto 8px" }} />
-                      <div style={{ fontSize: "13px", fontWeight: "600", color: "#fff", marginBottom: "4px" }}>
+                      <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "4px" }}>
                         Aucun rendez-vous enregistré
                       </div>
                       <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "0 0 12px" }}>
@@ -2614,7 +2712,7 @@ export default function PatientPortal() {
                       onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                         <Receipt size={15} color="var(--accent-mint)" />
                         <span>Mes Factures ({patientInvoices.length})</span>
                       </h4>
@@ -2666,7 +2764,7 @@ export default function PatientPortal() {
                             >
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                                 <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", lineHeight: "1.35", wordBreak: "break-word" }}>
+                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)", lineHeight: "1.35", wordBreak: "break-word" }}>
                                     {inv.invoiceNumber || `FAC-${inv.id}`}
                                   </div>
                                   <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 8px", fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
@@ -2764,7 +2862,7 @@ export default function PatientPortal() {
                       onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                         <FileText size={15} color="var(--accent-mint)" />
                         <span>Mes Ordonnances ({patientPrescriptions.length})</span>
                       </h4>
@@ -2816,7 +2914,7 @@ export default function PatientPortal() {
                             >
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                                 <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", lineHeight: "1.35", wordBreak: "break-word" }}>
+                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)", lineHeight: "1.35", wordBreak: "break-word" }}>
                                     {presc.prescriptionNumber || `ORD-${presc.id}`}
                                   </div>
                                   <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 8px", fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
@@ -2914,7 +3012,7 @@ export default function PatientPortal() {
                       onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                         <Activity size={15} color="var(--accent-mint)" />
                         <span>Mes Échographies ({patientEchographies.length})</span>
                       </h4>
@@ -2966,7 +3064,7 @@ export default function PatientPortal() {
                             >
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                                 <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", lineHeight: "1.35", wordBreak: "break-word" }}>
+                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)", lineHeight: "1.35", wordBreak: "break-word" }}>
                                     {echo.title || echo.echoType || "Compte-rendu d'échographie"}
                                   </div>
                                   <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 8px", fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
@@ -3064,7 +3162,7 @@ export default function PatientPortal() {
                       onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                      <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                         <Folder size={15} color="var(--accent-mint)" />
                         <span>Mes Documents ({patientDocuments.length})</span>
                       </h4>
@@ -3116,7 +3214,7 @@ export default function PatientPortal() {
                             >
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                                 <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#fff", lineHeight: "1.35", wordBreak: "break-word" }}>
+                                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--text-primary)", lineHeight: "1.35", wordBreak: "break-word" }}>
                                     {doc.title || "Document Médical"}
                                   </div>
                                   <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 8px", fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
@@ -3211,7 +3309,7 @@ export default function PatientPortal() {
                   fontSize: "22px",
                   fontWeight: "800",
                   letterSpacing: "-0.5px",
-                  color: "#ffffff",
+                  color: "var(--text-primary)",
                   margin: 0,
                 }}
               >
@@ -3233,7 +3331,7 @@ export default function PatientPortal() {
                     height: "58px",
                     borderRadius: "50%",
                     objectFit: "cover",
-                    border: "2px solid var(--accent-mint)",
+                    border: "2px solid #0284c7",
                     flexShrink: 0,
                   }}
                   onError={(e) => {
@@ -3241,10 +3339,10 @@ export default function PatientPortal() {
                   }}
                 />
                 <div>
-                  <h4 style={{ fontSize: "15px", fontWeight: "800", color: "#fff", margin: 0 }}>
+                  <h4 style={{ fontSize: "15px", fontWeight: "800", color: "var(--text-primary)", margin: 0 }}>
                     {clinicInfo.doctorName || "Dr. N. BELBACHIR OULD HENNIA"}
                   </h4>
-                  <div style={{ fontSize: "12px", color: "var(--accent-mint)", fontWeight: "600", marginTop: "2px" }}>
+                  <div style={{ fontSize: "12px", color: "#0284c7", fontWeight: "700", marginTop: "2px" }}>
                     {clinicInfo.specialty || "Spécialiste Gynécologie Obstétrique & Échographie"}
                   </div>
                   {clinicInfo.doctorNameAr && (
@@ -3261,32 +3359,16 @@ export default function PatientPortal() {
 
             {/* Horaires d'Ouverture */}
             <div className="glass-panel" style={{ padding: "16px", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Clock size={16} color="var(--accent-mint)" />
-                  <span style={{ fontSize: "13px", fontWeight: "700", color: "#fff" }}>
-                    Horaires des Consultations
-                  </span>
-                </div>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    padding: "3px 9px",
-                    borderRadius: "999px",
-                    background: "rgba(187, 247, 208, 0.15)",
-                    color: "var(--accent-mint)",
-                    fontWeight: "700",
-                  }}
-                >
-                  {clinicInfo.slotStartMorning && clinicInfo.slotEndEvening
-                    ? `${clinicInfo.slotStartMorning} — ${clinicInfo.slotEndEvening}`
-                    : "09:00 — 18:00"}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                <Clock size={16} color="#0284c7" />
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
+                  Horaires des Consultations
                 </span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12.5px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-secondary)" }}>
                   <span>{clinicInfo.hours ? (clinicInfo.hours.includes(":") ? clinicInfo.hours.split(":")[0] : clinicInfo.hours) : "Samedi — Jeudi"}</span>
-                  <span style={{ fontWeight: "700", color: "#fff" }}>
+                  <span style={{ fontWeight: "700", color: "var(--text-primary)" }}>
                     {clinicInfo.slotStartMorning && clinicInfo.slotEndEvening
                       ? `${clinicInfo.slotStartMorning} — ${clinicInfo.slotEndEvening}`
                       : "09:00 — 18:00"}
@@ -3295,7 +3377,7 @@ export default function PatientPortal() {
                 {clinicInfo.closedDays && (
                   <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-muted)" }}>
                     <span>{clinicInfo.closedDays.includes(":") ? clinicInfo.closedDays.split(":")[0] : clinicInfo.closedDays}</span>
-                    <span style={{ color: "rgba(239, 68, 68, 0.85)", fontWeight: "600" }}>
+                    <span style={{ color: "#ef4444", fontWeight: "700" }}>
                       {clinicInfo.closedDays.includes(":") ? clinicInfo.closedDays.split(":")[1].trim() : "Fermé"}
                     </span>
                   </div>
@@ -3306,12 +3388,12 @@ export default function PatientPortal() {
             {/* Coordonnées & Téléphone */}
             <div className="glass-panel" style={{ padding: "16px", marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                <MapPin size={16} color="var(--accent-mint)" />
-                <span style={{ fontSize: "13px", fontWeight: "700", color: "#fff" }}>
+                <MapPin size={16} color="#0284c7" />
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
                   Adresse & Contact
                 </span>
               </div>
-              <div style={{ fontSize: "13px", color: "#ffffff", fontWeight: "700", lineHeight: "1.4", marginBottom: "14px", whiteSpace: "pre-line" }}>
+              <div style={{ fontSize: "13px", color: "var(--text-primary)", fontWeight: "700", lineHeight: "1.4", marginBottom: "14px", whiteSpace: "pre-line" }}>
                 {clinicInfo.address || "Haï Essedikia (Avenue Seghier Benali), Oran"}
               </div>
 
@@ -3322,23 +3404,22 @@ export default function PatientPortal() {
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
+                    justifyContent: "center",
+                    gap: "10px",
                     padding: "12px 16px",
                     borderRadius: "12px",
-                    background: "rgba(187, 247, 208, 0.12)",
-                    border: "1px solid rgba(187, 247, 208, 0.3)",
-                    color: "var(--accent-mint)",
+                    background: "rgba(2, 132, 199, 0.08)",
+                    border: "1px solid rgba(2, 132, 199, 0.22)",
+                    color: "#0284c7",
                     textDecoration: "none",
-                    fontSize: "13px",
-                    fontWeight: "700",
+                    fontSize: "14px",
+                    fontWeight: "800",
+                    letterSpacing: "0.5px",
                     transition: "all 0.2s ease",
                   }}
                 >
-                  <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <Phone size={16} />
-                    <span>Secrétariat & Rendez-vous</span>
-                  </span>
-                  <span style={{ color: "#fff", letterSpacing: "0.5px" }}>
+                  <Phone size={17} />
+                  <span>
                     {clinicInfo.secretaryPhone || clinicInfo.phone || "0560 06 74 66"}
                   </span>
                 </a>
@@ -3349,8 +3430,8 @@ export default function PatientPortal() {
             <div className="glass-panel" style={{ padding: "16px", marginBottom: "18px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <MapPin size={16} color="var(--accent-mint)" />
-                  <span style={{ fontSize: "13px", fontWeight: "700", color: "#fff" }}>
+                  <MapPin size={16} color="#0284c7" />
+                  <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
                     Localisation sur la Carte
                   </span>
                 </div>
@@ -3360,7 +3441,7 @@ export default function PatientPortal() {
                   rel="noreferrer"
                   style={{
                     fontSize: "11px",
-                    color: "var(--accent-mint)",
+                    color: "#0284c7",
                     textDecoration: "none",
                     fontWeight: "700",
                     display: "flex",
@@ -3494,10 +3575,10 @@ export default function PatientPortal() {
               maxWidth: "520px",
               height: "85vh",
               maxHeight: "680px",
-              background: "#0d1812",
+              background: "#ffffff",
               borderRadius: "24px",
-              border: "1px solid rgba(187, 247, 208, 0.25)",
-              boxShadow: "0 25px 60px rgba(0, 0, 0, 0.8)",
+              border: "1px solid rgba(2, 132, 199, 0.25)",
+              boxShadow: "0 25px 60px rgba(15, 23, 42, 0.25)",
               display: "flex",
               flexDirection: "column",
               padding: "20px",
@@ -3532,7 +3613,7 @@ export default function PatientPortal() {
                 <Sparkles size={18} />
               </div>
               <div>
-                <h5 style={{ fontSize: "14px", fontWeight: "700", margin: 0, color: "#fff" }}>
+                <h5 style={{ fontSize: "14px", fontWeight: "700", margin: 0, color: "var(--text-primary)" }}>
                   Assistant Médical IA
                 </h5>
                 <span style={{ fontSize: "10px", color: "var(--accent-mint)" }}>
@@ -3659,11 +3740,11 @@ export default function PatientPortal() {
               maxHeight: "92vh",
               display: "flex",
               flexDirection: "column",
-              background: "#0c1711",
+              background: "#ffffff",
               border: "1px solid var(--border-glow)",
               borderRadius: "20px",
               overflow: "hidden",
-              boxShadow: "0 25px 60px rgba(0,0,0,0.85)",
+              boxShadow: "0 25px 60px rgba(15, 23, 42, 0.25)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -3777,7 +3858,7 @@ export default function PatientPortal() {
             </div>
 
             {/* Body Modal Preview */}
-            <div style={{ flex: 1, padding: "12px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0, background: "#08100b" }}>
+            <div style={{ flex: 1, padding: "12px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0, background: "#f1f5f9" }}>
               {previewModal.type === "image" ? (
                 <img
                   src={previewModal.url}

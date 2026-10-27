@@ -641,7 +641,7 @@ const ConsultationsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="input-group search-area w-auto">
+        <div className="input-group search-area w-100 w-sm-auto">
           <input
             type="text"
             className="form-control"
@@ -656,7 +656,7 @@ const ConsultationsPage = () => {
 
         <Button
           variant={showNewModal ? "outline-primary" : "primary"}
-          className="btn-rounded"
+          className="btn-rounded w-100 w-sm-auto"
           onClick={() => {
             const nextShow = !showNewModal;
             setShowNewModal(nextShow);
@@ -1540,16 +1540,16 @@ const ConsultationsPage = () => {
         </div>
         <div className="card-body">
           <div className="table-responsive">
-            <table className="table table-responsive-md table-hover">
+            <table className="table table-hover mb-0" style={{ width: "100%" }}>
               <thead>
                 <tr>
-                  <th style={{ whiteSpace: "nowrap" }}><strong>DATE & HEURE</strong></th>
+                  <th style={{ minWidth: "90px" }}><strong>DATE & HEURE</strong></th>
                   <th><strong>PATIENT</strong></th>
-                  <th><strong>MOTIF</strong></th>
-                  <th><strong>DIAGNOSTIC (CIM-10)</strong></th>
-                  <th><strong>COTATION</strong></th>
-                  <th><strong>DÉTAIL</strong></th>
-                  <th><strong>ACTIONS</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>MOTIF</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>DIAGNOSTIC (CIM-10)</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>COTATION</strong></th>
+                  <th className="d-none d-sm-table-cell"><strong>DÉTAIL</strong></th>
+                  <th className="text-end" style={{ width: "125px" }}><strong>ACTIONS</strong></th>
                 </tr>
               </thead>
               <tbody>
@@ -1564,7 +1564,8 @@ const ConsultationsPage = () => {
                     <tr key={cs.id} className={selectedConsultation?.id === cs.id ? "table-primary" : ""}>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <strong className="text-primary">{cs.date}</strong>
-                        <span className="text-muted fs-12 ms-2">à {cs.time}</span>
+                        <span className="text-muted fs-12 ms-2 d-none d-sm-inline">à {cs.time}</span>
+                        <div className="d-block d-sm-none text-muted fs-11">{cs.time}</div>
                       </td>
                       <td>
                         <Link
@@ -1573,17 +1574,26 @@ const ConsultationsPage = () => {
                         >
                           {cs.patientName}
                         </Link>
+                        {/* Motif et diagnostic visibles sous le nom sur mobile */}
+                        <div className="d-block d-md-none text-muted fs-11 mt-1">
+                          {cs.reason}
+                        </div>
+                        {cs.diagnosis && (
+                          <div className="d-block d-md-none text-muted fs-11">
+                            {cs.diagnosis}
+                          </div>
+                        )}
                       </td>
-                      <td>{cs.reason}</td>
-                      <td>
+                      <td className="d-none d-md-table-cell">{cs.reason}</td>
+                      <td className="d-none d-md-table-cell">
                         <span className="text-dark font-w500">{cs.diagnosis}</span>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <span className="consult-sober-tag">
                           {cs.billingCode}
                         </span>
                       </td>
-                      <td>
+                      <td className="d-none d-sm-table-cell">
                         <button
                           type="button"
                           className={`btn ${selectedConsultation?.id === cs.id ? "btn-primary" : "btn-outline-primary"} btn-xs`}
@@ -1605,15 +1615,16 @@ const ConsultationsPage = () => {
                           <i className="fa fa-eye"></i>
                         </button>
                       </td>
-                      <td>
-                        <div className="d-flex gap-1">
+                      <td style={{ width: "125px", whiteSpace: "nowrap" }} className="text-end pe-0">
+                        <div className="d-flex gap-1 justify-content-end">
                           <button
                             type="button"
                             onClick={() => setPreviewEchoReport(cs)}
-                            className="btn btn-outline-primary btn-xs d-flex align-items-center"
+                            className="btn btn-outline-primary btn-xs"
                             title="Imprimer le compte-rendu échographique officiel"
                           >
-                            <i className="flaticon-381-print me-1"></i> Écho
+                            <i className="flaticon-381-print"></i>
+                            <span className="d-none d-sm-inline ms-1">Écho</span>
                           </button>
                           <Link
                             to={`/patient-details?id=${cs.patientId}`}
@@ -1626,10 +1637,10 @@ const ConsultationsPage = () => {
                             <button
                               type="button"
                               onClick={() => handleOpenPrescription(cs)}
-                              className="btn btn-outline-success btn-xs d-flex align-items-center"
+                              className="btn btn-outline-success btn-xs"
                               title="Imprimer l'ordonnance médicale officielle"
                             >
-                              <i className="flaticon-381-file-1 me-1"></i> Ordonnance
+                              <i className="flaticon-381-file-1"></i>
                             </button>
                           )}
                         </div>

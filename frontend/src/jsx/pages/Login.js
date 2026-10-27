@@ -16,7 +16,7 @@ const Login = () => {
     // Si l'utilisateur est déjà connecté, redirection vers le tableau de bord
     const authUser = localStorage.getItem("cabinet_auth_user");
     if (authUser) {
-      navigate("/dashboard");
+      navigate("/admin/dashboard");
     }
     // Pré-remplir l'identifiant mémorisé si existant
     const remembered = localStorage.getItem("cabinet_remember_user");
@@ -112,7 +112,7 @@ const Login = () => {
           showConfirmButton: false,
         });
 
-        navigate("/dashboard");
+        navigate("/admin/dashboard");
         return;
       }
 
@@ -140,7 +140,7 @@ const Login = () => {
           showConfirmButton: false,
         });
 
-        navigate("/dashboard");
+        navigate("/admin/dashboard");
       } else if (isSecretaryUser && isSecretaryPass) {
         const sessionUser = {
           username: cleanUser,
@@ -150,7 +150,7 @@ const Login = () => {
           loginTime: new Date().toISOString(),
         };
         localStorage.setItem("cabinet_auth_user", JSON.stringify(sessionUser));
-        navigate("/dashboard");
+        navigate("/admin/dashboard");
       } else {
         setLoading(false);
         setErrorMsg("Identifiant ou mot de passe incorrect. Veuillez vérifier vos accès.");
@@ -215,16 +215,7 @@ const Login = () => {
           >
             Cabinet Médical Dr N. BELBACHIR
           </h4>
-          <p
-            style={{
-              color: "#64748b",
-              fontSize: "0.85rem",
-              fontWeight: 500,
-              marginBottom: "2px",
-            }}
-          >
-            Gynécologie Obstétrique & Échographie
-          </p>
+
           <p
             style={{
               color: "#1e60d5",
@@ -242,12 +233,9 @@ const Login = () => {
         {/* Corps du Formulaire */}
         <div style={{ padding: "30px" }}>
           <div className="mb-3 text-center">
-            <h5 style={{ fontWeight: 600, color: "#1e293b", fontSize: "1.05rem", marginBottom: "4px" }}>
+            <h5 style={{ fontWeight: 600, color: "#1e293b", fontSize: "1.05rem", marginBottom: "0" }}>
               Espace Administration Sécurisé
             </h5>
-            <small style={{ color: "#94a3b8" }}>
-              Veuillez saisir vos identifiants pour accéder au dossier médical
-            </small>
           </div>
 
           {errorMsg && (
@@ -296,7 +284,6 @@ const Login = () => {
                     height: "46px",
                     fontSize: "0.92rem",
                   }}
-                  placeholder="Ex: admin ou dr.belbachir"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoFocus
@@ -339,7 +326,6 @@ const Login = () => {
                     height: "46px",
                     fontSize: "0.92rem",
                   }}
-                  placeholder="Entrez votre mot de passe"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -382,9 +368,6 @@ const Login = () => {
                   Se souvenir de moi
                 </label>
               </div>
-              <span className="badge badge-light text-primary fs-11 px-2 py-1">
-                🔒 Session chiffrée
-              </span>
             </div>
 
             {/* Bouton de Connexion - Stabilisé contre insertBefore DOM mutations */}
@@ -416,29 +399,6 @@ const Login = () => {
             </button>
           </form>
 
-          {/* Identifiants d'accès rapide */}
-          <div
-            className="mt-4 p-2 text-center rounded"
-            style={{ background: "#f8fafc", border: "1px dashed #cbd5e1" }}
-          >
-            <small style={{ color: "#64748b", fontSize: "0.78rem", display: "block" }}>
-              Identifiants par défaut : <strong>admin</strong> • Mot de passe : <strong>admin</strong>
-            </small>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div
-          style={{
-            background: "#f8fafc",
-            padding: "12px 20px",
-            textAlign: "center",
-            borderTop: "1px solid #eef2f6",
-            fontSize: "0.75rem",
-            color: "#94a3b8",
-          }}
-        >
-          Système Médical Certifié • Cabinet Dr N. BELBACHIR OULD HENNIA © {new Date().getFullYear()}
         </div>
       </div>
     </div>

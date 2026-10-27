@@ -65,7 +65,7 @@ function handleGetAppointments($db) {
                        COALESCE(p.first_name, a.patient_name, '') AS first_name,
                        COALESCE(p.last_name, '') AS last_name,
                        COALESCE(p.phone, a.patient_phone, '') AS patient_phone,
-                       COALESCE(p.email, '') AS patient_email
+                       COALESCE(NULLIF(TRIM(p.email), ''), NULLIF(TRIM(a.patient_email), ''), '') AS patient_email
                 FROM appointments a
                 LEFT JOIN patients p ON a.patient_id = p.id
                 $where
@@ -118,16 +118,34 @@ function handleCreateAppointment($db) {
         $patientId = !empty($body['patientId']) ? intval($body['patientId']) : null;
         $patientName = trim($body['patientName'] ?? '');
         $patientPhone = trim($body['patientPhone'] ?? ($body['phone'] ?? ''));
+        $patientEmail = trim($body['patientEmail'] ?? ($body['email'] ?? ''));
 
-        // Si le patientId n'est pas fourni, vérifier si le patient existe déjà par son numéro de téléphone
-        if (!$patientId && !empty($patientPhone)) {
-            $find = $db->prepare("SELECT id, CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) AS full_name FROM patients WHERE phone = :phone AND phone != '' LIMIT 1");
-            $find->execute([':phone' => $patientPhone]);
+        // Si le patientId n'est pas fourni, vérifier si le patient existe déjà par son numéro de téléphone ou email
+        if (!$patientId && (!empty($patientPhone) || !empty($patientEmail))) {
+            $sqlFind = "SELECT id, email, CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) AS full_name FROM patients WHERE ";
+            $conditions = [];
+            $findParams = [];
+            if (!empty($patientPhone)) {
+                $conditions[] = "(phone = :phone AND phone != '')";
+                $findParams[':phone'] = $patientPhone;
+            }
+            if (!empty($patientEmail)) {
+                $conditions[] = "(email = :email AND email != '')";
+                $findParams[':email'] = $patientEmail;
+            }
+            $sqlFind .= implode(" OR ", $conditions) . " LIMIT 1";
+
+            $find = $db->prepare($sqlFind);
+            $find->execute($findParams);
             $existing = $find->fetch(PDO::FETCH_ASSOC);
             if ($existing) {
                 $patientId = (int)$existing['id'];
                 if (empty($patientName)) {
                     $patientName = trim($existing['full_name']);
+                }
+                if (empty($existing['email']) && !empty($patientEmail)) {
+                    $upd = $db->prepare("UPDATE patients SET email = :email WHERE id = :id");
+                    $upd->execute([':email' => $patientEmail, ':id' => $patientId]);
                 }
             }
         }
@@ -136,13 +154,14 @@ function handleCreateAppointment($db) {
         $price = isset($body['price']) ? (float)$body['price'] : 2500.0;
         $reason = $body['reason'] ?? $consultationType;
 
-        $sql = "INSERT INTO appointments (patient_id, patient_name, patient_phone, doctor_id, appointment_date, appointment_time, duration, reason, consultation_type, price, status, notes)
-                VALUES (:pid, :pname, :pphone, 1, :adate, :atime, :dur, :reason, :ctype, :price, :status, :notes)";
+        $sql = "INSERT INTO appointments (patient_id, patient_name, patient_phone, patient_email, doctor_id, appointment_date, appointment_time, duration, reason, consultation_type, price, status, notes)
+                VALUES (:pid, :pname, :pphone, :pemail, 1, :adate, :atime, :dur, :reason, :ctype, :price, :status, :notes)";
         $stmt = $db->prepare($sql);
         $stmt->execute([
             ':pid' => $patientId,
             ':pname' => !empty($patientName) ? $patientName : null,
             ':pphone' => !empty($patientPhone) ? $patientPhone : null,
+            ':pemail' => !empty($patientEmail) ? $patientEmail : null,
             ':adate' => $date,
             ':atime' => strlen($time) === 5 ? ($time . ":00") : $time,
             ':dur' => $body['duration'] ?? '20 min',
@@ -178,6 +197,7 @@ function handleCreateAppointment($db) {
             "patientId" => $patientId,
             "patientName" => $patientName,
             "phone" => $patientPhone,
+            "email" => $patientEmail,
             "date" => $date,
             "time" => substr($time, 0, 5),
             "status" => $body['status'] ?? 'Confirmé'
@@ -226,6 +246,18 @@ function handleUpdateAppointment($db) {
         if (isset($body['price'])) {
             $fields[] = "price = :price";
             $params[':price'] = (float)$body['price'];
+        }
+        if (isset($body['patientPhone']) || isset($body['phone'])) {
+            $fields[] = "patient_phone = :pphone";
+            $params[':pphone'] = trim($body['patientPhone'] ?? $body['phone']);
+        }
+        if (isset($body['patientEmail']) || isset($body['email'])) {
+            $fields[] = "patient_email = :pemail";
+            $params[':pemail'] = trim($body['patientEmail'] ?? $body['email']);
+        }
+        if (isset($body['patientName'])) {
+            $fields[] = "patient_name = :pname";
+            $params[':pname'] = trim($body['patientName']);
         }
         if (isset($body['notes'])) {
             $fields[] = "notes = :notes";

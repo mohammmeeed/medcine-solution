@@ -141,13 +141,13 @@ const Markup = () => {
     { url: "medical-records", component: <MedicalRecordsPage /> },
     { url: "prescriptions", component: <PrescriptionsPage /> },
     { url: "medical-documents", component: <MedicalDocumentsPage /> },
-    { url: "examinations", component: <Navigate to="/consultations" replace /> },
+    { url: "examinations", component: <Navigate to="/admin/consultations" replace /> },
     { url: "invoices", component: <InvoicesPage /> },
     { url: "cashflow", component: <CashflowPage /> },
     { url: "journal-caisse", component: <CashflowPage /> },
     { url: "payments", component: <PaymentsPage /> },
     { url: "reports", component: <ReportsPage /> },
-    { url: "notifications", component: <Navigate to="/dashboard" replace /> },
+    { url: "notifications", component: <Navigate to="/admin/dashboard" replace /> },
     { url: "staff", component: <StaffPage /> },
     { url: "staff-new", component: <StaffPage initialView="account-form" /> },
     { url: "staff-role-new", component: <StaffPage initialView="role-form" /> },
@@ -255,7 +255,7 @@ const Markup = () => {
 
           <Route path='page-login' element= {<Login />} />
           <Route path='login' element= {<Login />} />
-          <Route path='admin' element= {<Login />} />
+          <Route path='admin/login' element= {<Login />} />
           <Route path='page-register' element= {<Registration />} />
           <Route path='page-lock-screen' element= {<LockScreen />} />
           <Route path='page-error-400' element={<Error400/>} />
@@ -264,13 +264,28 @@ const Markup = () => {
           <Route path='page-error-500' element={<Error500/>} />
           <Route path='page-error-503' element={<Error503/>} />
           <Route path='affichage-salle-attente' element={<AffichageSalleAttente />} />
+          <Route path='admin/affichage-salle-attente' element={<AffichageSalleAttente />} />
+
+          {/* Redirection /admin direct vers /admin/dashboard */}
+          <Route path='admin' element={<Navigate to="/admin/dashboard" replace />} />
+
+          {/* Section Administration avec URLs préfixées /admin/... (ex: /admin/patients) */}
           <Route  element={<MainLayout />} > 
               {allroutes.map((data, i) => (
                 <Route
-                  key={i}
+                  key={`admin-${i}`}
+                  exact
+                  path={`admin/${data.url}`}
+                  element={data.component}
+                />
+              ))}
+              {/* Redirection automatique de compatibilité des anciennes URLs (ex: /patients -> /admin/patients) */}
+              {allroutes.map((data, i) => (
+                <Route
+                  key={`legacy-${i}`}
                   exact
                   path={`${data.url}`}
-                  element={data.component}
+                  element={<Navigate to={`/admin/${data.url}`} replace />}
                 />
               ))}
           </Route>          

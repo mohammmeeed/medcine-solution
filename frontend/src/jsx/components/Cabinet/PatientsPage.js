@@ -271,8 +271,8 @@ const PatientsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <div className="input-group search-area w-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
+          <div className="input-group search-area w-100 w-sm-auto">
             <input
               type="text"
               className="form-control"
@@ -286,7 +286,7 @@ const PatientsPage = () => {
           </div>
 
           <select
-            className="form-control w-auto default-select"
+            className="form-control w-100 w-sm-auto default-select"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
@@ -298,7 +298,7 @@ const PatientsPage = () => {
 
         <Button
           variant={showModal && !editId ? "outline-primary" : "primary"}
-          className="btn-rounded"
+          className="btn-rounded w-100 w-sm-auto"
           onClick={() => {
             if (showModal && !editId) {
               setShowModal(false);
@@ -520,14 +520,14 @@ const PatientsPage = () => {
         </div>
         <div className="card-body">
           <div className="table-responsive">
-            <table className="table table-responsive-md table-hover">
+            <table className="table table-hover mb-0" style={{ width: "100%" }}>
               <thead>
                 <tr>
                   <th><strong>NOM & PRÉNOM</strong></th>
-                  <th><strong>DATE NAISS. (ÂGE)</strong></th>
-                  <th><strong>TÉLÉPHONE</strong></th>
-                  <th><strong>DERNIÈRE VISITE</strong></th>
-                  <th><strong>ACTIONS</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>DATE NAISS. (ÂGE)</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>TÉLÉPHONE</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>DERNIÈRE VISITE</strong></th>
+                  <th className="text-end" style={{ width: "125px" }}><strong>ACTIONS</strong></th>
                 </tr>
               </thead>
               <tbody>
@@ -553,8 +553,11 @@ const PatientsPage = () => {
                         >
                           {(p.lastName || "").toUpperCase()} {p.firstName || ""}
                         </Link>
-                        <div className="d-flex align-items-center gap-2 mt-1">
-                          <span className="text-muted fs-12">{p.gender || "—"}</span>
+                        <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                          <span className="text-muted fs-12">
+                            {p.gender || "—"}
+                            <span className="d-inline d-md-none ms-1">({p.age || 0} ans)</span>
+                          </span>
                           <span
                             className="badge badge-xs badge-info light"
                             title="Mot de passe d'accès portail patient"
@@ -565,18 +568,20 @@ const PatientsPage = () => {
                           </span>
                         </div>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         {p.dob || "—"}{" "}
                         <span className="text-muted fs-12">({p.age || 0} ans)</span>
                       </td>
-                      <td>{p.phone}</td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
+                        <span className="font-w600">{p.phone}</span>
+                      </td>
+                      <td className="d-none d-md-table-cell">
                         <span className="text-muted">
                           {p.lastVisit || "N/A"}
                         </span>
                       </td>
-                      <td>
-                        <div className="d-flex">
+                      <td style={{ width: "125px", whiteSpace: "nowrap" }} className="text-end pe-0">
+                        <div className="d-flex align-items-center justify-content-end">
                           <Link
                             to={`/patient-details?id=${p.id}`}
                             className="btn btn-primary shadow btn-xs sharp me-1"

@@ -52,10 +52,11 @@ const Header = ({ onNote }) => {
     };
 
     const cleanPath = (location.pathname || "").toLowerCase().replace(/^\/+|\/+$/g, "");
-    const currentRouteKey = cleanPath.split("/")[0] || "";
+    const pathWithoutAdmin = cleanPath.replace(/^admin\/?/, "");
+    const currentRouteKey = pathWithoutAdmin.split("/")[0] || "dashboard";
     const pageTitle = routeTitles[currentRouteKey] || (
-      cleanPath
-        ? cleanPath.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+      pathWithoutAdmin
+        ? pathWithoutAdmin.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
         : "Tableau de bord"
     );
      
@@ -109,7 +110,7 @@ const Header = ({ onNote }) => {
                     <span>Portail Patient</span>
                   </Link>
                 </li>
-                <li className="nav-item dropdown notification_dropdown d-flex align-items-center">
+                <li className="nav-item dropdown notification_dropdown d-none d-md-flex align-items-center">
                   <Link to={"#"} className={`nav-link bell dz-theme-mode ${ background.value === "dark" ? "active": ""}`}
                     onClick={handelChangeMode}
                   >
@@ -119,7 +120,7 @@ const Header = ({ onNote }) => {
 							  </li>
               {fullScreen ? (
                 <li
-                  className="nav-item dropdown notification_dropdown d-none d-sm-flex align-items-center"
+                  className="nav-item dropdown notification_dropdown d-none d-md-flex align-items-center"
                   onClick={() => offFullScreen()}
                 >
                   <Link className="nav-link dz-fullscreen active" to={"#"}>
@@ -154,7 +155,7 @@ const Header = ({ onNote }) => {
                   </Link>
                 </li>
               ) : (
-                <li className="nav-item dropdown notification_dropdown d-none d-sm-flex align-items-center">
+                <li className="nav-item dropdown notification_dropdown d-none d-md-flex align-items-center">
                   <Link
                     className="nav-link dz-fullscreen"
                     to="#"
@@ -209,7 +210,7 @@ const Header = ({ onNote }) => {
                   align="end"
                   className="dropdown-menu dropdown-menu-right"
                 >
-                  <Link to="/profile" className="dropdown-item ai-icon">
+                  <Link to="/admin/profile" className="dropdown-item ai-icon">
                     <svg
                       id="icon-user1"
                       xmlns="http://www.w3.org/2000/svg"
@@ -228,7 +229,7 @@ const Header = ({ onNote }) => {
                     </svg>
                     <span className="ms-2">Mon Profil </span>
                   </Link>
-                  <Link to="/clinic" className="dropdown-item ai-icon">
+                  <Link to="/admin/clinic" className="dropdown-item ai-icon">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       className="text-success"
@@ -246,7 +247,7 @@ const Header = ({ onNote }) => {
                     </svg>
                     <span className="ms-2">Mon Cabinet </span>
                   </Link>
-                  <Link to="/settings" className="dropdown-item ai-icon">
+                  <Link to="/admin/settings" className="dropdown-item ai-icon">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       className="text-info"
@@ -265,7 +266,7 @@ const Header = ({ onNote }) => {
                     <span className="ms-2">Paramètres </span>
                   </Link>
                   <Link
-                    to="/page-login"
+                    to="/login"
                     className="dropdown-item ai-icon"
                     onClick={() => {
                       localStorage.removeItem("cabinet_auth_user");

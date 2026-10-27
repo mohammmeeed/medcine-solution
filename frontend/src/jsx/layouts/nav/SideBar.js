@@ -63,14 +63,16 @@ const SideBar = () => {
 
   // Détection réactive instantanée de la route active via useLocation()
   const cleanPathname = location.pathname.toLowerCase().replace(/^\/+|\/+$/g, "");
-  const currentPath = cleanPathname === "" ? "dashboard" : cleanPathname;
+  const currentPath = cleanPathname === "" ? "admin/dashboard" : cleanPathname;
 
   const isRouteActive = useCallback((itemTo) => {
     if (!itemTo) return false;
     const cleanTo = itemTo.toLowerCase().replace(/^\/+|\/+$/g, "");
-    if (currentPath === cleanTo) return true;
-    if (cleanTo === "patients" && currentPath === "patient-details") return true;
-    if (cleanTo === "medical-records" && currentPath === "medical-documents") return true;
+    const currentNoAdmin = currentPath.replace(/^admin\/?/, "");
+    const toNoAdmin = cleanTo.replace(/^admin\/?/, "");
+    if (currentPath === cleanTo || currentNoAdmin === toNoAdmin) return true;
+    if (toNoAdmin === "patients" && currentNoAdmin === "patient-details") return true;
+    if (toNoAdmin === "medical-records" && currentNoAdmin === "medical-documents") return true;
     return false;
   }, [currentPath]);
 
@@ -104,9 +106,23 @@ const SideBar = () => {
             : ""
           : ""
       }`}
+      style={{
+        position: "fixed",
+        top: "5rem",
+        bottom: 0,
+        height: "calc(100vh - 5rem)",
+      }}
     >
-      <div className="deznav-scroll">
-        <ul className="metismenu" id="menu">
+      <div
+        className="deznav-scroll"
+        style={{
+          height: "100%",
+          maxHeight: "100%",
+          overflowY: "auto",
+          overflowX: "hidden",
+        }}
+      >
+        <ul className="metismenu" id="menu" style={{ paddingBottom: "60px" }}>
           {MenuList.map((data, index) => {
             let menuClass = data.classsChange;
             if (menuClass === "menu-title") {
@@ -197,8 +213,10 @@ const SideBar = () => {
                                 ) : (
                                   <Link
                                     to={subTargetUrl}
+                                    target={subItem.target || undefined}
+                                    rel={subItem.target === "_blank" ? "noopener noreferrer" : undefined}
                                     className={isSubActive ? 'mm-active' : ''}
-                                    onClick={handleMobileNavClick}
+                                    onClick={subItem.target === "_blank" ? undefined : handleMobileNavClick}
                                   >
                                     {subItem.title}
                                   </Link>
@@ -212,8 +230,10 @@ const SideBar = () => {
                   ) : (
                     <Link
                       to={targetUrl}
+                      target={data.target || undefined}
+                      rel={data.target === "_blank" ? "noopener noreferrer" : undefined}
                       className={isItemActive ? 'mm-active' : ''}
-                      onClick={handleMobileNavClick}
+                      onClick={data.target === "_blank" ? undefined : handleMobileNavClick}
                     >
                       {data.iconStyle}{" "}
                       <span className="nav-text">

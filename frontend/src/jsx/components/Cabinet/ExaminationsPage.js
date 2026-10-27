@@ -103,10 +103,10 @@ const ExaminationsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2">
-          <span className="text-muted fs-13">Filtrer par patient :</span>
+        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
+          <span className="text-muted fs-13 d-none d-sm-inline">Filtrer par patient :</span>
           <select
-            className="form-control w-auto default-select"
+            className="form-control w-100 w-sm-auto default-select"
             value={selectedPatientId}
             onChange={(e) => setSelectedPatientId(e.target.value)}
           >
@@ -121,7 +121,7 @@ const ExaminationsPage = () => {
 
         <Button
           variant="primary"
-          className="btn-rounded"
+          className="btn-rounded w-100 w-sm-auto"
           onClick={() => setShowAddModal(true)}
         >
           <i className="flaticon-381-add-1 me-2"></i> Relever des Constantes
@@ -211,19 +211,19 @@ const ExaminationsPage = () => {
         </div>
         <div className="card-body">
           <div className="table-responsive">
-            <table className="table table-responsive-md table-hover">
+            <table className="table table-hover">
               <thead>
                 <tr>
                   <th><strong>DATE</strong></th>
                   <th><strong>PATIENT</strong></th>
-                  <th><strong>TENSION (mmHg)</strong></th>
-                  <th><strong>POULS (bpm)</strong></th>
-                  <th><strong>TEMPÉRATURE</strong></th>
-                  <th><strong>POIDS / TAILLE</strong></th>
-                  <th><strong>IMC</strong></th>
-                  <th><strong>SpO2</strong></th>
-                  <th><strong>GLYCÉMIE</strong></th>
-                  <th><strong>OBSERVATIONS</strong></th>
+                  <th><strong>TENSION</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>POULS (bpm)</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>TEMPÉRATURE</strong></th>
+                  <th><strong>POIDS</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>IMC</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>SpO2</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>GLYCÉMIE</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>OBSERVATIONS</strong></th>
                 </tr>
               </thead>
               <tbody>
@@ -242,26 +242,43 @@ const ExaminationsPage = () => {
                         <td>
                           <Link
                             to={`/patient-details?id=${ex.patientId}`}
-                            className="font-w600 text-dark hover-primary"
+                            className="font-w600 text-dark hover-primary d-block"
                           >
                             {ex.patientName}
                           </Link>
+                          {ex.notes && (
+                            <div className="d-block d-md-none text-muted fs-11 mt-1">
+                              {ex.notes}
+                            </div>
+                          )}
                         </td>
                         <td>
                           <Badge
                             bg={isBpHigh ? "danger" : "light"}
                             text={isBpHigh ? "white" : "dark"}
-                            className="font-w600 fs-12 border"
+                            className="font-w600 fs-11 border"
                           >
                             {ex.bpSystolic} / {ex.bpDiastolic}
                           </Badge>
+                          <div className="d-block d-md-none text-muted fs-11 mt-1">
+                            💓 {ex.heartRate} bpm
+                          </div>
                         </td>
-                        <td>{ex.heartRate} bpm</td>
-                        <td>{ex.temperature} °C</td>
+                        <td className="d-none d-md-table-cell">{ex.heartRate} bpm</td>
+                        <td className="d-none d-md-table-cell">{ex.temperature} °C</td>
                         <td>
-                          {ex.weight} kg <span className="text-muted fs-11">({ex.height} cm)</span>
+                          <div>{ex.weight} kg</div>
+                          <span className="text-muted fs-11 d-none d-md-inline">({ex.height} cm)</span>
+                          <div className="d-block d-md-none mt-1">
+                            <Badge
+                              bg={ex.bmi >= 25 ? "warning" : "success"}
+                              className="light fs-10"
+                            >
+                              IMC {ex.bmi}
+                            </Badge>
+                          </div>
                         </td>
-                        <td>
+                        <td className="d-none d-md-table-cell">
                           <Badge
                             bg={ex.bmi >= 25 ? "warning" : "success"}
                             className="light"
@@ -269,9 +286,9 @@ const ExaminationsPage = () => {
                             {ex.bmi}
                           </Badge>
                         </td>
-                        <td>{ex.spo2}%</td>
-                        <td>{ex.bloodSugar} g/L</td>
-                        <td>
+                        <td className="d-none d-md-table-cell">{ex.spo2}%</td>
+                        <td className="d-none d-md-table-cell">{ex.bloodSugar} g/L</td>
+                        <td className="d-none d-md-table-cell">
                           <span className="text-muted fs-12">{ex.notes || "—"}</span>
                         </td>
                       </tr>

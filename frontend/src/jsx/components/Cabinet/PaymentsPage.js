@@ -156,10 +156,10 @@ const PaymentsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2">
-          <span className="text-muted fs-13">Filtrer par mode :</span>
+        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
+          <span className="text-muted fs-13 d-none d-sm-inline">Filtrer par mode :</span>
           <select
-            className="form-control w-auto default-select"
+            className="form-control w-100 w-sm-auto default-select"
             value={methodFilter}
             onChange={(e) => setMethodFilter(e.target.value)}
           >
@@ -173,7 +173,7 @@ const PaymentsPage = () => {
 
         <Button
           variant="primary"
-          className="btn-rounded"
+          className="btn-rounded w-100 w-sm-auto"
           onClick={() => setShowAddModal(true)}
         >
           <i className="flaticon-381-add-1 me-2"></i> Encaisser un Règlement
@@ -263,18 +263,18 @@ const PaymentsPage = () => {
         </div>
         <div className="card-body">
           <div className="table-responsive">
-            <table className="table table-responsive-md table-hover">
+            <table className="table table-hover">
               <thead>
                 <tr>
-                  <th><strong>N° REÇU</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>N° REÇU</strong></th>
                   <th><strong>DATE & HEURE</strong></th>
                   <th><strong>PATIENT</strong></th>
-                  <th><strong>RÉF. FACTURE</strong></th>
-                  <th><strong>MONTANT ENCAISSÉ</strong></th>
-                  <th><strong>MODE DE RÈGLEMENT</strong></th>
-                  <th><strong>OPÉRATEUR</strong></th>
-                  <th><strong>STATUT</strong></th>
-                  <th><strong>ACTION</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>RÉF. FACTURE</strong></th>
+                  <th><strong>MONTANT</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>MODE DE RÈGLEMENT</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>OPÉRATEUR</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>STATUT</strong></th>
+                  <th className="text-end"><strong>ACTION</strong></th>
                 </tr>
               </thead>
               <tbody>
@@ -287,31 +287,39 @@ const PaymentsPage = () => {
                 ) : (
                   filteredPayments.map((pay) => (
                     <tr key={pay.id}>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <strong className="text-primary">{pay.receiptNumber}</strong>
                       </td>
                       <td>
-                        {pay.date} <span className="text-muted fs-12">à {pay.time}</span>
+                        <div>{pay.date}</div>
+                        <small className="text-muted fs-11">à {pay.time}</small>
+                        <div className="d-block d-md-none mt-1">
+                          <span className="badge badge-xs badge-light border text-primary">{pay.receiptNumber}</span>
+                        </div>
                       </td>
                       <td>
-                        <strong className="text-dark">{pay.patientName}</strong>
+                        <strong className="text-dark d-block">{pay.patientName}</strong>
+                        <div className="d-block d-md-none mt-1">
+                          <span className="badge badge-xs badge-primary light me-1">{pay.method}</span>
+                          <span className="text-muted fs-11">{pay.invoiceNumber}</span>
+                        </div>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <span className="badge badge-light border">{pay.invoiceNumber}</span>
                       </td>
                       <td>
-                        <strong className="text-success fs-15">{pay.amount.toLocaleString("fr-DZ")} DA</strong>
+                        <strong className="text-success fs-14">{pay.amount.toLocaleString("fr-DZ")} DA</strong>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <span className="badge badge-primary light">{pay.method}</span>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <span className="text-muted fs-13">{pay.operator}</span>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <Badge bg="success" className="light">{pay.status}</Badge>
                       </td>
-                      <td>
+                      <td className="text-end">
                         <button
                           className="btn btn-outline-primary btn-xs"
                           onClick={() => setPreviewReceipt(pay)}

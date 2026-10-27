@@ -708,6 +708,18 @@ rect#chart_ChartBorder {
 }
 
 @media (max-width: 768px) {
+  /* Interdiction stricte de tout scroll horizontal sur smartphone */
+  html,
+  body,
+  #root,
+  #main-wrapper,
+  .content-body,
+  .container-fluid {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+    width: 100% !important;
+  }
+
   .deznav-backdrop {
     display: block;
     position: fixed;
@@ -1137,8 +1149,8 @@ rect#chart_ChartBorder {
   }
 
   .fc-view-harness {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
+    overflow-x: hidden !important;
+    max-width: 100% !important;
   }
 
   /* 13. Statistiques du Tableau de bord (Cartes 1 ou 2 colonnes bien proportionnées) */

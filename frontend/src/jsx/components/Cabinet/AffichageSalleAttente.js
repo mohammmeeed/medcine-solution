@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { initialWaitingRoom, initialDoctor } from "../../../services/CabinetData";
 import ApiService from "../../../services/ApiService";
 
@@ -25,6 +26,7 @@ const getPatientTicketNumber = (p, fallbackIdx) => {
 };
 
 const AffichageSalleAttente = () => {
+  const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [waitingList, setWaitingList] = useState(() => {
     try {
@@ -350,6 +352,35 @@ const AffichageSalleAttente = () => {
 
           {/* Boutons Utilitaires */}
           <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => {
+                if (window.history.length > 1) {
+                  navigate(-1);
+                } else {
+                  navigate("/admin/waiting-room");
+                }
+              }}
+              title="Revenir au tableau de bord / salle d'attente"
+              style={{
+                background: "rgba(255, 255, 255, 0.15)",
+                border: "1px solid rgba(255, 255, 255, 0.25)",
+                color: "#fff",
+                padding: "8px 14px",
+                borderRadius: "10px",
+                cursor: "pointer",
+                fontSize: "14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontWeight: "600",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.28)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)")}
+            >
+              <i className="fa fa-arrow-left"></i>
+              <span>Retour</span>
+            </button>
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
               title={soundEnabled ? "Couper le son" : "Activer le son"}

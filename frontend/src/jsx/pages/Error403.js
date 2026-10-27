@@ -15,7 +15,7 @@ const Error403 = () => {
                      </h4>
                      <p>You do not have permission to view this resource.</p>
                      <div>
-                        <Link className="btn btn-primary" to="/dashboard">
+                        <Link className="btn btn-primary" to="/admin/dashboard">
                            Back to Home
                         </Link>
                      </div>

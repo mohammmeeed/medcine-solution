@@ -305,7 +305,7 @@ const PrescriptionsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="input-group search-area w-auto">
+        <div className="input-group search-area w-100 w-sm-auto">
           <input
             type="text"
             className="form-control"
@@ -318,10 +318,10 @@ const PrescriptionsPage = () => {
           </span>
         </div>
 
-        <div className="d-flex align-items-center gap-2 flex-wrap">
+        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
           <Button
             variant="outline-primary"
-            className="btn-rounded"
+            className="btn-rounded w-100 w-sm-auto"
             onClick={() => setShowMedModal(true)}
             title="Base et répertoire des médicaments"
           >
@@ -330,7 +330,7 @@ const PrescriptionsPage = () => {
 
           <Button
             variant={showCreateModal ? "outline-primary" : "primary"}
-            className="btn-rounded"
+            className="btn-rounded w-100 w-sm-auto"
             onClick={() => {
               if (showCreateModal) {
                 setShowCreateModal(false);
@@ -540,15 +540,15 @@ const PrescriptionsPage = () => {
         </div>
         <div className="card-body">
           <div className="table-responsive">
-            <table className="table table-responsive-md table-hover">
+            <table className="table table-hover mb-0" style={{ width: "100%" }}>
               <thead>
                 <tr>
-                  <th><strong>N° ORDONNANCE</strong></th>
-                  <th><strong>DATE</strong></th>
+                  <th style={{ minWidth: "105px" }}><strong>N° ORDONNANCE</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>DATE</strong></th>
                   <th><strong>PATIENT</strong></th>
-                  <th><strong>MÉDICAMENTS PRESCRITS</strong></th>
-                  <th><strong>VALIDITÉ</strong></th>
-                  <th><strong>ACTIONS</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>MÉDICAMENTS PRESCRITS</strong></th>
+                  <th className="d-none d-md-table-cell"><strong>VALIDITÉ</strong></th>
+                  <th className="text-end" style={{ width: "125px" }}><strong>ACTIONS</strong></th>
                 </tr>
               </thead>
               <tbody>
@@ -563,12 +563,20 @@ const PrescriptionsPage = () => {
                     <tr key={ord.id}>
                       <td>
                         <strong className="text-primary">{ord.prescriptionNumber}</strong>
+                        {/* Date visible sur mobile sous le numéro d'ordonnance */}
+                        <div className="d-block d-md-none text-muted fs-11 mt-1">
+                          {ord.date}
+                        </div>
                       </td>
-                      <td>{ord.date}</td>
+                      <td className="d-none d-md-table-cell">{ord.date}</td>
                       <td>
                         <span className="font-w600 text-dark">{ord.patientName}</span>
+                        {/* Résumé des médicaments visible sur mobile */}
+                        <div className="d-block d-md-none text-muted fs-11 mt-1">
+                          {(ord.items || []).length} méd. prescrit(s)
+                        </div>
                       </td>
-                      <td>
+                      <td className="d-none d-md-table-cell">
                         <ul className="mb-0 ps-3 fs-13">
                           {(ord.items || []).map((item, idx) => (
                             <li key={idx}>
@@ -577,19 +585,20 @@ const PrescriptionsPage = () => {
                           ))}
                         </ul>
                       </td>
-                      <td>{ord.validity}</td>
-                      <td>
-                        <div className="d-flex gap-1 align-items-center">
+                      <td className="d-none d-md-table-cell">{ord.validity}</td>
+                      <td style={{ width: "125px", whiteSpace: "nowrap" }} className="text-end pe-0">
+                        <div className="d-flex gap-1 align-items-center justify-content-end">
                           <button
                             className="btn btn-outline-primary btn-xs"
                             onClick={() => setPreviewPrescription(ord)}
                             title="Aperçu & Impression officielle"
                           >
-                            <i className="flaticon-381-print me-1"></i> Imprimer
+                            <i className="flaticon-381-print me-1"></i>
+                            <span className="d-none d-sm-inline">Imprimer</span>
                           </button>
                           <button
                             type="button"
-                            className="btn btn-xs btn-link text-danger p-0 ms-2"
+                            className="btn btn-danger shadow btn-xs sharp"
                             onClick={() =>
                               handleDeletePrescription(
                                 ord.id,

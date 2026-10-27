@@ -645,8 +645,8 @@ const AppointmentsPage = () => {
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
         {/* Recherche et filtres à gauche */}
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <div className="input-group search-area w-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
+          <div className="input-group search-area w-100 w-sm-auto">
             <input
               type="text"
               className="form-control"
@@ -660,7 +660,7 @@ const AppointmentsPage = () => {
           </div>
 
           <select
-            className="form-control w-auto default-select"
+            className="form-control w-100 w-sm-auto default-select"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
@@ -674,7 +674,7 @@ const AppointmentsPage = () => {
         </div>
 
         {/* Boutons d'action et mode à droite */}
-        <div className="d-flex align-items-center gap-2 flex-wrap">
+        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto justify-content-between justify-content-sm-end">
           <div className="btn-group" role="group">
             <button
               type="button"
@@ -694,7 +694,7 @@ const AppointmentsPage = () => {
 
           <Button
             variant={showModal && !editId ? "outline-primary" : "primary"}
-            className="btn-rounded"
+            className="btn-rounded w-100 w-sm-auto"
             onClick={() => {
               if (showModal && !editId) {
                 setShowModal(false);
@@ -914,12 +914,12 @@ const AppointmentsPage = () => {
             </div>
 
             {/* Navigation et Titre Mois/Année */}
-            <div className="d-flex align-items-center gap-2">
+            <div className="d-flex align-items-center gap-1 gap-md-2 cal-nav-group">
               <button
                 type="button"
                 className="btn btn-sm btn-outline-light text-secondary border cal-nav-btn"
                 onClick={handlePrev}
-                title="Semaine précédente"
+                title="Précédent"
               >
                 <i className="fa fa-chevron-left"></i>
               </button>
@@ -930,18 +930,19 @@ const AppointmentsPage = () => {
                 type="button"
                 className="btn btn-sm btn-outline-light text-secondary border cal-nav-btn"
                 onClick={handleNext}
-                title="Semaine suivante"
+                title="Suivant"
               >
                 <i className="fa fa-chevron-right"></i>
               </button>
               <button
                 type="button"
-                className="btn btn-sm btn-outline-primary ms-1 d-inline-flex align-items-center gap-1"
+                className="btn btn-sm btn-outline-primary ms-1 d-inline-flex align-items-center gap-1 cal-btn-today"
                 onClick={handleToday}
                 title="Revenir à aujourd'hui et centrer sur l'heure actuelle"
               >
                 <i className="fa fa-calendar-check-o"></i>
-                <span>Aujourd'hui</span>
+                <span className="d-none d-sm-inline">Aujourd'hui</span>
+                <span className="d-inline d-sm-none">Auj.</span>
               </button>
               <div
                 className="d-none d-md-inline-flex align-items-center ms-2 px-2 py-1 rounded bg-light border text-primary font-w600 fs-12 shadow-sm"
@@ -953,7 +954,7 @@ const AppointmentsPage = () => {
             </div>
 
             {/* Actions à droite : Request Approval (badge 7) & Refresh */}
-            <div className="d-flex align-items-center gap-2">
+            <div className="d-flex align-items-center gap-1 gap-md-2">
               <button
                 type="button"
                 className="cal-btn-approval"
@@ -965,6 +966,7 @@ const AppointmentsPage = () => {
                     confirmButtonColor: "#2563eb",
                   })
                 }
+                title="Demandes d'approbation (7)"
               >
                 <svg
                   width="14"
@@ -975,12 +977,12 @@ const AppointmentsPage = () => {
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="me-1 text-muted"
+                  className="me-0 me-sm-1 text-muted"
                 >
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                   <circle cx="12" cy="7" r="4"></circle>
                 </svg>
-                <span>Request Approval</span>
+                <span className="d-none d-md-inline">Request Approval</span>
                 <span className="cal-badge-pill">7</span>
               </button>
 
@@ -997,6 +999,7 @@ const AppointmentsPage = () => {
                     showConfirmButton: false,
                   });
                 }}
+                title="Actualiser l'agenda"
               >
                 <svg
                   width="13"
@@ -1007,13 +1010,13 @@ const AppointmentsPage = () => {
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="me-1"
+                  className="me-0 me-sm-1"
                 >
                   <polyline points="23 4 23 10 17 10"></polyline>
                   <polyline points="1 20 1 14 7 14"></polyline>
                   <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
                 </svg>
-                <span>Refresh</span>
+                <span className="d-none d-md-inline">Refresh</span>
               </button>
             </div>
           </div>
@@ -1364,6 +1367,163 @@ const AppointmentsPage = () => {
                 line-height: 1.2;
                 text-transform: uppercase;
               }
+
+              /* ========================================================
+                 Ajustements mobiles et tablettes (Téléphone)
+                 ======================================================== */
+              @media (max-width: 768px) {
+                .cal-design-topbar {
+                  padding: 8px 10px !important;
+                  gap: 6px !important;
+                }
+                .cal-tab-btn {
+                  padding: 6px 10px !important;
+                  font-size: 13px !important;
+                }
+                .cal-nav-group {
+                  width: 100%;
+                  justify-content: center;
+                  order: 3;
+                  margin-top: 2px;
+                }
+                .cal-nav-title {
+                  font-size: 12px !important;
+                  max-width: 155px;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                  text-align: center;
+                }
+                .cal-btn-today {
+                  padding: 3px 8px !important;
+                  font-size: 12px !important;
+                }
+                .cal-btn-approval {
+                  padding: 5px 8px !important;
+                  font-size: 11px !important;
+                }
+                .cal-btn-refresh {
+                  padding: 5px 8px !important;
+                  font-size: 11px !important;
+                }
+
+                /* AUCUN défilement horizontal sur mobile (pas de scroll droite/gauche) */
+                .modern-calendar-wrapper {
+                  overflow-x: hidden !important;
+                  width: 100% !important;
+                  max-width: 100% !important;
+                }
+                .modern-calendar-wrapper .fc,
+                .modern-calendar-wrapper .fc-timeGridWeek-view,
+                .modern-calendar-wrapper .fc-dayGridMonth-view,
+                .modern-calendar-wrapper .fc-scrollgrid {
+                  width: 100% !important;
+                  max-width: 100% !important;
+                  min-width: 0 !important;
+                }
+
+                /* ========================================================
+                   Affichage garanti de la colonne du TEMPS (Heures) sur mobile
+                   ======================================================== */
+                /* Largeur nette pour la colonne des heures */
+                .modern-calendar-wrapper .fc-col-header-cell.fc-timegrid-axis,
+                .modern-calendar-wrapper .fc-timegrid-slot-label,
+                .modern-calendar-wrapper .fc-timegrid-cols .fc-timegrid-axis {
+                  width: 44px !important;
+                  min-width: 44px !important;
+                  max-width: 46px !important;
+                }
+
+                /* Cellule d'en-tête (au-dessus des heures) */
+                .modern-calendar-wrapper .fc-col-header-cell.fc-timegrid-axis {
+                  background-color: #ffffff !important;
+                  z-index: 10 !important;
+                }
+
+                /* La colonne axis dans cols DOIT être transparente (pour ne pas masquer les heures) */
+                .modern-calendar-wrapper .fc-timegrid-cols .fc-timegrid-axis {
+                  background: transparent !important;
+                  background-color: transparent !important;
+                  box-shadow: none !important;
+                  pointer-events: none !important;
+                }
+
+                /* Cellules des heures (08:00, 09:00, etc.) parfaitement visibles */
+                .modern-calendar-wrapper .fc-timegrid-slot-label {
+                  height: 60px !important;
+                  vertical-align: middle !important;
+                  position: relative !important;
+                  z-index: 8 !important;
+                  background-color: #ffffff !important;
+                  border-right: 1px solid #eaedf1 !important;
+                  padding: 0 !important;
+                  visibility: visible !important;
+                }
+
+                .modern-calendar-wrapper .fc-timegrid-slot,
+                .modern-calendar-wrapper .fc-timegrid-slot-lane {
+                  height: 60px !important;
+                }
+
+                .modern-calendar-wrapper .fc-timegrid-slot-label-frame {
+                  display: flex !important;
+                  align-items: center !important;
+                  justify-content: center !important;
+                  width: 100% !important;
+                  height: 100% !important;
+                }
+
+                .modern-calendar-wrapper .fc-timegrid-slot-label-cushion,
+                .modern-calendar-wrapper tr .fc-timegrid-slot-label-cushion,
+                .modern-calendar-wrapper tr:not(.fc-timegrid-slot-minor) .fc-timegrid-slot-label-cushion {
+                  font-size: 10.5px !important;
+                  font-weight: 800 !important;
+                  color: #0f172a !important;
+                  display: block !important;
+                  text-align: center !important;
+                  padding: 0 1px !important;
+                  white-space: nowrap !important;
+                  opacity: 1 !important;
+                  visibility: visible !important;
+                }
+
+                /* En-tête des jours empilé verticalement pour éviter tout chevauchement */
+                .cal-custom-day-header {
+                  flex-direction: column !important;
+                  gap: 2px !important;
+                  padding: 4px 0 !important;
+                }
+                .cal-day-num {
+                  font-size: 12px !important;
+                  line-height: 1.1;
+                }
+                .cal-day-name {
+                  font-size: 11px !important;
+                  line-height: 1.1;
+                }
+                .cal-day-pill-today {
+                  width: 24px !important;
+                  height: 24px !important;
+                  font-size: 11px !important;
+                }
+                .cal-card-content {
+                  padding: 4px 6px !important;
+                  gap: 2px !important;
+                }
+                .cal-patient-name {
+                  font-size: 12px !important;
+                }
+                .cal-patient-reason {
+                  font-size: 10.5px !important;
+                }
+                .cal-card-time {
+                  font-size: 9px !important;
+                }
+                .cal-badge-new {
+                  font-size: 8px !important;
+                  padding: 1px 4px !important;
+                }
+              }
             `}</style>
 
             <div className="modern-calendar-wrapper notranslate" translate="no">
@@ -1395,21 +1555,31 @@ const AppointmentsPage = () => {
                 dayHeaderContent={(arg) => {
                   const d = arg.date;
                   const dayNum = d.getDate();
-                  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                  const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
                   const dayName = dayNames[d.getDay()];
                   const isSunday = d.getDay() === 0;
+                  const isFriday = d.getDay() === 5;
                   const isToday = arg.isToday;
 
                   return (
                     <div
-                      className={`cal-custom-day-header ${isToday ? "cal-header-today" : ""} ${isSunday ? "cal-header-sunday" : ""}`}
+                      className={`cal-custom-day-header ${isToday ? "cal-header-today" : ""} ${isSunday || isFriday ? "cal-header-sunday" : ""}`}
                     >
                       {isToday ? (
                         <span className="cal-day-pill-today">{dayNum}</span>
                       ) : (
                         <span className="cal-day-num">{dayNum}</span>
                       )}
-                      <span className="cal-day-name">{isToday ? "Aujourd'hui" : dayName}</span>
+                      <span className="cal-day-name">
+                        {isToday ? (
+                          <>
+                            <span className="d-none d-md-inline">Aujourd'hui</span>
+                            <span className="d-inline d-md-none">{dayName}</span>
+                          </>
+                        ) : (
+                          dayName
+                        )}
+                      </span>
                     </div>
                   );
                 }}
@@ -1511,15 +1681,15 @@ const AppointmentsPage = () => {
           </div>
           <div className="card-body">
             <div className="table-responsive">
-              <table className="table table-responsive-md table-hover">
+              <table className="table table-hover">
                 <thead>
                   <tr>
                     <th><strong>DATE & HEURE</strong></th>
                     <th><strong>PATIENT</strong></th>
-                    <th><strong>DURÉE</strong></th>
-                    <th><strong>TÉLÉPHONE</strong></th>
-                    <th><strong>STATUT</strong></th>
-                    <th><strong>ACTIONS</strong></th>
+                    <th className="d-none d-md-table-cell"><strong>DURÉE</strong></th>
+                    <th className="d-none d-md-table-cell"><strong>TÉLÉPHONE</strong></th>
+                    <th className="d-none d-md-table-cell"><strong>STATUT</strong></th>
+                    <th className="text-end"><strong>ACTIONS</strong></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1539,13 +1709,17 @@ const AppointmentsPage = () => {
                           </span>
                         </td>
                         <td>
-                          <span className="font-w600 text-dark">{rdv.patientName}</span>
+                          <span className="font-w600 text-dark d-block">{rdv.patientName}</span>
+                          <div className="d-block d-md-none mt-1">
+                            {getStatusBadge(rdv.status)}
+                            <span className="text-muted fs-11 ms-2">⏱ {rdv.duration}</span>
+                          </div>
                         </td>
-                        <td>{rdv.duration}</td>
-                        <td>{rdv.phone}</td>
-                        <td>{getStatusBadge(rdv.status)}</td>
-                        <td>
-                          <div className="d-flex align-items-center gap-2">
+                        <td className="d-none d-md-table-cell">{rdv.duration}</td>
+                        <td className="d-none d-md-table-cell">{rdv.phone}</td>
+                        <td className="d-none d-md-table-cell">{getStatusBadge(rdv.status)}</td>
+                        <td className="text-end">
+                          <div className="d-inline-flex align-items-center gap-2">
                             <button
                               type="button"
                               className="btn-action-simple btn-edit"

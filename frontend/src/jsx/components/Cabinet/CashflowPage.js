@@ -539,14 +539,14 @@ const CashflowPage = () => {
                   <table className="table table-hover align-middle mb-0">
                     <thead className="table-light text-muted fs-11 text-uppercase">
                       <tr>
-                        <th style={{ width: "130px" }} className="ps-4">TYPE</th>
-                        <th>N° COMMANDE / RÉF</th>
+                        <th style={{ width: "95px" }} className="ps-2 ps-md-4">TYPE</th>
+                        <th className="d-none d-md-table-cell">N° COMMANDE / RÉF</th>
                         <th>CLIENT / FOURNISSEUR</th>
-                        <th>CATÉGORIE</th>
-                        <th>NOTE / MOTIF</th>
-                        <th className="text-end">MONTANT TOTAL</th>
-                        <th className="text-center">DATE</th>
-                        <th className="text-center pe-4" style={{ width: "120px" }}>ACTIONS</th>
+                        <th className="d-none d-md-table-cell">CATÉGORIE</th>
+                        <th className="d-none d-md-table-cell">NOTE / MOTIF</th>
+                        <th className="text-end">MONTANT</th>
+                        <th className="text-center d-none d-md-table-cell">DATE</th>
+                        <th className="text-end pe-2 pe-md-4" style={{ width: "90px" }}>ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -570,7 +570,7 @@ const CashflowPage = () => {
                           return (
                             <tr key={row.id}>
                               {/* TYPE */}
-                              <td className="ps-4">
+                              <td className="ps-2 ps-md-4">
                                 <span
                                   className="badge font-w700 px-2 py-1 fs-11"
                                   style={{
@@ -585,7 +585,7 @@ const CashflowPage = () => {
                               </td>
 
                               {/* N° COMMANDE / RÉF */}
-                              <td>
+                              <td className="d-none d-md-table-cell">
                                 <div className="font-w600 text-dark fs-13 mb-1">
                                   {row.reference}
                                 </div>
@@ -618,10 +618,14 @@ const CashflowPage = () => {
                                     {row.partyPhone}
                                   </small>
                                 )}
+                                {/* Date et catégorie visibles sur mobile sous le nom */}
+                                <div className="d-block d-md-none text-muted fs-11 mt-1">
+                                  {formatDateFr(row.entryDate)} • {row.category}
+                                </div>
                               </td>
 
                               {/* CATÉGORIE */}
-                              <td>
+                              <td className="d-none d-md-table-cell">
                                 <span
                                   className="badge font-w600 text-uppercase fs-11"
                                   style={{
@@ -635,7 +639,7 @@ const CashflowPage = () => {
                               </td>
 
                               {/* NOTE / MOTIF */}
-                              <td>
+                              <td className="d-none d-md-table-cell">
                                 <span className="fs-13 text-secondary text-truncate d-inline-block" style={{ maxWidth: "240px" }}>
                                   {row.notes || "—"}
                                 </span>
@@ -644,7 +648,7 @@ const CashflowPage = () => {
                               {/* MONTANT TOTAL */}
                               <td className="text-end">
                                 <div
-                                  className="font-w800 fs-14"
+                                  className="font-w800 fs-13 fs-md-14"
                                   style={{ color: isRecette ? "#10b981" : "#ef4444" }}
                                 >
                                   {isRecette ? "+" : "-"}
@@ -656,13 +660,13 @@ const CashflowPage = () => {
                               </td>
 
                               {/* DATE */}
-                              <td className="text-center fs-12 text-muted font-w500">
+                              <td className="text-center fs-12 text-muted font-w500 d-none d-md-table-cell">
                                 {formatDateFr(row.entryDate)}
                               </td>
 
                               {/* ACTIONS */}
-                              <td className="text-center pe-4">
-                                <div className="d-flex justify-content-center gap-1">
+                              <td className="text-end pe-2 pe-md-4" style={{ width: "90px", whiteSpace: "nowrap" }}>
+                                <div className="d-flex justify-content-end gap-1">
                                   {row.attachmentPath && (
                                     <button
                                       type="button"

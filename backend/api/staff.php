@@ -78,19 +78,35 @@ function handleSaveStaff($db) {
         $accessLevel = $input['accessLevel'] ?? 'Accueil & Gestion Administrative';
         $password = !empty($input['password']) ? password_hash($input['password'], PASSWORD_DEFAULT) : null;
 
-        // Vérifier si existe déjà par ID
+        // 1. Chercher si l'utilisateur existe déjà par ID, par Email ou premier compte médecin
+        $existingId = null;
         if (!empty($input['id']) && is_numeric($input['id'])) {
-            $stmt = $db->prepare("
-                UPDATE staff_users SET
-                    name = :name,
-                    email = :email,
-                    phone = :phone,
-                    role = :role,
-                    type = :type,
-                    status = :status,
-                    access_level = :access_level" . ($password ? ", password_hash = :pwd" : "") . "
-                WHERE id = :id
-            ");
+            $stmtCheck = $db->prepare("SELECT id FROM staff_users WHERE id = :id");
+            $stmtCheck->execute([':id' => (int)$input['id']]);
+            $existingId = $stmtCheck->fetchColumn();
+        }
+        if (!$existingId && !empty($email)) {
+            $stmtCheck = $db->prepare("SELECT id FROM staff_users WHERE email = :email");
+            $stmtCheck->execute([':email' => $email]);
+            $existingId = $stmtCheck->fetchColumn();
+        }
+        if (!$existingId && ($type === 'doctor' || (!empty($input['username']) && $input['username'] === 'admin'))) {
+            $stmtCheck = $db->prepare("SELECT id FROM staff_users WHERE type = 'doctor' ORDER BY id ASC LIMIT 1");
+            $stmtCheck->execute();
+            $existingId = $stmtCheck->fetchColumn();
+        }
+
+        // 2. Mise à jour (UPDATE) ou Création (INSERT)
+        if ($existingId) {
+            $sql = "UPDATE staff_users SET
+                        name = :name,
+                        email = :email,
+                        phone = :phone,
+                        role = :role,
+                        type = :type,
+                        status = :status,
+                        access_level = :access_level" . ($password ? ", password_hash = :pwd" : "") . "
+                    WHERE id = :id";
             $params = [
                 ':name' => $name,
                 ':email' => $email,
@@ -99,12 +115,31 @@ function handleSaveStaff($db) {
                 ':type' => $type,
                 ':status' => $status,
                 ':access_level' => $accessLevel,
-                ':id' => (int)$input['id']
+                ':id' => (int)$existingId
             ];
             if ($password) $params[':pwd'] = $password;
+            $stmt = $db->prepare($sql);
             $stmt->execute($params);
+
+            // Synchroniser également le médecin dans cabinet_info si applicable
+            if ($type === 'doctor') {
+                try {
+                    $stmtCab = $db->prepare("
+                        UPDATE cabinet_info 
+                        SET doctor_name = :name, email = :email, phone = :phone 
+                        WHERE id = (SELECT id FROM (SELECT id FROM cabinet_info ORDER BY id ASC LIMIT 1) AS tmp)
+                    ");
+                    $stmtCab->execute([
+                        ':name' => $name,
+                        ':email' => $email,
+                        ':phone' => $phone
+                    ]);
+                } catch (Exception $e) {
+                    // cabinet_info optionnel si non initialisé
+                }
+            }
         } else {
-            // Insertion
+            // Insertion d'un nouveau compte
             $pwdHash = $password ?: password_hash('123456', PASSWORD_DEFAULT);
             $stmt = $db->prepare("
                 INSERT INTO staff_users (

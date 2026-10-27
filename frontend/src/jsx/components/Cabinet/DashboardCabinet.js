@@ -166,7 +166,7 @@ const DashboardCabinet = () => {
           </p>
         </div>
         <div className="d-flex align-items-center flex-wrap gap-2 mt-2 mt-sm-0">
-          <Link to="/appointments" className="btn btn-outline-primary btn-rounded">
+          <Link to="/admin/appointments" className="btn btn-outline-primary btn-rounded">
             <i className="flaticon-381-calendar-1 me-2"></i> Voir l'agenda
           </Link>
           <Button
@@ -336,51 +336,58 @@ const DashboardCabinet = () => {
                   {todayAppointments} créneaux programmés • {completedToday} honorés
                 </p>
               </div>
-              <Link to="/appointments" className="btn btn-sm btn-outline-primary mt-2 mt-sm-0">
+              <Link to="/admin/appointments" className="btn btn-sm btn-outline-primary mt-2 mt-sm-0">
                 Gérer l'agenda complet <i className="flaticon-381-next ms-1"></i>
               </Link>
             </div>
             <div className="card-body">
               <div className="table-responsive">
-                <table className="table table-responsive-md table-hover">
+                <table className="table table-hover mb-0" style={{ width: "100%" }}>
                   <thead>
                     <tr>
-                      <th><strong>HEURE</strong></th>
+                      <th style={{ width: "80px", minWidth: "75px" }}><strong>HEURE</strong></th>
                       <th><strong>PATIENT</strong></th>
-                      <th><strong>MOTIF</strong></th>
-                      <th><strong>TÉLÉPHONE</strong></th>
-                      <th><strong>STATUT</strong></th>
-                      <th><strong>ACTION</strong></th>
+                      <th className="d-none d-md-table-cell"><strong>MOTIF</strong></th>
+                      <th className="d-none d-md-table-cell"><strong>TÉLÉPHONE</strong></th>
+                      <th className="d-none d-sm-table-cell"><strong>STATUT</strong></th>
+                      <th className="text-end" style={{ width: "95px" }}><strong>ACTION</strong></th>
                     </tr>
                   </thead>
                   <tbody>
                     {appointments.map((rdv) => (
                       <tr key={rdv.id}>
                         <td>
-                          <span className="badge badge-light text-primary font-w600">
+                          <span className="badge badge-light text-primary font-w600" style={{ fontSize: "11px", padding: "4px 8px" }}>
                             <i className="flaticon-381-clock me-1"></i>
                             {rdv.time}
                           </span>
                         </td>
                         <td>
                           <Link
-                            to="/patient-details"
+                            to="/admin/patient-details"
                             className="font-w600 text-dark hover-primary"
                           >
                             {rdv.patientName}
                           </Link>
+                          {/* Motif et statut visibles sous le nom sur petit écran */}
+                          <div className="d-block d-md-none text-muted fs-11 mt-1">
+                            {rdv.reason}
+                          </div>
+                          <div className="d-block d-sm-none mt-1">
+                            {getStatusBadge(rdv.status)}
+                          </div>
                         </td>
-                        <td>
+                        <td className="d-none d-md-table-cell">
                           <span className="text-muted">{rdv.reason}</span>
                         </td>
-                        <td>{rdv.phone}</td>
-                        <td>{getStatusBadge(rdv.status)}</td>
-                        <td>
-                          <div className="d-flex gap-1">
+                        <td className="d-none d-md-table-cell">{rdv.phone}</td>
+                        <td className="d-none d-sm-table-cell">{getStatusBadge(rdv.status)}</td>
+                        <td style={{ width: "95px", whiteSpace: "nowrap" }} className="text-end pe-0">
+                          <div className="d-flex gap-1 justify-content-end">
                             {rdv.status === "Arrivé" && (
                               <button
                                 className="btn btn-primary btn-xs"
-                                onClick={() => navigate("/consultations")}
+                                onClick={() => navigate("/admin/consultations")}
                                 title="Lancer la consultation"
                               >
                                 Consulter
@@ -400,7 +407,7 @@ const DashboardCabinet = () => {
                               </button>
                             )}
                             <Link
-                              to="/patient-details"
+                              to="/admin/patient-details"
                               className="btn btn-light btn-xs"
                               title="Dossier"
                             >
@@ -426,7 +433,7 @@ const DashboardCabinet = () => {
                 <h4 className="card-title">Salle d'attente</h4>
                 <p className="text-muted fs-13 mb-0">Accueil en cours</p>
               </div>
-              <Link to="/waiting-room" className="btn btn-xs btn-outline-warning">
+              <Link to="/admin/waiting-room" className="btn btn-xs btn-outline-warning">
                 Direct
               </Link>
             </div>
@@ -456,7 +463,7 @@ const DashboardCabinet = () => {
                           </div>
                           <button
                             className="btn btn-primary btn-xs ms-2"
-                            onClick={() => navigate("/consultations")}
+                            onClick={() => navigate("/admin/consultations")}
                           >
                             Appeler
                           </button>
@@ -496,7 +503,7 @@ const DashboardCabinet = () => {
                 ></div>
               </div>
               <div className="d-grid gap-2">
-                <Link to="/invoices" className="btn btn-outline-primary btn-sm">
+                <Link to="/admin/invoices" className="btn btn-outline-primary btn-sm">
                   <i className="flaticon-381-calculator me-1"></i> Consulter les factures
                 </Link>
               </div>

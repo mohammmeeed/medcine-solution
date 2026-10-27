@@ -249,7 +249,21 @@ const StaffPage = ({ initialView = "list" }) => {
   const [accounts, setAccounts] = useState(() => {
     try {
       const saved = localStorage.getItem("cabinet_staff_accounts");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const customAdminPass = localStorage.getItem("cabinet_admin_password") || "admin123";
+          return parsed.map((a) => ({
+            ...a,
+            password:
+              a.password && a.password !== "••••••••"
+                ? a.password
+                : (a.username === "admin"
+                    ? customAdminPass
+                    : (a.username === "secretaire" ? "123" : "123456")),
+          }));
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -262,19 +276,32 @@ const StaffPage = ({ initialView = "list" }) => {
       try {
         const staffData = await ApiService.getStaff();
         if (Array.isArray(staffData) && staffData.length > 0) {
-          const mapped = staffData.map((s) => ({
-            id: s.id,
-            name: s.name,
-            username: s.type === "doctor" ? "admin" : (s.email ? s.email.split("@")[0] : `user${s.id}`),
-            password: "••••••••",
-            email: s.email || "",
-            phone: s.phone || "",
-            roleId: s.type === "doctor" ? "role-superadmin" : "role-secretary",
-            roleName: s.role || (s.type === "doctor" ? "Médecin Titulaire (Super Admin)" : "Secrétaire Médicale"),
-            status: s.status || "Actif",
-            type: s.type || "secretary",
-            createdAt: s.createdAt ? s.createdAt.split(" ")[0] : "2024-01-15",
-          }));
+          const customAdminPass = localStorage.getItem("cabinet_admin_password") || "admin123";
+          const mapped = staffData.map((s) => {
+            const isDoctor = s.type === "doctor";
+            const username = isDoctor ? "admin" : (s.email ? s.email.split("@")[0] : `user${s.id}`);
+            const existing = (accounts || DEFAULT_ACCOUNTS).find(
+              (a) => a.id === s.id || a.username === username
+            );
+            const actualPassword =
+              existing?.password && existing.password !== "••••••••"
+                ? existing.password
+                : (isDoctor ? customAdminPass : (username === "secretaire" ? "123" : "123456"));
+
+            return {
+              id: s.id,
+              name: s.name,
+              username: username,
+              password: actualPassword,
+              email: s.email || "",
+              phone: s.phone || "",
+              roleId: isDoctor ? "role-superadmin" : "role-secretary",
+              roleName: s.role || (isDoctor ? "Médecin Titulaire (Super Admin)" : "Secrétaire Médicale"),
+              status: s.status || "Actif",
+              type: s.type || "secretary",
+              createdAt: s.createdAt ? s.createdAt.split(" ")[0] : "2024-01-15",
+            };
+          });
           setAccounts(mapped);
         }
       } catch (err) {
@@ -337,12 +364,20 @@ const StaffPage = ({ initialView = "list" }) => {
 
   const handleEditAccount = (acc) => {
     setEditingAccountId(acc.id);
+    const customAdminPass = localStorage.getItem("cabinet_admin_password") || "admin123";
+    const resolvedPassword =
+      acc.password && acc.password !== "••••••••"
+        ? acc.password
+        : (acc.username === "admin"
+            ? customAdminPass
+            : (acc.username === "secretaire" ? "123" : "123456"));
+
     setAccountForm({
       name: acc.name || "",
       username: acc.username || "",
       email: acc.email || "",
       phone: acc.phone || "",
-      password: acc.password || "",
+      password: resolvedPassword,
       roleId: acc.roleId || roles[0]?.id,
       status: acc.status || "Actif",
     });
@@ -351,7 +386,7 @@ const StaffPage = ({ initialView = "list" }) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleSaveAccount = (e) => {
+  const handleSaveAccount = async (e) => {
     e.preventDefault();
 
     const cleanName = accountForm.name.trim();
@@ -391,84 +426,97 @@ const StaffPage = ({ initialView = "list" }) => {
 
     const assignedRole = roles.find((r) => r.id === accountForm.roleId) || roles[0];
 
-    if (editingAccountId) {
-      // Modification
-      setAccounts((prev) =>
-        prev.map((acc) => {
-          if (acc.id === editingAccountId) {
-            return {
-              ...acc,
-              name: cleanName,
-              username: cleanUsername,
-              email: accountForm.email.trim(),
-              phone: accountForm.phone.trim(),
-              password: cleanPass ? cleanPass : acc.password,
-              roleId: assignedRole.id,
-              roleName: assignedRole.name,
-              status: accountForm.status,
-            };
-          }
-          return acc;
-        })
-      );
+    try {
+      if (editingAccountId) {
+        // Modification
+        if (cleanPass && cleanPass !== "••••••••" && cleanUsername === "admin") {
+          localStorage.setItem("cabinet_admin_password", cleanPass);
+        }
 
-      // Synchronisation MySQL
-      ApiService.saveStaffUser({
-        id: editingAccountId,
-        name: cleanName,
-        email: accountForm.email.trim() || `${cleanUsername}@cabinet.dz`,
-        phone: accountForm.phone.trim(),
-        role: assignedRole.name,
-        roleName: assignedRole.name,
-        type: cleanUsername === "admin" ? "doctor" : "secretary",
-        status: accountForm.status,
-        accessLevel: assignedRole.name,
-        password: cleanPass || undefined,
-      }).catch((err) => console.warn("Erreur sauvegarde MySQL :", err));
+        setAccounts((prev) =>
+          prev.map((acc) => {
+            if (acc.id === editingAccountId) {
+              return {
+                ...acc,
+                name: cleanName,
+                username: cleanUsername,
+                email: accountForm.email.trim(),
+                phone: accountForm.phone.trim(),
+                password: cleanPass && cleanPass !== "••••••••" ? cleanPass : acc.password,
+                roleId: assignedRole.id,
+                roleName: assignedRole.name,
+                status: accountForm.status,
+              };
+            }
+            return acc;
+          })
+        );
 
+        // Enregistrement direct et persistant dans la base de données MySQL
+        await ApiService.saveStaffUser({
+          id: editingAccountId,
+          name: cleanName,
+          email: accountForm.email.trim() || `${cleanUsername}@cabinet.dz`,
+          phone: accountForm.phone.trim(),
+          role: assignedRole.name,
+          roleName: assignedRole.name,
+          type: cleanUsername === "admin" ? "doctor" : "secretary",
+          status: accountForm.status,
+          accessLevel: assignedRole.name,
+          password: cleanPass && cleanPass !== "••••••••" ? cleanPass : undefined,
+        });
+
+        Swal.fire({
+          icon: "success",
+          title: "Enregistré dans la Base de Données !",
+          text: `Les informations du compte de ${cleanName} sont bien sauvegardées dans MySQL.`,
+          timer: 1800,
+          showConfirmButton: false,
+        });
+      } else {
+        // Création
+        const newAcc = {
+          id: "acc-" + Date.now(),
+          name: cleanName,
+          username: cleanUsername,
+          password: cleanPass,
+          email: accountForm.email.trim(),
+          phone: accountForm.phone.trim(),
+          roleId: assignedRole.id,
+          roleName: assignedRole.name,
+          status: accountForm.status,
+          type: cleanUsername === "admin" ? "doctor" : "secretary",
+          createdAt: new Date().toISOString().split("T")[0],
+        };
+        setAccounts((prev) => [newAcc, ...prev]);
+
+        // Enregistrement dans MySQL
+        await ApiService.saveStaffUser({
+          name: cleanName,
+          email: accountForm.email.trim() || `${cleanUsername}@cabinet.dz`,
+          phone: accountForm.phone.trim(),
+          role: assignedRole.name,
+          roleName: assignedRole.name,
+          type: cleanUsername === "admin" ? "doctor" : "secretary",
+          status: accountForm.status,
+          accessLevel: assignedRole.name,
+          password: cleanPass,
+        });
+
+        Swal.fire({
+          icon: "success",
+          title: "Compte créé dans la Base de Données !",
+          text: `Le compte utilisateur pour ${cleanName} a été ajouté dans MySQL.`,
+          timer: 1800,
+          showConfirmButton: false,
+        });
+      }
+    } catch (err) {
+      console.error("Erreur enregistrement MySQL :", err);
       Swal.fire({
-        icon: "success",
-        title: "Compte modifié dans la Base de Données",
-        text: `Le compte de ${cleanName} a été mis à jour avec succès.`,
-        timer: 1600,
-        showConfirmButton: false,
-      });
-    } else {
-      // Création
-      const newAcc = {
-        id: "acc-" + Date.now(),
-        name: cleanName,
-        username: cleanUsername,
-        password: cleanPass,
-        email: accountForm.email.trim(),
-        phone: accountForm.phone.trim(),
-        roleId: assignedRole.id,
-        roleName: assignedRole.name,
-        status: accountForm.status,
-        type: cleanUsername === "admin" ? "doctor" : "secretary",
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      setAccounts((prev) => [newAcc, ...prev]);
-
-      // Synchronisation MySQL
-      ApiService.saveStaffUser({
-        name: cleanName,
-        email: accountForm.email.trim() || `${cleanUsername}@cabinet.dz`,
-        phone: accountForm.phone.trim(),
-        role: assignedRole.name,
-        roleName: assignedRole.name,
-        type: cleanUsername === "admin" ? "doctor" : "secretary",
-        status: accountForm.status,
-        accessLevel: assignedRole.name,
-        password: cleanPass,
-      }).catch((err) => console.warn("Erreur insertion MySQL :", err));
-
-      Swal.fire({
-        icon: "success",
-        title: "Compte créé dans la Base de Données",
-        text: `Le compte utilisateur pour ${cleanName} a été ajouté dans MySQL.`,
-        timer: 1600,
-        showConfirmButton: false,
+        icon: "warning",
+        title: "Enregistrement local appliqué",
+        text: "Modifications enregistrées localement. Détail : " + (err.message || ""),
       });
     }
 
@@ -731,8 +779,8 @@ const StaffPage = ({ initialView = "list" }) => {
           activeMenu={editingAccountId ? "Modifier le Compte Administrateur" : "Nouveau Compte Administrateur"}
         />
 
-        {/* Barre de retour et d'actions */}
-        <div className="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+        {/* Barre de retour */}
+        <div className="mb-4">
           <button
             type="button"
             className="btn btn-outline-primary btn-sm btn-rounded d-inline-flex align-items-center gap-2"
@@ -744,17 +792,87 @@ const StaffPage = ({ initialView = "list" }) => {
             <i className="fa fa-arrow-left"></i>
             <span>Retour à la liste du personnel</span>
           </button>
-          <div className="d-flex align-items-center gap-2">
-            <span className="badge badge-light text-primary fs-12 px-3 py-2">
-              <i className="flaticon-381-shield-1 me-1"></i> Sécurité & Gestion des Droits
-            </span>
-          </div>
         </div>
+
+        {/* Styles pour uniformiser exactement la taille et la hauteur de tous les champs */}
+        <style>{`
+          .staff-form-card .form-control,
+          .staff-form-card .form-select,
+          .staff-form-card .input-group-text,
+          .staff-form-card .input-group .btn {
+            height: 48px !important;
+            min-height: 48px !important;
+            max-height: 48px !important;
+            font-size: 14px !important;
+            line-height: 1.5 !important;
+            box-sizing: border-box !important;
+          }
+          .staff-form-card .form-control,
+          .staff-form-card .form-select {
+            border-radius: 8px !important;
+            border: 1px solid #dcdce4 !important;
+            padding: 10px 14px !important;
+            background-color: #ffffff !important;
+          }
+          .staff-form-card .form-control:focus,
+          .staff-form-card .form-select:focus {
+            border-color: #1e60d5 !important;
+            box-shadow: 0 0 0 3px rgba(30, 96, 213, 0.12) !important;
+          }
+          .staff-form-card .input-group {
+            height: 48px !important;
+            display: flex !important;
+            align-items: stretch !important;
+          }
+          .staff-form-card .input-group .form-control {
+            border-radius: 0 !important;
+          }
+          .staff-form-card .input-group > :first-child {
+            border-top-left-radius: 8px !important;
+            border-bottom-left-radius: 8px !important;
+            border-top-right-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+          }
+          .staff-form-card .input-group > :last-child {
+            border-top-right-radius: 8px !important;
+            border-bottom-right-radius: 8px !important;
+            border-top-left-radius: 0 !important;
+            border-bottom-left-radius: 0 !important;
+          }
+          .staff-form-card .input-group-text {
+            background-color: #f8fafc !important;
+            border: 1px solid #dcdce4 !important;
+            border-right: 0 !important;
+            color: #64748b !important;
+            font-weight: 600 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 16px !important;
+          }
+          .staff-form-card .input-group .btn {
+            border: 1px solid #dcdce4 !important;
+            border-left: 0 !important;
+            background-color: #ffffff !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .staff-form-card .input-group .btn:hover {
+            background-color: #f8fafc !important;
+          }
+          .staff-form-card .form-label {
+            min-height: 24px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 13.5px;
+          }
+        `}</style>
 
         {/* Formulaire Pleine Page */}
         <div className="row justify-content-center">
           <div className="col-xl-9 col-lg-10 col-12">
-            <div className="card border-0 shadow-sm">
+            <div className="card border-0 shadow-sm staff-form-card">
               <div className="card-header border-bottom py-3">
                 <div className="d-flex align-items-center gap-3">
                   <div
@@ -780,8 +898,9 @@ const StaffPage = ({ initialView = "list" }) => {
                 <div className="card-body p-4">
                   <div className="row">
                     <div className="col-md-6 mb-3">
-                      <label className="form-label font-w600 text-dark">
-                        Nom complet du titulaire <span className="text-danger">*</span>
+                      <label className="form-label font-w600 text-dark d-flex align-items-center">
+                        <span>Nom complet du titulaire</span>
+                        <span className="text-danger ms-1">*</span>
                       </label>
                       <input
                         type="text"
@@ -796,12 +915,12 @@ const StaffPage = ({ initialView = "list" }) => {
                     </div>
 
                     <div className="col-md-6 mb-3">
-                      <label className="form-label font-w600 text-dark">
-                        Nom d'utilisateur (Identifiant de connexion){" "}
-                        <span className="text-danger">*</span>
+                      <label className="form-label font-w600 text-dark d-flex align-items-center">
+                        <span>Nom d'utilisateur (Identifiant de connexion)</span>
+                        <span className="text-danger ms-1">*</span>
                       </label>
                       <div className="input-group">
-                        <span className="input-group-text bg-light">@</span>
+                        <span className="input-group-text">@</span>
                         <input
                           type="text"
                           className="form-control"
@@ -819,14 +938,14 @@ const StaffPage = ({ initialView = "list" }) => {
                     </div>
 
                     <div className="col-md-6 mb-3">
-                      <label className="form-label font-w600 text-dark">
-                        Mot de passe{" "}
-                        {editingAccountId ? (
+                      <label className="form-label font-w600 text-dark d-flex align-items-center justify-content-between">
+                        <span>
+                          Mot de passe {editingAccountId ? null : <span className="text-danger">*</span>}
+                        </span>
+                        {editingAccountId && (
                           <span className="text-muted fs-11 font-w400">
                             (Laisser vide pour ne pas modifier)
                           </span>
-                        ) : (
-                          <span className="text-danger">*</span>
                         )}
                       </label>
                       <div className="input-group">
@@ -846,22 +965,30 @@ const StaffPage = ({ initialView = "list" }) => {
                             })
                           }
                           required={!editingAccountId}
+                          autoComplete="new-password"
                         />
                         <button
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-secondary d-flex align-items-center justify-content-center"
                           type="button"
-                          onClick={() => setShowPassword(!showPassword)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setShowPassword(!showPassword);
+                          }}
+                          title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                          style={{ minWidth: "48px" }}
                         >
                           <i
-                            className={`fa ${showPassword ? "fa-eye-slash" : "fa-eye"}`}
+                            className={`fa ${showPassword ? "fa-eye-slash text-primary" : "fa-eye text-muted"}`}
+                            style={{ fontSize: "16px" }}
                           ></i>
                         </button>
                       </div>
                     </div>
 
                     <div className="col-md-6 mb-3">
-                      <label className="form-label font-w600 text-dark">
-                        Rôle & Droits d'Accès <span className="text-danger">*</span>
+                      <label className="form-label font-w600 text-dark d-flex align-items-center">
+                        <span>Rôle & Droits d'Accès</span>
+                        <span className="text-danger ms-1">*</span>
                       </label>
                       <select
                         className="form-select"
@@ -879,7 +1006,7 @@ const StaffPage = ({ initialView = "list" }) => {
                     </div>
 
                     <div className="col-md-6 mb-3">
-                      <label className="form-label font-w600 text-dark">
+                      <label className="form-label font-w600 text-dark d-flex align-items-center">
                         Adresse Email
                       </label>
                       <input
@@ -894,7 +1021,7 @@ const StaffPage = ({ initialView = "list" }) => {
                     </div>
 
                     <div className="col-md-6 mb-3">
-                      <label className="form-label font-w600 text-dark">
+                      <label className="form-label font-w600 text-dark d-flex align-items-center">
                         Téléphone professionnel
                       </label>
                       <input
@@ -1021,8 +1148,8 @@ const StaffPage = ({ initialView = "list" }) => {
           activeMenu={editingRoleId ? "Modifier le Rôle & Accès" : "Nouveau Rôle de Sécurité"}
         />
 
-        {/* Barre de retour et d'actions */}
-        <div className="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+        {/* Barre de retour */}
+        <div className="mb-4">
           <button
             type="button"
             className="btn btn-outline-primary btn-sm btn-rounded d-inline-flex align-items-center gap-2"
@@ -1034,17 +1161,12 @@ const StaffPage = ({ initialView = "list" }) => {
             <i className="fa fa-arrow-left"></i>
             <span>Retour à la liste du personnel</span>
           </button>
-          <div className="d-flex align-items-center gap-2">
-            <span className="badge badge-light text-primary fs-12 px-3 py-2">
-              <i className="flaticon-381-shield-1 me-1"></i> Matrice des Permissions
-            </span>
-          </div>
         </div>
 
         {/* Formulaire Pleine Page */}
         <div className="row justify-content-center">
           <div className="col-xl-10 col-12">
-            <div className="card border-0 shadow-sm">
+            <div className="card border-0 shadow-sm staff-form-card">
               <div className="card-header border-bottom py-3">
                 <div className="d-flex align-items-center gap-3">
                   <div
@@ -1251,16 +1373,16 @@ const StaffPage = ({ initialView = "list" }) => {
       />
 
       {/* Boutons d'Action Supérieurs */}
-      <div className="d-flex mb-3 align-items-center justify-content-end gap-2 flex-wrap">
+      <div className="d-flex mb-3 align-items-center justify-content-end gap-2 flex-wrap w-100">
         <button
-          className="btn btn-outline-primary btn-sm d-flex align-items-center gap-2"
+          className="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-center gap-2 w-100 w-sm-auto"
           onClick={handleOpenNewRole}
         >
           <i className="flaticon-381-shield-1"></i>
           <span>Nouveau Rôle</span>
         </button>
         <button
-          className="btn btn-primary btn-sm d-flex align-items-center gap-2"
+          className="btn btn-primary btn-sm d-flex align-items-center justify-content-center gap-2 w-100 w-sm-auto"
           onClick={handleOpenNewAccount}
         >
           <i className="flaticon-381-user-7"></i>
@@ -1271,25 +1393,25 @@ const StaffPage = ({ initialView = "list" }) => {
       {/* Onglets de Navigation : Comptes vs Rôles */}
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header border-0 pb-0 pt-3 px-3">
-          <ul className="nav nav-pills card-header-pills gap-2">
-            <li className="nav-item">
+          <ul className="nav nav-pills card-header-pills gap-2 flex-nowrap overflow-x-auto pb-2" style={{ WebkitOverflowScrolling: "touch" }}>
+            <li className="nav-item flex-shrink-0">
               <button
                 className={`nav-link px-3 py-2 font-w600 ${activeTab === "accounts" ? "active" : "text-muted"
                   }`}
                 onClick={() => setActiveTab("accounts")}
               >
                 <i className="flaticon-381-user-7 me-2"></i>
-                Comptes Utilisateurs & Administrateurs ({accounts.length})
+                Comptes Utilisateurs ({accounts.length})
               </button>
             </li>
-            <li className="nav-item">
+            <li className="nav-item flex-shrink-0">
               <button
                 className={`nav-link px-3 py-2 font-w600 ${activeTab === "roles" ? "active" : "text-muted"
                   }`}
                 onClick={() => setActiveTab("roles")}
               >
                 <i className="flaticon-381-shield-1 me-2"></i>
-                Rôles & Permissions par Page ({roles.length})
+                Rôles & Permissions ({roles.length})
               </button>
             </li>
           </ul>
@@ -1301,19 +1423,51 @@ const StaffPage = ({ initialView = "list" }) => {
       {/* ==================================================================== */}
       {activeTab === "accounts" && (
         <div className="card border-0 shadow-sm">
+          {/* Style pour supprimer complètement la barre grise d'en-tête */}
+          <style>{`
+            .staff-table {
+              --bs-table-bg: #ffffff !important;
+              --bs-table-accent-bg: transparent !important;
+              --bs-table-striped-bg: transparent !important;
+              background-color: #ffffff !important;
+            }
+            .staff-table thead,
+            .staff-table thead tr,
+            .staff-table thead th {
+              background-color: #ffffff !important;
+              background: #ffffff !important;
+              color: #1e293b !important;
+              border-bottom: 2px solid #edf2f7 !important;
+              font-weight: 600 !important;
+              font-size: 13px !important;
+              padding-top: 14px !important;
+              padding-bottom: 14px !important;
+            }
+            .staff-table tbody tr {
+              background-color: #ffffff !important;
+            }
+            .staff-table tbody td {
+              background-color: #ffffff !important;
+              border-bottom: 1px solid #f1f5f9 !important;
+              vertical-align: middle !important;
+            }
+            .staff-table tbody tr:hover td {
+              background-color: #f8fbff !important;
+            }
+          `}</style>
 
           <div className="card-body p-0">
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
-                <thead className="table-light fs-12 text-uppercase text-muted">
+              <table className="table table-hover align-middle mb-0 staff-table">
+                <thead>
                   <tr>
-                    <th className="ps-4">Utilisateur / Praticien</th>
-                    <th>Identifiant (Login)</th>
-                    <th>Rôle Assigné</th>
-                    <th>Accès Modules</th>
-                    <th>Contact</th>
+                    <th className="ps-3 ps-md-4">Utilisateur</th>
+                    <th className="d-none d-md-table-cell">Identifiant</th>
+                    <th>Rôle</th>
+                    <th className="d-none d-md-table-cell">Accès Modules</th>
+                    <th className="d-none d-md-table-cell">Contact</th>
                     <th>Statut</th>
-                    <th className="text-end pe-4">Actions</th>
+                    <th className="text-end pe-3 pe-md-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="fs-13">
@@ -1332,50 +1486,54 @@ const StaffPage = ({ initialView = "list" }) => {
 
                     return (
                       <tr key={acc.id}>
-                        <td className="ps-4">
+                        <td className="ps-3 ps-md-4">
                           <div className="d-flex align-items-center">
                             <div
-                              className="rounded-circle d-flex align-items-center justify-content-center me-3 font-w700 fs-12 text-primary"
+                              className="rounded-circle d-flex align-items-center justify-content-center me-2 me-md-3 font-w700 fs-12 text-primary"
                               style={{
-                                width: "40px",
-                                height: "40px",
+                                width: "38px",
+                                height: "38px",
+                                minWidth: "38px",
                                 backgroundColor: "#e8f0fe",
                               }}
                             >
                               {initials}
                             </div>
                             <div>
-                              <h6 className="mb-0 font-w600 text-dark">
+                              <h6 className="mb-0 font-w600 text-dark fs-13">
                                 {acc.name}
                               </h6>
+                              <code className="d-inline-block d-md-none text-primary fs-11 mt-1" style={{ backgroundColor: "#eff6ff", padding: "1px 4px", borderRadius: "4px" }}>
+                                @{acc.username}
+                              </code>
                               {acc.username === "admin" && (
-                                <span className="badge bg-primary-light text-primary fs-11 py-0 px-2">
+                                <span className="badge bg-primary-light text-primary fs-11 py-0 px-2 d-none d-md-inline-block ms-1">
                                   Compte Principal
                                 </span>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td>
-                          <code className="text-primary font-w600 fs-12 bg-light px-2 py-1 rounded">
+                        <td className="d-none d-md-table-cell">
+                          <code className="text-primary font-w600 fs-12 px-2 py-1 rounded" style={{ backgroundColor: "#eff6ff" }}>
                             @{acc.username}
                           </code>
                         </td>
                         <td>
                           <Badge
                             bg={roleObj?.badgeColor || "primary"}
-                            className="light font-w600 fs-12"
+                            className="light font-w600 fs-11"
                           >
                             {roleObj?.name || acc.roleName || "Sans rôle"}
                           </Badge>
                         </td>
-                        <td>
+                        <td className="d-none d-md-table-cell">
                           <span className="font-w600 text-dark">
                             {allowedCount} / {SITE_PAGES.length}
                           </span>{" "}
                           <span className="text-muted fs-11">pages</span>
                         </td>
-                        <td>
+                        <td className="d-none d-md-table-cell">
                           <div>
                             {acc.email ? (
                               <div className="text-muted fs-12">
@@ -1396,7 +1554,7 @@ const StaffPage = ({ initialView = "list" }) => {
                             className={`badge ${acc.status === "Actif"
                                 ? "bg-success text-white"
                                 : "bg-danger text-white"
-                              } cursor-pointer`}
+                              } cursor-pointer fs-11`}
                             onClick={() => handleToggleStatus(acc)}
                             title="Cliquer pour changer le statut"
                             style={{ cursor: "pointer" }}
@@ -1404,7 +1562,7 @@ const StaffPage = ({ initialView = "list" }) => {
                             {acc.status}
                           </span>
                         </td>
-                        <td className="text-end pe-4">
+                        <td className="text-end pe-3 pe-md-4">
                           <div className="d-inline-flex gap-1">
                             <button
                               type="button"

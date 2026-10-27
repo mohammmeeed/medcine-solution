@@ -20,7 +20,7 @@ const NavHader = () => {
 
   return (
     <div className="nav-header">
-      <Link to="/" className="brand-logo" style={{ display: "flex", alignItems: "center" }}>
+      <Link to="/" className="brand-logo d-none d-md-flex" style={{ alignItems: "center" }}>
         <DoctorLogo isDark={isDark} className="logo-abbr" />
       </Link>
 

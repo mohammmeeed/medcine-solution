@@ -159,7 +159,7 @@ const SmtpConfigPage = () => {
 
       {/* Onglets de navigation entre Paramètres et SMTP */}
       <div className="d-flex align-items-center gap-2 mb-3">
-        <Link to="/settings" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
+        <Link to="/admin/settings" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
           <i className="flaticon-381-settings-2 me-1"></i> Tarifs & Consultations
         </Link>
         <button type="button" className="btn btn-sm btn-primary btn-rounded px-3 py-2">
