@@ -38,6 +38,7 @@ const ClinicProfilePage = () => {
     address: initialDoctor.address,
     hours: "Samedi — Jeudi: 09:00 — 18:00",
     closedDays: "Vendredi: Fermé",
+    closedDates: [],
     aboutText: "",
     aboutSummary: "",
     slotDuration: 30,
@@ -51,6 +52,57 @@ const ClinicProfilePage = () => {
     legalNotice:
       "Membre d'une association de gestion agréée par l'administration fiscale, acceptant à ce titre le règlement des honoraires par chèque et carte bancaire.",
   });
+
+  const [newClosure, setNewClosure] = useState({
+    mode: "single",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: new Date().toISOString().split("T")[0],
+    reason: "Jour férié",
+  });
+
+  const handleAddClosure = async () => {
+    if (!newClosure.startDate) return;
+    const start = newClosure.startDate;
+    const end =
+      newClosure.mode === "range" && newClosure.endDate && newClosure.endDate >= start
+        ? newClosure.endDate
+        : start;
+    const entry = {
+      id: Date.now(),
+      startDate: start,
+      endDate: end,
+      reason: (newClosure.reason || "").trim() || (start !== end ? "Vacances / Congé" : "Jour férié"),
+    };
+    const updatedDates = [...(Array.isArray(clinic.closedDates) ? clinic.closedDates : []), entry];
+    const updatedClinic = { ...clinic, closedDates: updatedDates };
+    setClinic(updatedClinic);
+    try {
+      localStorage.setItem("cabinet_info", JSON.stringify(updatedClinic));
+      await ApiService.updateCabinetInfo(updatedClinic);
+    } catch (e) {}
+    Swal.fire({
+      icon: "success",
+      title: start !== end ? "Période de fermeture ajoutée" : "Jour de fermeture ajouté",
+      text:
+        start !== end
+          ? `Le cabinet sera fermé du ${start} au ${end} (${entry.reason}).`
+          : `Le cabinet sera fermé le ${start} (${entry.reason}).`,
+      timer: 1800,
+      showConfirmButton: false,
+    });
+  };
+
+  const handleRemoveClosure = async (id) => {
+    const updatedDates = (Array.isArray(clinic.closedDates) ? clinic.closedDates : []).filter(
+      (item) => item.id !== id
+    );
+    const updatedClinic = { ...clinic, closedDates: updatedDates };
+    setClinic(updatedClinic);
+    try {
+      localStorage.setItem("cabinet_info", JSON.stringify(updatedClinic));
+      await ApiService.updateCabinetInfo(updatedClinic);
+    } catch (e) {}
+  };
 
   // Gestion de la sélection interactive des jours de fermeture
   const toggleClosedDay = (dayKey) => {
@@ -190,7 +242,7 @@ const ClinicProfilePage = () => {
       Swal.fire({
         icon: "error",
         title: "Erreur d'enregistrement",
-        text: "Impossible d'enregistrer dans MySQL : " + err.message,
+        text: "Impossible d'enregistrer : " + err.message,
         confirmButtonColor: "#1e60d5",
       });
     } finally {
@@ -587,6 +639,155 @@ const ClinicProfilePage = () => {
                         Les jours marqués en rouge <strong>(Fermé)</strong> bloquent automatiquement les réservations sur le portail patient.
                       </small>
                     </div>
+                  </div>
+
+                  <h5 className="text-primary font-w600 mt-4 mb-3 border-bottom pb-2">
+                    Jours Fériés & Vacances (Fermetures Exceptionnelles)
+                  </h5>
+                  {/* Fermetures exceptionnelles : Jours fériés & Vacances / Congés */}
+                  <div className="mb-4 p-3 bg-white rounded border" style={{ borderColor: "#e2e8f0" }}>
+                    <div className="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                      <div>
+                        <label className="form-label font-w600 mb-0 text-dark">
+                          <i className="fa fa-calendar-times text-danger me-2"></i>
+                          Jours fériés & Vacances / Congés (Fermetures exceptionnelles)
+                        </label>
+                        <small className="text-muted d-block">
+                          Fermez le cabinet pour un jour précis (ex: Jour férié) ou plusieurs jours consécutifs (ex: Vacances / Congé).
+                        </small>
+                      </div>
+                      <span className="badge badge-danger light px-3 py-1 font-w600">
+                        {(Array.isArray(clinic.closedDates) ? clinic.closedDates : []).length} fermeture(s) programmée(s)
+                      </span>
+                    </div>
+
+                    <div className="row g-2 align-items-end mb-3 p-3 rounded" style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                      <div className="col-md-3">
+                        <label className="form-label fs-12 font-w600 mb-1">Type de fermeture</label>
+                        <select
+                          className="form-control form-control-sm"
+                          value={newClosure.mode}
+                          onChange={(e) => {
+                            const mode = e.target.value;
+                            setNewClosure((prev) => ({
+                              ...prev,
+                              mode,
+                              endDate: mode === "single" ? prev.startDate : prev.endDate,
+                              reason:
+                                mode === "range" && prev.reason === "Jour férié"
+                                  ? "Vacances / Congé"
+                                  : mode === "single" && prev.reason === "Vacances / Congé"
+                                  ? "Jour férié"
+                                  : prev.reason,
+                            }));
+                          }}
+                        >
+                          <option value="single">Un seul jour (Jour férié...)</option>
+                          <option value="range">Plusieurs jours (Vacances / Congé)</option>
+                        </select>
+                      </div>
+
+                      <div className={newClosure.mode === "range" ? "col-md-2" : "col-md-3"}>
+                        <label className="form-label fs-12 font-w600 mb-1">
+                          {newClosure.mode === "range" ? "Date de début *" : "Date du jour fermé *"}
+                        </label>
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          value={newClosure.startDate}
+                          onChange={(e) =>
+                            setNewClosure((prev) => ({
+                              ...prev,
+                              startDate: e.target.value,
+                              endDate: prev.mode === "single" || prev.endDate < e.target.value ? e.target.value : prev.endDate,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      {newClosure.mode === "range" && (
+                        <div className="col-md-2">
+                          <label className="form-label fs-12 font-w600 mb-1">Date de fin *</label>
+                          <input
+                            type="date"
+                            className="form-control form-control-sm"
+                            min={newClosure.startDate}
+                            value={newClosure.endDate}
+                            onChange={(e) => setNewClosure((prev) => ({ ...prev, endDate: e.target.value }))}
+                          />
+                        </div>
+                      )}
+
+                      <div className={newClosure.mode === "range" ? "col-md-3" : "col-md-4"}>
+                        <label className="form-label fs-12 font-w600 mb-1">Motif (Jour férié, Vacances...)</label>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          list="closure-reasons-list"
+                          placeholder="Ex: Jour férié, Vacances, Congrès..."
+                          value={newClosure.reason}
+                          onChange={(e) => setNewClosure((prev) => ({ ...prev, reason: e.target.value }))}
+                        />
+                        <datalist id="closure-reasons-list">
+                          <option value="Jour férié" />
+                          <option value="Vacances / Congé annuel" />
+                          <option value="Aïd El-Fitr (Férié)" />
+                          <option value="Aïd El-Adha (Férié)" />
+                          <option value="Formation / Congrès médical" />
+                          <option value="Fermeture exceptionnelle" />
+                        </datalist>
+                      </div>
+
+                      <div className="col-md-2 d-grid">
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-sm font-w600"
+                          onClick={handleAddClosure}
+                        >
+                          <i className="fa fa-plus me-1"></i> Fermer {newClosure.mode === "range" ? "la période" : "ce jour"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {Array.isArray(clinic.closedDates) && clinic.closedDates.length > 0 ? (
+                      <div className="d-flex flex-wrap gap-2">
+                        {clinic.closedDates.map((item) => {
+                          const isRange = item.endDate && item.endDate !== item.startDate;
+                          return (
+                            <div
+                              key={item.id || `${item.startDate}-${item.endDate}`}
+                              className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded"
+                              style={{
+                                background: "#fef2f2",
+                                border: "1px solid #fecaca",
+                                color: "#991b1b",
+                                fontSize: "13px",
+                              }}
+                            >
+                              <i className="fa fa-ban text-danger"></i>
+                              <div>
+                                <strong>
+                                  {isRange ? `Du ${item.startDate} au ${item.endDate}` : `Le ${item.startDate}`}
+                                </strong>
+                                {item.reason && <span className="ms-1 text-muted">({item.reason})</span>}
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-xs btn-outline-danger ms-1 py-0 px-2"
+                                title="Supprimer cette fermeture"
+                                onClick={() => handleRemoveClosure(item.id)}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-muted fs-12">
+                        Aucune fermeture exceptionnelle (jour férié ou vacances) programmée pour le moment.
+                      </div>
+                    )}
                   </div>
 
                   <h5 className="text-primary font-w600 mt-4 mb-3 border-bottom pb-2">

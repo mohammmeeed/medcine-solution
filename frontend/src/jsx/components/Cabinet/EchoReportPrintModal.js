@@ -127,7 +127,7 @@ const EchoReportPrintModal = ({ show, onHide, consultation }) => {
             <div className="d-flex justify-content-between flex-wrap gap-2 mb-1">
               <div>
                 <span className="crecho-lbl-bold">Nom & Prénom : </span>
-                <span>{consultation.patientName}</span>
+                <span>{(consultation.patientName || "").replace(/\s*\(sc\)\s*/gi, "").trim()}</span>
               </div>
               <div>
                 <span className="crecho-lbl-bold">Date d'examen : </span>

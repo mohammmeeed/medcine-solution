@@ -21,7 +21,11 @@ if errorlevel 1 (
 
 :: 2. Demarrer le Backend PHP sur le port 8000
 echo [2/3] Lancement du Backend PHP sur http://127.0.0.1:8000...
-start "Backend PHP - Medcine Solution" cmd /k "cd /d %~dp0 && php -S 127.0.0.1:8000 -t backend backend/router.php"
+if exist "C:\xampp\php\php.exe" (
+    start "Backend PHP - Medcine Solution" cmd /k "cd /d %~dp0 && C:\xampp\php\php.exe -S 127.0.0.1:8000 -t backend backend/router.php"
+) else (
+    start "Backend PHP - Medcine Solution" cmd /k "cd /d %~dp0 && php -S 127.0.0.1:8000 -t backend backend/router.php"
+)
 
 :: 3. Demarrer le Frontend React sur le port 3000
 echo [3/3] Lancement du Frontend React sur http://localhost:3000...

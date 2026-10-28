@@ -305,7 +305,7 @@ const PrescriptionsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="input-group search-area w-100 w-sm-auto">
+        <div className="input-group search-area" style={{ width: "auto", minWidth: "260px" }}>
           <input
             type="text"
             className="form-control"
@@ -318,10 +318,10 @@ const PrescriptionsPage = () => {
           </span>
         </div>
 
-        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap ms-auto">
           <Button
             variant="outline-primary"
-            className="btn-rounded w-100 w-sm-auto"
+            className="btn-rounded"
             onClick={() => setShowMedModal(true)}
             title="Base et répertoire des médicaments"
           >
@@ -330,7 +330,7 @@ const PrescriptionsPage = () => {
 
           <Button
             variant={showCreateModal ? "outline-primary" : "primary"}
-            className="btn-rounded w-100 w-sm-auto"
+            className="btn-rounded"
             onClick={() => {
               if (showCreateModal) {
                 setShowCreateModal(false);
@@ -445,7 +445,7 @@ const PrescriptionsPage = () => {
                             <option value="">-- Choisir un médicament --</option>
                             {medications.map((m, mIdx) => (
                               <option key={m.id || `${m.name}-${mIdx}`} value={m.name}>
-                                {m.name} {m.dosage ? `(${m.dosage})` : ""}
+                                {m.name}
                               </option>
                             ))}
                           </select>

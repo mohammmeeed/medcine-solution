@@ -126,6 +126,7 @@ export default function PatientPortal() {
       aboutSummary: "Cabinet médical moderne dédié à la santé féminine, au suivi complet de la grossesse, au diagnostic prénatal et aux échographies obstétricales et pelviennes de haute précision.",
       hours: "Samedi — Jeudi: 09:00 — 18:00",
       closedDays: "Vendredi: Fermé",
+      closedDates: [],
       address: "Haï Seddikia (ex-Cité Boulanger), Cité 340 Logements, Bâtiment 18/A, Oran",
       secretaryPhone: "0560 06 74 66",
       phone: "041 53 97 82",
@@ -212,7 +213,22 @@ export default function PatientPortal() {
   const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
 
   // Vérifie si un jour fait partie des jours de fermeture du cabinet configurés dans Mon Cabinet
+  // Vérifie si une date (YYYY-MM-DD) fait partie des fermetures exceptionnelles (jours fériés / vacances)
+  const getClosedDateInfo = (day, month = calendarMonth, year = calendarYear) => {
+    if (!Array.isArray(clinicInfo.closedDates) || clinicInfo.closedDates.length === 0) return null;
+    const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return (
+      clinicInfo.closedDates.find((item) => {
+        const start = item.startDate;
+        const end = item.endDate || item.startDate;
+        return start && iso >= start && iso <= end;
+      }) || null
+    );
+  };
+
+  // Vérifie si un jour fait partie des jours de fermeture du cabinet configurés dans Mon Cabinet
   const isClosedDay = (day, month = calendarMonth, year = calendarYear) => {
+    if (getClosedDateInfo(day, month, year)) return true;
     const d = new Date(year, month, day).getDay(); // 0 = Dimanche, 1 = Lundi, ... 5 = Vendredi, 6 = Samedi
     const closedStr = (clinicInfo.closedDays || "Vendredi: Fermé").toLowerCase();
 
@@ -290,6 +306,33 @@ export default function PatientPortal() {
   };
 
   const [selectedDay, setSelectedDay] = useState(getInitialDay);
+
+  // Si la date sélectionnée devient fermée suite au chargement des jours fériés / vacances, avancer au prochain jour ouvert
+  useEffect(() => {
+    if (isClosedDay(selectedDay, selectedMonth, selectedYear)) {
+      let d = selectedDay;
+      let m = selectedMonth;
+      let y = selectedYear;
+      for (let i = 0; i < 60; i++) {
+        const maxD = new Date(y, m + 1, 0).getDate();
+        d++;
+        if (d > maxD) {
+          d = 1;
+          m++;
+          if (m > 11) {
+            m = 0;
+            y++;
+          }
+        }
+        if (!isClosedDay(d, m, y)) {
+          setSelectedDay(d);
+          setSelectedMonth(m);
+          setSelectedYear(y);
+          break;
+        }
+      }
+    }
+  }, [clinicInfo.closedDates, clinicInfo.closedDays]);
 
   // Période initiale par défaut (matin ou après-midi selon l'heure de l'appareil)
   const getInitialPeriod = (day, month = now.getMonth(), year = now.getFullYear()) => {
@@ -549,12 +592,75 @@ export default function PatientPortal() {
 
   // Sections déroulantes / accordéon (wishlist style) pour RDV et documents médicaux
   const [openSections, setOpenSections] = useState({
+    homeAppointments: true,
     appointments: false,
     invoices: false,
     prescriptions: false,
     echographies: false,
     documents: false,
   });
+
+  // Horloge réactive pour retirer automatiquement de l'accueil les RDV dont la date/heure est passée
+  const [currentClock, setCurrentClock] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentClock(new Date());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Analyse la date et l'heure d'un rendez-vous ("29 Octobre 2026" ou "2026-10-29")
+  const parseAppointmentDateTime = (apt) => {
+    if (!apt) return null;
+    const rawDate = String(apt.isoDate || apt.date || "").trim();
+    if (!rawDate) return null;
+
+    let year = NaN;
+    let monthIndex = NaN;
+    let day = NaN;
+
+    const isoMatch = rawDate.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (isoMatch) {
+      year = parseInt(isoMatch[1], 10);
+      monthIndex = parseInt(isoMatch[2], 10) - 1;
+      day = parseInt(isoMatch[3], 10);
+    } else {
+      const parts = rawDate.split(/\s+/);
+      if (parts.length >= 3) {
+        day = parseInt(parts[0], 10);
+        const mName = parts[1].toLowerCase();
+        monthIndex = MONTH_NAMES.findIndex((m) => m.toLowerCase() === mName);
+        year = parseInt(parts[2], 10);
+      }
+    }
+
+    if (isNaN(year) || isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11 || isNaN(day)) {
+      return null;
+    }
+
+    let hours = 23;
+    let minutes = 59;
+    if (apt.time) {
+      const tParts = String(apt.time).trim().split(":").map(Number);
+      if (!isNaN(tParts[0])) hours = tParts[0];
+      if (!isNaN(tParts[1])) minutes = tParts[1];
+    }
+
+    return new Date(year, monthIndex, day, hours, minutes, 0, 0);
+  };
+
+  // Rendez-vous actifs à venir (affichés sur la page d'Accueil ; retirés automatiquement dès que la date/heure est passée)
+  const homeAppointments = useMemo(() => {
+    return patientAppointments.filter((apt) => {
+      if (!apt || apt.hiddenFromHome) return false;
+      if (apt.status && ["Terminé", "Annulé", "Absent"].includes(apt.status)) {
+        return false;
+      }
+      const aptDate = parseAppointmentDateTime(apt);
+      if (!aptDate) return true;
+      return aptDate.getTime() > currentClock.getTime();
+    });
+  }, [patientAppointments, currentClock]);
 
   const toggleSection = (key) => {
     setOpenSections((prev) => ({
@@ -794,7 +900,7 @@ export default function PatientPortal() {
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(9.5);
       pdf.setTextColor(26, 58, 92);
-      pdf.text(`${idx + 1}. ${item.medication || item.nom || "Medicament"} ${item.dosage || ""}`, 22, curY);
+      pdf.text(`${idx + 1}. ${item.medication || item.nom || "Medicament"}`, 22, curY);
       curY += 5;
 
       pdf.setFont("helvetica", "normal");
@@ -1416,6 +1522,8 @@ export default function PatientPortal() {
 
   const handlePatientLogout = () => {
     setAuthenticatedPatient(null);
+    setPatientName("");
+    setPatientPhone("");
     setPatientPassword("");
     setPatientEmail("");
     setAuthSuccess("");
@@ -1452,6 +1560,10 @@ export default function PatientPortal() {
       return;
     }
 
+    if (isClosedDay(selectedDay, selectedMonth, selectedYear)) {
+      alert("Le cabinet est fermé à cette date. Veuillez sélectionner un autre jour disponible.");
+      return;
+    }
     if (isDayPast(selectedDay) || isSlotPast(selectedTime, selectedDay)) {
       alert("Ce créneau horaire est déjà passé. Veuillez sélectionner un horaire futur disponible.");
       return;
@@ -1459,12 +1571,16 @@ export default function PatientPortal() {
 
     const ticketNumber = getTicketNumber(selectedTime);
 
+    const dayStr = String(selectedDay).padStart(2, "0");
+    const monthStr = String(selectedMonth + 1).padStart(2, "0");
+
     const bookingData = {
       id: "RDV-" + Math.floor(1000 + Math.random() * 9000),
       ticketNumber: ticketNumber, // Numéro de ticket / passage journalier (ex: 1 pour 09:00, 2 pour 09:30...)
       doctorName: clinicInfo.doctorName || "Dr. N. BELBACHIR OULD HENNIA",
       specialty: clinicInfo.specialty || "Gynécologie Obstétrique & Échographie",
       date: `${selectedDay} ${MONTH_NAMES[selectedMonth]} ${selectedYear}`,
+      isoDate: `${selectedYear}-${monthStr}-${dayStr}`,
       time: selectedTime,
       patientName: patientName.trim(),
       patientPhone: patientPhone.trim(),
@@ -1479,12 +1595,11 @@ export default function PatientPortal() {
 
     // Synchronisation en direct avec la Base de Données MySQL (table appointments & patients)
     try {
-      const dayStr = String(selectedDay).padStart(2, "0");
-      const monthStr = String(selectedMonth + 1).padStart(2, "0");
       const resp = await fetch(getApiUrl("appointments.php"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          patientId: authenticatedPatient && authenticatedPatient.id ? authenticatedPatient.id : null,
           patientName: patientName.trim(),
           patientPhone: patientPhone.trim(),
           patientEmail: patientEmail.trim(),
@@ -1646,12 +1761,163 @@ export default function PatientPortal() {
             <button
               className="btn-primary-mint"
               onClick={() => setView("schedule")}
-              style={{ padding: "18px 24px", fontSize: "16px", marginBottom: "10px" }}
+              style={{ padding: "18px 24px", fontSize: "16px", marginBottom: "16px" }}
             >
               <Calendar size={20} />
               <span>Réserver un Rendez-vous</span>
               <ArrowRight size={18} style={{ marginLeft: "auto" }} />
             </button>
+
+            {/* MES RENDEZ-VOUS À VENIR SUR LA PAGE D'ACCUEIL */}
+            <div
+              className="glass-panel"
+              style={{
+                padding: "8px 14px",
+                marginBottom: "20px",
+              }}
+            >
+              <div style={{ marginBottom: openSections.homeAppointments && homeAppointments.length > 0 ? "10px" : "0px" }}>
+                <div
+                  onClick={() => toggleSection("homeAppointments")}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: openSections.homeAppointments ? "10px" : "0px",
+                    cursor: "pointer",
+                    userSelect: "none",
+                    padding: "8px 4px",
+                    borderRadius: "10px",
+                    transition: "background 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(2, 132, 199, 0.04)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Calendar size={15} color="var(--accent-mint)" />
+                    <span>Mes Rendez-vous ({homeAppointments.length})</span>
+                  </h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {homeAppointments.length > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm("Voulez-vous masquer vos rendez-vous de la page d'accueil ? (Ils resteront disponibles dans votre Profil)")) {
+                            const updated = patientAppointments.map((a) => ({ ...a, hiddenFromHome: true }));
+                            setPatientAppointments(updated);
+                            localStorage.setItem("cabinet_client_appointments", JSON.stringify(updated));
+                          }
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "rgba(239, 68, 68, 0.85)",
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                      >
+                        Effacer
+                      </button>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "6px",
+                        background: "rgba(2, 132, 199, 0.08)",
+                        color: "var(--accent-mint)",
+                      }}
+                    >
+                      {openSections.homeAppointments ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                    </div>
+                  </div>
+                </div>
+
+                {openSections.homeAppointments && (
+                  homeAppointments.length === 0 ? (
+                    <div
+                      style={{
+                        padding: "16px 14px",
+                        textAlign: "center",
+                        background: "rgba(241, 245, 249, 0.7)",
+                        border: "1px dashed var(--border-subtle)",
+                        borderRadius: "14px",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <div style={{ fontSize: "12.5px", fontWeight: "600", color: "var(--text-secondary)" }}>
+                        Aucun rendez-vous à venir
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "6px" }}>
+                      {homeAppointments.map((apt, index) => (
+                        <div
+                          key={apt.id || index}
+                          style={{
+                            padding: "13px 14px",
+                            background: "linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)",
+                            border: "1px solid rgba(2, 132, 199, 0.18)",
+                            borderLeft: "3px solid var(--accent-mint)",
+                            borderRadius: "12px",
+                            boxShadow: "0 2px 8px rgba(2, 132, 199, 0.05)",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontSize: "11.5px", fontWeight: "800", color: "var(--accent-mint)" }}>
+                                {apt.id || "RDV"}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  padding: "2px 8px",
+                                  borderRadius: "6px",
+                                  background: "rgba(2, 132, 199, 0.1)",
+                                  color: "var(--accent-mint)",
+                                  fontWeight: "800",
+                                  border: "1px solid rgba(2, 132, 199, 0.25)",
+                                }}
+                              >
+                                Ticket #{apt.ticketNumber || getTicketNumber(apt.time)}
+                              </span>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "10.5px",
+                                padding: "3px 9px",
+                                borderRadius: "999px",
+                                background: "rgba(16, 185, 129, 0.12)",
+                                color: "#059669",
+                                border: "1px solid rgba(16, 185, 129, 0.25)",
+                                fontWeight: "700",
+                              }}
+                            >
+                              {apt.status || "Confirmé"}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "var(--text-secondary)", fontWeight: "500" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                              <Calendar size={13} color="var(--accent-mint)" />
+                              {apt.date}
+                            </span>
+                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                              <Clock size={13} color="var(--accent-mint)" />
+                              {apt.time}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1809,6 +2075,7 @@ export default function PatientPortal() {
                       calendarMonth === now.getMonth() &&
                       calendarYear === now.getFullYear();
                     const isDayFriday = isFriday(d, calendarMonth, calendarYear);
+                    const closedException = getClosedDateInfo(d, calendarMonth, calendarYear);
                     const isAvailable = !isPast && !isDayFriday && (!isToday || hasFutureSlotsToday);
                     const isSelected =
                       selectedDay === d &&
@@ -1830,7 +2097,7 @@ export default function PatientPortal() {
                       cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Passé - non réservable)`;
                     } else if (isDayFriday) {
                       cellClass += " closed";
-                      cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Cabinet fermé)`;
+                      cellTitle = `${d} ${MONTH_NAMES[calendarMonth]} ${calendarYear} (Cabinet fermé${closedException?.reason ? ` : ${closedException.reason}` : ""})`;
                     } else if (isToday && !hasFutureSlotsToday) {
                       cellClass += " past";
                       cellTitle = `Aujourd'hui (${d} ${MONTH_NAMES[calendarMonth]}) : Plus aucun créneau disponible`;
@@ -2070,6 +2337,8 @@ export default function PatientPortal() {
                 <div style={{ position: "relative" }}>
                   <input
                     type="text"
+                    name="booking_patient_name"
+                    autoComplete="name"
                     className="glass-input"
                     placeholder=""
                     value={patientName}
@@ -2099,6 +2368,8 @@ export default function PatientPortal() {
                 <div style={{ position: "relative" }}>
                   <input
                     type="tel"
+                    name="booking_patient_phone"
+                    autoComplete="tel"
                     className="glass-input"
                     placeholder=""
                     value={patientPhone}
@@ -2302,12 +2573,6 @@ export default function PatientPortal() {
                   {confirmedBooking.patientName} ({confirmedBooking.patientPhone})
                   {confirmedBooking.patientEmail ? ` • ${confirmedBooking.patientEmail}` : ""}
                 </div>
-                <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                  Consultation : <strong>{confirmedBooking.reason}</strong>
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                  Honoraires / Tarif : <strong style={{ color: "var(--accent-mint)" }}>{confirmedBooking.price}</strong>
-                </div>
               </div>
             </div>
 
@@ -2353,7 +2618,7 @@ export default function PatientPortal() {
                 display: "flex",
                 alignItems: "center",
                 gap: "14px",
-                border: authenticatedPatient ? "1px solid rgba(187, 247, 208, 0.4)" : "1px solid rgba(255, 255, 255, 0.1)",
+                border: authenticatedPatient ? "1px solid rgba(2, 132, 199, 0.35)" : "1px solid var(--border-subtle)",
               }}
             >
               <div
@@ -2362,13 +2627,13 @@ export default function PatientPortal() {
                   height: "52px",
                   borderRadius: "50%",
                   background: authenticatedPatient
-                    ? "linear-gradient(135deg, rgba(187, 247, 208, 0.35), rgba(16, 185, 129, 0.35))"
-                    : "linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))",
-                  border: authenticatedPatient ? "2px solid var(--accent-mint)" : "1px solid rgba(255, 255, 255, 0.2)",
+                    ? "linear-gradient(135deg, rgba(2, 132, 199, 0.15), rgba(14, 165, 233, 0.1))"
+                    : "#f1f5f9",
+                  border: authenticatedPatient ? "2px solid var(--accent-mint)" : "1px solid rgba(2, 132, 199, 0.2)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: authenticatedPatient ? "var(--accent-mint)" : "var(--text-secondary)",
+                  color: "var(--accent-mint)",
                   flexShrink: 0,
                 }}
               >
@@ -2473,13 +2738,13 @@ export default function PatientPortal() {
                 </div>
 
                 {authError && (
-                  <div style={{ fontSize: "11.5px", color: "#fca5a5", background: "rgba(239, 68, 68, 0.12)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "8px", padding: "8px 10px" }}>
+                  <div style={{ fontSize: "11.5px", color: "#dc2626", fontWeight: "600", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "8px 10px" }}>
                     {authError}
                   </div>
                 )}
 
                 {authSuccess && (
-                  <div style={{ fontSize: "11.5px", color: "var(--accent-mint)", background: "rgba(187, 247, 208, 0.12)", border: "1px solid rgba(187, 247, 208, 0.3)", borderRadius: "8px", padding: "8px 10px" }}>
+                  <div style={{ fontSize: "11.5px", color: "#059669", fontWeight: "600", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "8px", padding: "8px 10px" }}>
                     {authSuccess}
                   </div>
                 )}
@@ -2590,7 +2855,7 @@ export default function PatientPortal() {
                         width: "24px",
                         height: "24px",
                         borderRadius: "6px",
-                        background: "rgba(255, 255, 255, 0.06)",
+                        background: "rgba(2, 132, 199, 0.08)",
                         color: "var(--accent-mint)",
                       }}
                     >
@@ -2634,15 +2899,16 @@ export default function PatientPortal() {
                           key={apt.id || index}
                           style={{
                             padding: "13px 14px",
-                            background: "rgba(12, 22, 16, 0.65)",
-                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            background: "linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)",
+                            border: "1px solid rgba(2, 132, 199, 0.18)",
                             borderLeft: "3px solid var(--accent-mint)",
                             borderRadius: "12px",
+                            boxShadow: "0 2px 8px rgba(2, 132, 199, 0.05)",
                           }}
                         >
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span style={{ fontSize: "11px", fontWeight: "800", color: "var(--accent-mint)" }}>
+                              <span style={{ fontSize: "11.5px", fontWeight: "800", color: "var(--accent-mint)" }}>
                                 {apt.id || "RDV"}
                               </span>
                               <span
@@ -2650,10 +2916,10 @@ export default function PatientPortal() {
                                   fontSize: "11px",
                                   padding: "2px 8px",
                                   borderRadius: "6px",
-                                  background: "rgba(187, 247, 208, 0.18)",
+                                  background: "rgba(2, 132, 199, 0.1)",
                                   color: "var(--accent-mint)",
                                   fontWeight: "800",
-                                  border: "1px solid rgba(187, 247, 208, 0.35)",
+                                  border: "1px solid rgba(2, 132, 199, 0.25)",
                                 }}
                               >
                                 Ticket #{apt.ticketNumber || getTicketNumber(apt.time)}
@@ -2662,17 +2928,18 @@ export default function PatientPortal() {
                             <span
                               style={{
                                 fontSize: "10.5px",
-                                padding: "3px 8px",
+                                padding: "3px 9px",
                                 borderRadius: "999px",
-                                background: "rgba(187, 247, 208, 0.15)",
-                                color: "var(--accent-mint)",
+                                background: "rgba(16, 185, 129, 0.12)",
+                                color: "#059669",
+                                border: "1px solid rgba(16, 185, 129, 0.25)",
                                 fontWeight: "700",
                               }}
                             >
                               Confirmé
                             </span>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "var(--text-secondary)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px", color: "var(--text-secondary)", fontWeight: "500" }}>
                             <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                               <Calendar size={13} color="var(--accent-mint)" />
                               {apt.date}
@@ -2692,7 +2959,7 @@ export default function PatientPortal() {
               {/* Sections Médicales : Factures, Ordonnances, Échographies, Documents */}
               {authenticatedPatient && (
                 <>
-                  <div style={{ height: "1px", background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+                  <div style={{ height: "1px", background: "rgba(2, 132, 199, 0.1)", margin: "4px 0" }} />
 
                   {/* Section Factures */}
                   <div style={{ marginBottom: openSections.invoices ? "14px" : "0px" }}>
@@ -2709,7 +2976,7 @@ export default function PatientPortal() {
                         borderRadius: "10px",
                         transition: "background 0.2s ease",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(2, 132, 199, 0.04)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
@@ -2724,7 +2991,7 @@ export default function PatientPortal() {
                           width: "24px",
                           height: "24px",
                           borderRadius: "6px",
-                          background: "rgba(255, 255, 255, 0.06)",
+                          background: "rgba(2, 132, 199, 0.08)",
                           color: "var(--accent-mint)",
                         }}
                       >
@@ -2738,7 +3005,7 @@ export default function PatientPortal() {
                           style={{
                             padding: "18px 16px",
                             textAlign: "center",
-                            background: "rgba(12, 22, 16, 0.5)",
+                            background: "rgba(241, 245, 249, 0.7)",
                             border: "1px dashed var(--border-subtle)",
                             borderRadius: "14px",
                             marginBottom: "6px",
@@ -2756,10 +3023,11 @@ export default function PatientPortal() {
                               key={inv.id || index}
                               style={{
                                 padding: "13px 14px",
-                                background: "rgba(12, 22, 16, 0.65)",
-                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                background: "linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)",
+                                border: "1px solid rgba(2, 132, 199, 0.18)",
                                 borderLeft: "3px solid var(--accent-mint)",
                                 borderRadius: "12px",
+                                boxShadow: "0 2px 8px rgba(2, 132, 199, 0.05)",
                               }}
                             >
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
@@ -2782,9 +3050,9 @@ export default function PatientPortal() {
                                   <button
                                     onClick={() => handleViewInvoice(inv)}
                                     style={{
-                                      background: "rgba(255, 255, 255, 0.08)",
-                                      color: "var(--text-primary)",
-                                      border: "1px solid rgba(255, 255, 255, 0.16)",
+                                      background: "#ffffff",
+                                      color: "var(--accent-mint)",
+                                      border: "1px solid rgba(2, 132, 199, 0.25)",
                                       borderRadius: "8px",
                                       padding: "7px 11px",
                                       fontSize: "11.5px",
@@ -2797,14 +3065,12 @@ export default function PatientPortal() {
                                       transition: "all 0.2s ease",
                                     }}
                                     onMouseEnter={(e) => {
-                                      e.currentTarget.style.background = "rgba(187, 247, 208, 0.15)";
+                                      e.currentTarget.style.background = "rgba(2, 132, 199, 0.1)";
                                       e.currentTarget.style.borderColor = "var(--accent-mint)";
-                                      e.currentTarget.style.color = "var(--accent-mint)";
                                     }}
                                     onMouseLeave={(e) => {
-                                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
-                                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
-                                      e.currentTarget.style.color = "var(--text-primary)";
+                                      e.currentTarget.style.background = "#ffffff";
+                                      e.currentTarget.style.borderColor = "rgba(2, 132, 199, 0.25)";
                                     }}
                                     title="Visualiser la facture"
                                   >
@@ -2842,7 +3108,7 @@ export default function PatientPortal() {
                     )}
                   </div>
 
-                  <div style={{ height: "1px", background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+                  <div style={{ height: "1px", background: "rgba(2, 132, 199, 0.1)", margin: "4px 0" }} />
 
                   {/* Section Ordonnances */}
                   <div style={{ marginBottom: openSections.prescriptions ? "14px" : "0px" }}>
@@ -2859,7 +3125,7 @@ export default function PatientPortal() {
                         borderRadius: "10px",
                         transition: "background 0.2s ease",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(2, 132, 199, 0.04)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
@@ -2874,7 +3140,7 @@ export default function PatientPortal() {
                           width: "24px",
                           height: "24px",
                           borderRadius: "6px",
-                          background: "rgba(255, 255, 255, 0.06)",
+                          background: "rgba(2, 132, 199, 0.08)",
                           color: "var(--accent-mint)",
                         }}
                       >
@@ -2888,7 +3154,7 @@ export default function PatientPortal() {
                           style={{
                             padding: "18px 16px",
                             textAlign: "center",
-                            background: "rgba(12, 22, 16, 0.5)",
+                            background: "rgba(241, 245, 249, 0.7)",
                             border: "1px dashed var(--border-subtle)",
                             borderRadius: "14px",
                             marginBottom: "6px",
@@ -2906,10 +3172,11 @@ export default function PatientPortal() {
                               key={presc.id || index}
                               style={{
                                 padding: "13px 14px",
-                                background: "rgba(12, 22, 16, 0.65)",
-                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                background: "linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)",
+                                border: "1px solid rgba(2, 132, 199, 0.18)",
                                 borderLeft: "3px solid var(--accent-mint)",
                                 borderRadius: "12px",
+                                boxShadow: "0 2px 8px rgba(2, 132, 199, 0.05)",
                               }}
                             >
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
@@ -2932,9 +3199,9 @@ export default function PatientPortal() {
                                   <button
                                     onClick={() => handleViewPrescription(presc)}
                                     style={{
-                                      background: "rgba(255, 255, 255, 0.08)",
-                                      color: "var(--text-primary)",
-                                      border: "1px solid rgba(255, 255, 255, 0.16)",
+                                      background: "#ffffff",
+                                      color: "var(--accent-mint)",
+                                      border: "1px solid rgba(2, 132, 199, 0.25)",
                                       borderRadius: "8px",
                                       padding: "7px 11px",
                                       fontSize: "11.5px",
@@ -2947,14 +3214,12 @@ export default function PatientPortal() {
                                       transition: "all 0.2s ease",
                                     }}
                                     onMouseEnter={(e) => {
-                                      e.currentTarget.style.background = "rgba(187, 247, 208, 0.15)";
+                                      e.currentTarget.style.background = "rgba(2, 132, 199, 0.1)";
                                       e.currentTarget.style.borderColor = "var(--accent-mint)";
-                                      e.currentTarget.style.color = "var(--accent-mint)";
                                     }}
                                     onMouseLeave={(e) => {
-                                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
-                                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
-                                      e.currentTarget.style.color = "var(--text-primary)";
+                                      e.currentTarget.style.background = "#ffffff";
+                                      e.currentTarget.style.borderColor = "rgba(2, 132, 199, 0.25)";
                                     }}
                                     title="Visualiser l'ordonnance"
                                   >
@@ -2992,7 +3257,7 @@ export default function PatientPortal() {
                     )}
                   </div>
 
-                  <div style={{ height: "1px", background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+                  <div style={{ height: "1px", background: "rgba(2, 132, 199, 0.1)", margin: "4px 0" }} />
 
                   {/* Section Échographies */}
                   <div style={{ marginBottom: openSections.echographies ? "14px" : "0px" }}>
@@ -3009,7 +3274,7 @@ export default function PatientPortal() {
                         borderRadius: "10px",
                         transition: "background 0.2s ease",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(2, 132, 199, 0.04)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
@@ -3024,7 +3289,7 @@ export default function PatientPortal() {
                           width: "24px",
                           height: "24px",
                           borderRadius: "6px",
-                          background: "rgba(255, 255, 255, 0.06)",
+                          background: "rgba(2, 132, 199, 0.08)",
                           color: "var(--accent-mint)",
                         }}
                       >
@@ -3038,7 +3303,7 @@ export default function PatientPortal() {
                           style={{
                             padding: "18px 16px",
                             textAlign: "center",
-                            background: "rgba(12, 22, 16, 0.5)",
+                            background: "rgba(241, 245, 249, 0.7)",
                             border: "1px dashed var(--border-subtle)",
                             borderRadius: "14px",
                             marginBottom: "6px",
@@ -3056,10 +3321,11 @@ export default function PatientPortal() {
                               key={echo.id || index}
                               style={{
                                 padding: "13px 14px",
-                                background: "rgba(12, 22, 16, 0.65)",
-                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                background: "linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)",
+                                border: "1px solid rgba(2, 132, 199, 0.18)",
                                 borderLeft: "3px solid var(--accent-mint)",
                                 borderRadius: "12px",
+                                boxShadow: "0 2px 8px rgba(2, 132, 199, 0.05)",
                               }}
                             >
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
@@ -3082,9 +3348,9 @@ export default function PatientPortal() {
                                   <button
                                     onClick={() => handleViewEchography(echo)}
                                     style={{
-                                      background: "rgba(255, 255, 255, 0.08)",
-                                      color: "var(--text-primary)",
-                                      border: "1px solid rgba(255, 255, 255, 0.16)",
+                                      background: "#ffffff",
+                                      color: "var(--accent-mint)",
+                                      border: "1px solid rgba(2, 132, 199, 0.25)",
                                       borderRadius: "8px",
                                       padding: "7px 11px",
                                       fontSize: "11.5px",
@@ -3097,14 +3363,12 @@ export default function PatientPortal() {
                                       transition: "all 0.2s ease",
                                     }}
                                     onMouseEnter={(e) => {
-                                      e.currentTarget.style.background = "rgba(187, 247, 208, 0.15)";
+                                      e.currentTarget.style.background = "rgba(2, 132, 199, 0.1)";
                                       e.currentTarget.style.borderColor = "var(--accent-mint)";
-                                      e.currentTarget.style.color = "var(--accent-mint)";
                                     }}
                                     onMouseLeave={(e) => {
-                                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
-                                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
-                                      e.currentTarget.style.color = "var(--text-primary)";
+                                      e.currentTarget.style.background = "#ffffff";
+                                      e.currentTarget.style.borderColor = "rgba(2, 132, 199, 0.25)";
                                     }}
                                     title="Visualiser le compte-rendu d'échographie"
                                   >
@@ -3142,7 +3406,7 @@ export default function PatientPortal() {
                     )}
                   </div>
 
-                  <div style={{ height: "1px", background: "rgba(255, 255, 255, 0.06)", margin: "4px 0" }} />
+                  <div style={{ height: "1px", background: "rgba(2, 132, 199, 0.1)", margin: "4px 0" }} />
 
                   {/* Section Documents Médicaux */}
                   <div style={{ marginBottom: openSections.documents ? "14px" : "0px" }}>
@@ -3159,7 +3423,7 @@ export default function PatientPortal() {
                         borderRadius: "10px",
                         transition: "background 0.2s ease",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(2, 132, 199, 0.04)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
@@ -3174,7 +3438,7 @@ export default function PatientPortal() {
                           width: "24px",
                           height: "24px",
                           borderRadius: "6px",
-                          background: "rgba(255, 255, 255, 0.06)",
+                          background: "rgba(2, 132, 199, 0.08)",
                           color: "var(--accent-mint)",
                         }}
                       >
@@ -3188,7 +3452,7 @@ export default function PatientPortal() {
                           style={{
                             padding: "18px 16px",
                             textAlign: "center",
-                            background: "rgba(12, 22, 16, 0.5)",
+                            background: "rgba(241, 245, 249, 0.7)",
                             border: "1px dashed var(--border-subtle)",
                             borderRadius: "14px",
                             marginBottom: "6px",
@@ -3206,10 +3470,11 @@ export default function PatientPortal() {
                               key={doc.id || index}
                               style={{
                                 padding: "13px 14px",
-                                background: "rgba(12, 22, 16, 0.65)",
-                                border: "1px solid rgba(255, 255, 255, 0.08)",
+                                background: "linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)",
+                                border: "1px solid rgba(2, 132, 199, 0.18)",
                                 borderLeft: "3px solid var(--accent-mint)",
                                 borderRadius: "12px",
+                                boxShadow: "0 2px 8px rgba(2, 132, 199, 0.05)",
                               }}
                             >
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
@@ -3232,9 +3497,9 @@ export default function PatientPortal() {
                                   <button
                                     onClick={() => handleViewDocument(doc)}
                                     style={{
-                                      background: "rgba(255, 255, 255, 0.08)",
-                                      color: "var(--text-primary)",
-                                      border: "1px solid rgba(255, 255, 255, 0.16)",
+                                      background: "#ffffff",
+                                      color: "var(--accent-mint)",
+                                      border: "1px solid rgba(2, 132, 199, 0.25)",
                                       borderRadius: "8px",
                                       padding: "7px 11px",
                                       fontSize: "11.5px",
@@ -3247,14 +3512,12 @@ export default function PatientPortal() {
                                       transition: "all 0.2s ease",
                                     }}
                                     onMouseEnter={(e) => {
-                                      e.currentTarget.style.background = "rgba(187, 247, 208, 0.15)";
+                                      e.currentTarget.style.background = "rgba(2, 132, 199, 0.1)";
                                       e.currentTarget.style.borderColor = "var(--accent-mint)";
-                                      e.currentTarget.style.color = "var(--accent-mint)";
                                     }}
                                     onMouseLeave={(e) => {
-                                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
-                                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.16)";
-                                      e.currentTarget.style.color = "var(--text-primary)";
+                                      e.currentTarget.style.background = "#ffffff";
+                                      e.currentTarget.style.borderColor = "rgba(2, 132, 199, 0.25)";
                                     }}
                                     title="Visualiser le document"
                                   >
@@ -3755,8 +4018,8 @@ export default function PatientPortal() {
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "14px 18px",
-                borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-                background: "rgba(18, 30, 22, 0.75)",
+                borderBottom: "1px solid rgba(2, 132, 199, 0.15)",
+                background: "#f8fafc",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
@@ -3765,7 +4028,7 @@ export default function PatientPortal() {
                     width: "32px",
                     height: "32px",
                     borderRadius: "8px",
-                    background: "rgba(187, 247, 208, 0.15)",
+                    background: "rgba(2, 132, 199, 0.1)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -3780,7 +4043,7 @@ export default function PatientPortal() {
                     margin: 0,
                     fontSize: "14.5px",
                     fontWeight: "700",
-                    color: "#fff",
+                    color: "var(--text-primary)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -3797,8 +4060,8 @@ export default function PatientPortal() {
                     target="_blank"
                     rel="noreferrer"
                     style={{
-                      background: "rgba(255, 255, 255, 0.08)",
-                      color: "var(--text-primary)",
+                      background: "#ffffff",
+                      color: "var(--accent-mint)",
                       padding: "7px 12px",
                       borderRadius: "8px",
                       fontSize: "12px",
@@ -3807,7 +4070,7 @@ export default function PatientPortal() {
                       display: "flex",
                       alignItems: "center",
                       gap: "5px",
-                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      border: "1px solid rgba(2, 132, 199, 0.25)",
                     }}
                     title="Ouvrir en plein écran dans un nouvel onglet"
                   >
@@ -3839,9 +4102,9 @@ export default function PatientPortal() {
                 <button
                   onClick={() => setPreviewModal(null)}
                   style={{
-                    background: "rgba(255, 255, 255, 0.08)",
+                    background: "#e2e8f0",
                     border: "none",
-                    color: "#fff",
+                    color: "var(--text-primary)",
                     borderRadius: "8px",
                     width: "32px",
                     height: "32px",

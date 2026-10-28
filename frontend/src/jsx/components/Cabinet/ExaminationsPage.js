@@ -103,10 +103,10 @@ const ExaminationsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
           <span className="text-muted fs-13 d-none d-sm-inline">Filtrer par patient :</span>
           <select
-            className="form-control w-100 w-sm-auto default-select"
+            className="form-control default-select" style={{ width: "auto", minWidth: "220px" }}
             value={selectedPatientId}
             onChange={(e) => setSelectedPatientId(e.target.value)}
           >
@@ -121,7 +121,7 @@ const ExaminationsPage = () => {
 
         <Button
           variant="primary"
-          className="btn-rounded w-100 w-sm-auto"
+          className="btn-rounded ms-auto"
           onClick={() => setShowAddModal(true)}
         >
           <i className="flaticon-381-add-1 me-2"></i> Relever des Constantes

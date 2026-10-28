@@ -1,6 +1,6 @@
 import React, { useContext } from "react";
 import { useSelector, useDispatch } from 'react-redux';
-import { Routes, Route, Outlet, Navigate } from 'react-router-dom';
+import { Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom';
 import { navtoggle } from "../store/actions/AuthActions";
 
 /// Css
@@ -128,6 +128,11 @@ import Toastr from "./components/PluginsMenu/Toastr/Toastr";
 import Lightgallery from "./components/PluginsMenu/Lightgallery/Lightgallery";
 
 import { ThemeContext } from "../context/ThemeContext";
+
+const LegacyAdminRedirect = ({ url }) => {
+  const location = useLocation();
+  return <Navigate to={`/admin/${url}${location.search || ""}${location.hash || ""}`} replace />;
+};
 
 const Markup = () => {  
   const allroutes = [
@@ -285,7 +290,7 @@ const Markup = () => {
                   key={`legacy-${i}`}
                   exact
                   path={`${data.url}`}
-                  element={<Navigate to={`/admin/${data.url}`} replace />}
+                  element={<LegacyAdminRedirect url={data.url} />}
                 />
               ))}
           </Route>          

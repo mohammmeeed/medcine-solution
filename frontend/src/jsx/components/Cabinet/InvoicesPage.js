@@ -61,7 +61,8 @@ const InvoicesPage = () => {
   }, []);
 
   const getPatientPassword = (inv) => {
-    if (!inv) return "";
+    if (!inv || inv.isGuest || !inv.patientId) return "";
+    if (inv.patientName && (inv.patientName.includes('(sc)') || inv.patientName.toLowerCase().includes('sans compte'))) return "";
     if (inv.patientPassword) return inv.patientPassword;
     const pat = patients.find((p) => p.id === inv.patientId);
     if (pat?.password) return pat.password;
@@ -150,7 +151,7 @@ const InvoicesPage = () => {
 
     Swal.fire({
       icon: "success",
-      title: "Facture enregistrée dans la Base de Données",
+      title: "Facture enregistrée avec succès",
       text: `Facture #${newInv.invoiceNumber} enregistrée pour ${newInv.patientName}.`,
       confirmButtonColor: "#1e60d5",
     });
@@ -174,8 +175,8 @@ const InvoicesPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
-          <div className="input-group search-area w-100 w-sm-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <div className="input-group search-area" style={{ width: "auto", minWidth: "260px" }}>
             <input
               type="text"
               className="form-control"
@@ -191,7 +192,7 @@ const InvoicesPage = () => {
 
         <Button
           variant="primary"
-          className="btn-rounded w-100 w-sm-auto"
+          className="btn-rounded ms-auto"
           onClick={() => setShowNewModal(true)}
         >
           <i className="flaticon-381-add-1 me-2"></i> Émettre une Facture
@@ -501,6 +502,7 @@ const InvoicesPage = () => {
               </div>
 
               {/* Banderole Accès Portail Patient pour le Ticket de Caisse avec QR Code exact */}
+              {!previewInvoice.isGuest && previewInvoice.patientId && !previewInvoice.patientName?.includes('(sc)') && !previewInvoice.patientName?.toLowerCase().includes('sans compte') && (
               <div
                 className="p-3 mb-3 rounded border d-flex justify-content-between align-items-center flex-wrap gap-3"
                 style={{
@@ -568,6 +570,8 @@ const InvoicesPage = () => {
                   </span>
                 </div>
               </div>
+
+              )}
 
               {/* Acte & Montant Simple (Pas de TTC, Pas de CNAS, Pas de Mutuelle) */}
               <div className="card border mb-3 shadow-none">

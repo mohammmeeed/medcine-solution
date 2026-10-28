@@ -131,6 +131,7 @@ const DEFAULT_PRESELECTS = {
 
 const ConsultationEchoForm = ({
   patients = [],
+  medications = [],
   initialPatientId = null,
   initialDoctor = {},
   onSave,
@@ -197,6 +198,12 @@ const ConsultationEchoForm = ({
 
   // Auto-remplissage patiente
   useEffect(() => {
+    if (patientId === "guest") {
+      setNom("");
+      setPrenom("");
+      setDdn("");
+      return;
+    }
     if (patients && patients.length > 0) {
       const p = patients.find((pat) => String(pat.id) === String(patientId)) || patients[0];
       if (p) {
@@ -311,6 +318,19 @@ const ConsultationEchoForm = ({
     }
   };
 
+  const handleSelectPredefinedMed = (index, medName) => {
+    const found = medications.find((m) => (m.name || "").toLowerCase() === medName.toLowerCase());
+    const updated = [...prescriptionItems];
+    if (found) {
+      updated[index].medication = found.name;
+      if (found.defaultPosology) updated[index].posology = found.defaultPosology;
+      if (found.defaultDuration) updated[index].duration = found.defaultDuration;
+    } else {
+      updated[index].medication = medName;
+    }
+    setPrescriptionItems(updated);
+  };
+
   // Construction de l'objet de consultation et ordonnance pour sauvegarde ou impression
   const buildCurrentData = () => {
     const selectedPatient =
@@ -355,9 +375,12 @@ const ConsultationEchoForm = ({
         }
       : null;
 
+    const isGuest = patientId === "guest" || !selectedPatient;
+    const cleanGuestName = `${nom} ${prenom}`.trim();
     const payload = {
-      patientId: selectedPatient?.id || 1,
-      patientName: `${selectedPatient?.firstName || prenom} ${selectedPatient?.lastName || nom}`,
+      patientId: isGuest ? null : (selectedPatient?.id || null),
+      patientName: isGuest ? (cleanGuestName.includes("(sc)") ? cleanGuestName : `${cleanGuestName} (sc)`) : `${selectedPatient?.firstName || prenom} ${selectedPatient?.lastName || nom}`,
+      isGuest,
       date: dateExam,
       time: `${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, "0")}`,
       reason: titles[examType] || "Échographie",
@@ -615,6 +638,7 @@ const ConsultationEchoForm = ({
                 onChange={(e) => setPatientId(e.target.value)}
                 required
               >
+                <option value="guest">👤 Patient(e) sans compte (de passage / sans dossier)</option>
                 {patients.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.lastName.toUpperCase()} {p.firstName} — {p.fileNumber} (Née le {p.dob || "-"})
@@ -2298,6 +2322,25 @@ const ConsultationEchoForm = ({
                   <div key={index} className="p-2 border rounded mb-2 bg-white">
                     <div className="d-flex justify-content-between align-items-center mb-1">
                       <strong className="text-muted fs-11">Médicament #{index + 1}</strong>
+                      <div className="d-flex align-items-center gap-2 ms-auto me-2">
+                        <select
+                          className="form-select form-select-sm py-0 px-2 fs-11 text-primary border-primary"
+                          style={{ width: "auto", minWidth: "180px", height: "24px" }}
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleSelectPredefinedMed(index, e.target.value);
+                            }
+                          }}
+                        >
+                          <option value="">-- Choisir un médicament existant --</option>
+                          {medications.map((m, mIdx) => (
+                            <option key={m.id || `${m.name}-${mIdx}`} value={m.name}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       {prescriptionItems.length > 1 && (
                         <button
                           type="button"
@@ -2313,9 +2356,18 @@ const ConsultationEchoForm = ({
                         <input
                           type="text"
                           className="form-control form-control-sm"
-                          placeholder="Médicament (ex: SPASFON, PARACÉTAMOL, TARDYFERON...)"
                           value={item.medication}
-                          onChange={(e) => handleMedChange(index, "medication", e.target.value)}
+                          list="consult-medications-datalist"
+                          placeholder="Écrire un médicament ou sélectionner dans la liste..."
+                          onChange={(e) => {
+                            handleMedChange(index, "medication", e.target.value);
+                            const exact = medications.find(
+                              (m) => (m.name || "").toLowerCase() === e.target.value.trim().toLowerCase()
+                            );
+                            if (exact) {
+                              handleSelectPredefinedMed(index, exact.name);
+                            }
+                          }}
                         />
                       </div>
                       <div className="col-md-4 col-12">
@@ -2363,6 +2415,8 @@ const ConsultationEchoForm = ({
               variant="outline-success"
               type="button"
               onClick={handlePrintPrescriptionOnly}
+              disabled={!(showPrescription && prescriptionItems.some((i) => i.medication && i.medication.trim() !== ""))}
+              style={!(showPrescription && prescriptionItems.some((i) => i.medication && i.medication.trim() !== "")) ? { opacity: 0.45, cursor: "not-allowed" } : {}}
               className="d-flex align-items-center"
               title="Imprimer l'ordonnance médicale"
             >

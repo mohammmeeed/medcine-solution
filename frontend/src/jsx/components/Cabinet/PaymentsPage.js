@@ -127,7 +127,7 @@ const PaymentsPage = () => {
 
     Swal.fire({
       icon: "success",
-      title: "Règlement enregistré dans la Base de Données !",
+      title: "Règlement enregistré !",
       text: `Reçu #${created.receiptNumber} généré (${created.amount.toLocaleString("fr-DZ")} DA).`,
       confirmButtonColor: "#1e60d5",
     });
@@ -156,10 +156,10 @@ const PaymentsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
           <span className="text-muted fs-13 d-none d-sm-inline">Filtrer par mode :</span>
           <select
-            className="form-control w-100 w-sm-auto default-select"
+            className="form-control default-select" style={{ width: "auto", minWidth: "210px" }}
             value={methodFilter}
             onChange={(e) => setMethodFilter(e.target.value)}
           >
@@ -173,7 +173,7 @@ const PaymentsPage = () => {
 
         <Button
           variant="primary"
-          className="btn-rounded w-100 w-sm-auto"
+          className="btn-rounded ms-auto"
           onClick={() => setShowAddModal(true)}
         >
           <i className="flaticon-381-add-1 me-2"></i> Encaisser un Règlement

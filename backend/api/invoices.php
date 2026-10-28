@@ -58,7 +58,7 @@ function handleGetInvoices($db) {
         $stmt = $db->prepare("
             SELECT 
                 i.*,
-                CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
+                COALESCE(CONCAT(p.first_name, ' ', p.last_name), i.patient_name, 'Patient sans compte') AS patient_name,
                 p.first_name,
                 p.last_name,
                 p.file_number,
@@ -73,16 +73,21 @@ function handleGetInvoices($db) {
         $rows = $stmt->fetchAll();
 
         $data = array_map(function ($row) {
-            $pwd = !empty($row['patient_password']) ? $row['patient_password'] : '';
-            if (empty($pwd)) {
-                $pwd = generateInvoicePatientPassword($row['last_name'] ?? '', $row['first_name'] ?? '', $row['patient_phone'] ?? '');
+            $isGuest = empty($row['patient_id']) || (!empty($row['patient_name']) && (stripos($row['patient_name'], '(sc)') !== false || stripos($row['patient_name'], 'sans compte') !== false));
+            $pwd = '';
+            if (!$isGuest) {
+                $pwd = !empty($row['patient_password']) ? $row['patient_password'] : '';
+                if (empty($pwd)) {
+                    $pwd = generateInvoicePatientPassword($row['last_name'] ?? '', $row['first_name'] ?? '', $row['patient_phone'] ?? '');
+                }
             }
             return [
                 'id' => (int)$row['id'],
                 'invoiceNumber' => $row['invoice_number'],
-                'patientId' => (int)$row['patient_id'],
+                'patientId' => !empty($row['patient_id']) ? (int)$row['patient_id'] : null,
+                'isGuest' => $isGuest,
                 'consultationId' => !empty($row['consultation_id']) ? (int)$row['consultation_id'] : null,
-                'patientName' => $row['patient_name'] ?? 'Patient',
+                'patientName' => $row['patient_name'] ?? 'Patient sans compte',
                 'patientPhone' => $row['patient_phone'] ?? '',
                 'patientPassword' => $pwd,
                 'fileNumber' => $row['file_number'] ?? '',
@@ -107,16 +112,20 @@ function handleGetInvoices($db) {
 function handleSaveInvoice($db) {
     $input = getRequestBody();
 
-    if (empty($input['patientId']) || empty($input['amount'])) {
-        sendResponse('error', null, 'Patient et montant obligatoires', 400);
+    $patientId = !empty($input['patientId']) ? (int)$input['patientId'] : null;
+    $patientName = !empty($input['patientName']) ? trim($input['patientName']) : null;
+
+    if (empty($patientId) && empty($patientName)) {
+        sendResponse('error', null, 'Patient ou nom obligatoire', 400);
+    }
+    if (empty($input['amount'])) {
+        sendResponse('error', null, 'Montant obligatoire', 400);
     }
 
     try {
-        // Générer un numéro de facture si non fourni
         $count = $db->query("SELECT COUNT(*) FROM invoices")->fetchColumn();
         $invoiceNumber = $input['invoiceNumber'] ?? ('FAC-' . date('Y') . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT));
 
-        $patientId = (int)$input['patientId'];
         $consultationId = !empty($input['consultationId']) ? (int)$input['consultationId'] : null;
         $invoiceDate = $input['date'] ?? date('Y-m-d');
         $actDescription = $input['actDescription'] ?? 'Consultation médicale';
@@ -129,11 +138,11 @@ function handleSaveInvoice($db) {
 
         $stmt = $db->prepare("
             INSERT INTO invoices (
-                invoice_number, patient_id, consultation_id, invoice_date,
+                invoice_number, patient_id, patient_name, consultation_id, invoice_date,
                 act_description, amount, covered_amo, covered_amc,
                 patient_remaining, payment_method, status
             ) VALUES (
-                :invoiceNumber, :patientId, :consultationId, :invoiceDate,
+                :invoiceNumber, :patientId, :patientName, :consultationId, :invoiceDate,
                 :actDescription, :amount, :coveredAmo, :coveredAmc,
                 :patientRemaining, :paymentMethod, :status
             )
@@ -142,6 +151,7 @@ function handleSaveInvoice($db) {
         $stmt->execute([
             ':invoiceNumber' => $invoiceNumber,
             ':patientId' => $patientId,
+            ':patientName' => $patientName,
             ':consultationId' => $consultationId,
             ':invoiceDate' => $invoiceDate,
             ':actDescription' => $actDescription,

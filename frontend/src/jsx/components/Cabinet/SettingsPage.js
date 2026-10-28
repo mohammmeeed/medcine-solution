@@ -216,7 +216,7 @@ const SettingsPage = () => {
       localStorage.setItem("cabinet_settings", JSON.stringify(settings));
       Swal.fire({
         icon: "success",
-        title: "Paramètres enregistrés dans la Base de Données",
+        title: "Paramètres enregistrés avec succès",
         text: "Le type de consultation, le tarif et les préférences de l'agenda sont enregistrés avec succès.",
         confirmButtonColor: "#1e60d5",
       });

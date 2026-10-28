@@ -468,7 +468,7 @@ const StaffPage = ({ initialView = "list" }) => {
 
         Swal.fire({
           icon: "success",
-          title: "Enregistré dans la Base de Données !",
+          title: "Enregistré avec succès !",
           text: `Les informations du compte de ${cleanName} sont bien sauvegardées dans MySQL.`,
           timer: 1800,
           showConfirmButton: false,
@@ -505,7 +505,7 @@ const StaffPage = ({ initialView = "list" }) => {
 
         Swal.fire({
           icon: "success",
-          title: "Compte créé dans la Base de Données !",
+          title: "Compte créé avec succès !",
           text: `Le compte utilisateur pour ${cleanName} a été ajouté dans MySQL.`,
           timer: 1800,
           showConfirmButton: false,
@@ -554,7 +554,7 @@ const StaffPage = ({ initialView = "list" }) => {
         }
         Swal.fire({
           icon: "success",
-          title: "Compte supprimé de la Base de Données",
+          title: "Compte supprimé avec succès",
           text: `Le compte de ${acc.name} a été supprimé.`,
           timer: 1500,
           showConfirmButton: false,
@@ -1086,7 +1086,7 @@ const StaffPage = ({ initialView = "list" }) => {
 
                   {/* Aperçu des permissions du rôle sélectionné */}
                   {selectedRole && (
-                    <div className="p-3 bg-light rounded mt-3 border">
+                    <div className="p-3 bg-white rounded mt-3 border" style={{ borderColor: "#e2e8f0" }}>
                       <div className="d-flex align-items-center justify-content-between mb-2">
                         <span className="font-w600 text-dark fs-12">
                           <i className="flaticon-381-shield-1 text-primary me-1"></i>
@@ -1111,7 +1111,7 @@ const StaffPage = ({ initialView = "list" }) => {
                   )}
                 </div>
 
-                <div className="card-footer border-top d-flex justify-content-end gap-2 bg-light py-3 px-4">
+                <div className="card-footer border-top d-flex justify-content-end gap-2 bg-white py-3 px-4">
                   <button
                     type="button"
                     className="btn btn-outline-secondary"
@@ -1282,7 +1282,7 @@ const StaffPage = ({ initialView = "list" }) => {
                           type="button"
                           className={`btn btn-xs ${pageCategoryFilter === cat
                               ? "btn-primary"
-                              : "btn-light text-muted"
+                              : "btn-outline-primary bg-white"
                             }`}
                           onClick={() => setPageCategoryFilter(cat)}
                         >
@@ -1306,10 +1306,15 @@ const StaffPage = ({ initialView = "list" }) => {
                           <div
                             className={`p-3 rounded border h-100 d-flex align-items-start gap-3 ${isChecked
                                 ? "border-primary bg-primary-light"
-                                : "border-light bg-light opacity-75"
+                                : "bg-white"
                               }`}
                             onClick={() => handleTogglePagePermission(page.id)}
-                            style={{ cursor: "pointer", transition: "all 0.15s" }}
+                            style={{
+                              cursor: "pointer",
+                              transition: "all 0.15s",
+                              backgroundColor: isChecked ? "#eff6ff" : "#ffffff",
+                              borderColor: isChecked ? "#3b82f6" : "#e2e8f0",
+                            }}
                           >
                             <input
                               type="checkbox"
@@ -1326,7 +1331,7 @@ const StaffPage = ({ initialView = "list" }) => {
                                   ></i>
                                   {page.name}
                                 </span>
-                                <code className="fs-10 text-muted">{page.path}</code>
+
                               </div>
                               <p className="text-muted fs-11 mb-0 mt-1 line-clamp-1">
                                 {page.description}
@@ -1339,7 +1344,7 @@ const StaffPage = ({ initialView = "list" }) => {
                   </div>
                 </div>
 
-                <div className="card-footer border-top d-flex justify-content-end gap-2 bg-light py-3 px-4">
+                <div className="card-footer border-top d-flex justify-content-end gap-2 bg-white py-3 px-4">
                   <button
                     type="button"
                     className="btn btn-outline-secondary"
@@ -1375,14 +1380,14 @@ const StaffPage = ({ initialView = "list" }) => {
       {/* Boutons d'Action Supérieurs */}
       <div className="d-flex mb-3 align-items-center justify-content-end gap-2 flex-wrap w-100">
         <button
-          className="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-center gap-2 w-100 w-sm-auto"
+          className="btn btn-outline-primary btn-sm btn-rounded d-inline-flex align-items-center justify-content-center gap-2"
           onClick={handleOpenNewRole}
         >
           <i className="flaticon-381-shield-1"></i>
           <span>Nouveau Rôle</span>
         </button>
         <button
-          className="btn btn-primary btn-sm d-flex align-items-center justify-content-center gap-2 w-100 w-sm-auto"
+          className="btn btn-primary btn-sm btn-rounded d-inline-flex align-items-center justify-content-center gap-2"
           onClick={handleOpenNewAccount}
         >
           <i className="flaticon-381-user-7"></i>
@@ -1631,7 +1636,7 @@ const StaffPage = ({ initialView = "list" }) => {
                       </div>
                       <p className="text-muted fs-12 mb-0">{role.description}</p>
                     </div>
-                    <span className="badge bg-light text-primary font-w600 fs-12 py-2 px-3">
+                    <span className="badge text-primary font-w600 fs-12 py-2 px-3" style={{ backgroundColor: "#eff6ff" }}>
                       {userCount} utilisateur{userCount > 1 ? "s" : ""}
                     </span>
                   </div>
@@ -1663,7 +1668,7 @@ const StaffPage = ({ initialView = "list" }) => {
                             key={page.id}
                             className={`d-flex align-items-center px-2 py-1 rounded fs-11 font-w500 ${isAllowed
                                 ? "bg-success-light text-success border border-success-subtle"
-                                : "bg-light text-muted opacity-50"
+                                : "bg-white text-muted border"
                               }`}
                             style={{ transition: "all 0.2s" }}
                           >

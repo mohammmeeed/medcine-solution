@@ -100,7 +100,7 @@ function handleGetPatients($db) {
             // Récupérer la dernière visite réelle si non renseignée
             $latestVisit = $r['last_visit'];
             if (empty($latestVisit)) {
-                $lvStmt = $db->prepare("SELECT date FROM consultations WHERE patient_id = :pid ORDER BY date DESC, id DESC LIMIT 1");
+                $lvStmt = $db->prepare("SELECT consultation_date FROM consultations WHERE patient_id = :pid ORDER BY consultation_date DESC, id DESC LIMIT 1");
                 $lvStmt->execute([':pid' => $r['id']]);
                 $latestVisit = $lvStmt->fetchColumn() ?: null;
             }

@@ -61,10 +61,11 @@ function handleGetAppointments($db) {
         }
 
         $sql = "SELECT a.*, 
-                       COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))), ''), NULLIF(TRIM(a.patient_name), ''), 'Patient') AS patient_name,
-                       COALESCE(p.first_name, a.patient_name, '') AS first_name,
-                       COALESCE(p.last_name, '') AS last_name,
-                       COALESCE(p.phone, a.patient_phone, '') AS patient_phone,
+                       a.patient_name AS raw_patient_name,
+                       a.patient_phone AS raw_patient_phone,
+                       p.first_name AS p_first_name,
+                       p.last_name AS p_last_name,
+                       p.phone AS p_phone,
                        COALESCE(NULLIF(TRIM(p.email), ''), NULLIF(TRIM(a.patient_email), ''), '') AS patient_email
                 FROM appointments a
                 LEFT JOIN patients p ON a.patient_id = p.id
@@ -78,14 +79,28 @@ function handleGetAppointments($db) {
         $appointments = [];
         foreach ($rows as $r) {
             $timeShort = substr($r['appointment_time'], 0, 5);
+            $enteredName = trim($r['raw_patient_name'] ?? '');
+            $enteredPhone = trim($r['raw_patient_phone'] ?? '');
+
+            // Si le nom saisi ne contient que des chiffres et que le téléphone contient des lettres, rétablir l'ordre
+            if ($enteredName !== '' && preg_match('/^[0-9+\s().-]+$/', $enteredName) && $enteredPhone !== '' && preg_match('/[a-zA-Z]/', $enteredPhone)) {
+                $tmp = $enteredName;
+                $enteredName = $enteredPhone;
+                $enteredPhone = $tmp;
+            }
+
+            $dbFullName = trim(($r['p_first_name'] ?? '') . ' ' . ($r['p_last_name'] ?? ''));
+            $finalPatientName = $enteredName !== '' ? $enteredName : ($dbFullName !== '' ? $dbFullName : 'Patient');
+            $finalPhone = $enteredPhone !== '' ? $enteredPhone : trim($r['p_phone'] ?? '');
+
             $appointments[] = [
                 "id" => intval($r['id']),
                 "ticketNumber" => calculateTicketNumber($timeShort),
                 "patientId" => !empty($r['patient_id']) ? intval($r['patient_id']) : null,
-                "patientName" => $r['patient_name'],
-                "firstName" => $r['first_name'],
-                "lastName" => $r['last_name'],
-                "phone" => $r['patient_phone'],
+                "patientName" => $finalPatientName,
+                "firstName" => $enteredName !== '' ? $enteredName : ($r['p_first_name'] ?? ''),
+                "lastName" => $enteredName !== '' ? '' : ($r['p_last_name'] ?? ''),
+                "phone" => $finalPhone,
                 "email" => $r['patient_email'],
                 "date" => $r['appointment_date'],
                 "time" => $timeShort,
@@ -120,33 +135,20 @@ function handleCreateAppointment($db) {
         $patientPhone = trim($body['patientPhone'] ?? ($body['phone'] ?? ''));
         $patientEmail = trim($body['patientEmail'] ?? ($body['email'] ?? ''));
 
-        // Si le patientId n'est pas fourni, vérifier si le patient existe déjà par son numéro de téléphone ou email
-        if (!$patientId && (!empty($patientPhone) || !empty($patientEmail))) {
-            $sqlFind = "SELECT id, email, CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) AS full_name FROM patients WHERE ";
-            $conditions = [];
-            $findParams = [];
-            if (!empty($patientPhone)) {
-                $conditions[] = "(phone = :phone AND phone != '')";
-                $findParams[':phone'] = $patientPhone;
-            }
-            if (!empty($patientEmail)) {
-                $conditions[] = "(email = :email AND email != '')";
-                $findParams[':email'] = $patientEmail;
-            }
-            $sqlFind .= implode(" OR ", $conditions) . " LIMIT 1";
+        // Si le nom saisi ne contient que des chiffres et que le téléphone contient des lettres, rétablir l'ordre
+        if ($patientName !== '' && preg_match('/^[0-9+\s().-]+$/', $patientName) && $patientPhone !== '' && preg_match('/[a-zA-Z]/', $patientPhone)) {
+            $tmp = $patientName;
+            $patientName = $patientPhone;
+            $patientPhone = $tmp;
+        }
 
-            $find = $db->prepare($sqlFind);
-            $find->execute($findParams);
+        // Si un patientId est fourni mais que patientName est vide, récupérer le nom depuis la table patients
+        if ($patientId && empty($patientName)) {
+            $find = $db->prepare("SELECT CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) AS full_name FROM patients WHERE id = :id LIMIT 1");
+            $find->execute([':id' => $patientId]);
             $existing = $find->fetch(PDO::FETCH_ASSOC);
-            if ($existing) {
-                $patientId = (int)$existing['id'];
-                if (empty($patientName)) {
-                    $patientName = trim($existing['full_name']);
-                }
-                if (empty($existing['email']) && !empty($patientEmail)) {
-                    $upd = $db->prepare("UPDATE patients SET email = :email WHERE id = :id");
-                    $upd->execute([':email' => $patientEmail, ':id' => $patientId]);
-                }
+            if ($existing && !empty(trim($existing['full_name']))) {
+                $patientName = trim($existing['full_name']);
             }
         }
 
@@ -287,11 +289,11 @@ function handleUpdateAppointment($db) {
                 $aptQ->execute([':id' => (int)$id]);
                 $aptRow = $aptQ->fetch(PDO::FETCH_ASSOC);
                 if ($aptRow) {
-                    $pName = trim(($aptRow['first_name'] ?? '') . ' ' . ($aptRow['last_name'] ?? ''));
+                    $pName = trim($aptRow['patient_name'] ?? '');
                     if (empty($pName)) {
-                        $pName = $aptRow['patient_name'] ?: 'Patient';
+                        $pName = trim(($aptRow['first_name'] ?? '') . ' ' . ($aptRow['last_name'] ?? '')) ?: 'Patient';
                     }
-                    $pPhone = $aptRow['phone'] ?: ($aptRow['patient_phone'] ?: null);
+                    $pPhone = $aptRow['patient_phone'] ?: ($aptRow['phone'] ?: null);
 
                     $insWait = $db->prepare("
                         INSERT INTO waiting_room (patient_id, patient_name, patient_phone, appointment_id, appointment_time, arrival_time, reason, status)

@@ -27,7 +27,7 @@ function handleGetConsultations($db) {
         $patientId = isset($_GET['patient_id']) ? intval($_GET['patient_id']) : null;
 
         $sql = "SELECT c.*, 
-                       CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
+                       COALESCE(CONCAT(p.first_name, ' ', p.last_name), c.patient_name, 'Patient sans compte') AS patient_name,
                        p.first_name AS patient_first_name,
                        p.last_name AS patient_last_name,
                        p.dob AS patient_dob,
@@ -35,7 +35,7 @@ function handleGetConsultations($db) {
                        p.blood_group AS patient_blood_group,
                        p.phone AS patient_phone
                 FROM consultations c
-                JOIN patients p ON c.patient_id = p.id ";
+                LEFT JOIN patients p ON c.patient_id = p.id ";
 
         $params = [];
         if ($id) {
@@ -77,7 +77,7 @@ function handleGetConsultations($db) {
                     $prescriptionData = [
                         "id" => intval($presc['id']),
                         "prescriptionNumber" => $presc['prescription_number'],
-                        "patientId" => intval($presc['patient_id']),
+                        "patientId" => !empty($presc['patient_id']) ? intval($presc['patient_id']) : null,
                         "patientName" => $r['patient_name'],
                         "date" => $presc['prescription_date'],
                         "validity" => $presc['validity'],
@@ -107,10 +107,13 @@ function handleGetConsultations($db) {
             $docStmt->execute([':cid' => $r['id']]);
             $attachedDocs = $docStmt->fetchAll(PDO::FETCH_ASSOC);
 
+            $isGuest = empty($r['patient_id']);
+
             $consultations[] = [
                 "id" => intval($r['id']),
                 "consultationNumber" => $r['consultation_number'],
-                "patientId" => intval($r['patient_id']),
+                "patientId" => !empty($r['patient_id']) ? intval($r['patient_id']) : null,
+                "isGuest" => $isGuest,
                 "patientName" => $r['patient_name'],
                 "date" => $r['consultation_date'],
                 "time" => substr($r['consultation_time'], 0, 5),
@@ -137,13 +140,13 @@ function handleGetConsultations($db) {
                 "ultrasoundReport" => $echoReport,
                 "documents" => $attachedDocs,
                 "patientDetails" => [
-                    "nom" => $r['patient_last_name'],
-                    "prenom" => $r['patient_first_name'],
-                    "dob" => $r['patient_dob'],
+                    "nom" => !empty($r['patient_last_name']) ? $r['patient_last_name'] : $r['patient_name'],
+                    "prenom" => $r['patient_first_name'] ?? "",
+                    "dob" => $r['patient_dob'] ?? "-",
                     "age" => $age ? ($age . " ans") : "",
-                    "fileNumber" => $r['patient_file_number'],
-                    "bloodGroup" => $r['patient_blood_group'],
-                    "phone" => $r['patient_phone']
+                    "fileNumber" => !empty($r['patient_file_number']) ? $r['patient_file_number'] : "SANS DOSSIER",
+                    "bloodGroup" => $r['patient_blood_group'] ?? "-",
+                    "phone" => $r['patient_phone'] ?? ""
                 ],
                 "status" => $r['status']
             ];
@@ -158,16 +161,19 @@ function handleGetConsultations($db) {
 function handleCreateConsultation($db) {
     $body = getRequestBody();
 
-    if (empty($body['patientId'])) {
-        sendResponse("error", null, "L'identifiant du patient (patientId) est requis", 400);
+    $patientId = !empty($body['patientId']) ? intval($body['patientId']) : null;
+    $patientName = !empty($body['patientName']) ? trim($body['patientName']) : null;
+
+    if (empty($patientId) && empty($patientName)) {
+        sendResponse("error", null, "Le patient ou son nom est requis", 400);
     }
 
     try {
         $db->beginTransaction();
 
-        $patientId = intval($body['patientId']);
         $date = !empty($body['date']) ? $body['date'] : date('Y-m-d');
         $time = !empty($body['time']) ? $body['time'] : date('H:i:s');
+        $reason = !empty($body['reason']) ? trim($body['reason']) : "Consultation médicale";
         if (!empty($body['billingCode'])) {
             $billingCode = $body['billingCode'];
         } else {
@@ -183,11 +189,16 @@ function handleCreateConsultation($db) {
 
         // Générer le numéro de consultation séquentiel unique
         $year = date('Y', strtotime($date));
-        $countStmt = $db->query("SELECT COUNT(*) FROM consultations");
+        $countStmt = $db->query("SELECT COALESCE(MAX(id), 0) FROM consultations");
         $count = $countStmt->fetchColumn() + 1;
         $consultNumber = !empty($body['consultationNumber'])
             ? $body['consultationNumber']
             : sprintf("CS-%s-%04d", $year, $count);
+        $chkCNum = $db->prepare("SELECT COUNT(*) FROM consultations WHERE consultation_number = :num");
+        $chkCNum->execute([':num' => $consultNumber]);
+        if ($chkCNum->fetchColumn() > 0) {
+            $consultNumber = sprintf("CS-%s-%04d-%d", $year, $count, rand(10, 99));
+        }
 
         $vitals = isset($body['vitals']) && is_array($body['vitals']) ? $body['vitals'] : [];
         $bp = $vitals['bp'] ?? ($body['bp'] ?? null);
@@ -208,17 +219,18 @@ function handleCreateConsultation($db) {
 
         // Insertion dans la table consultations
         $cSql = "INSERT INTO consultations 
-                    (consultation_number, patient_id, doctor_id, consultation_date, consultation_time, 
+                    (consultation_number, patient_id, patient_name, doctor_id, consultation_date, consultation_time, 
                      reason, bp, weight, temperature, heart_rate, ddr, terme, symptoms, exam_findings, 
                      echo_type, echo_findings, echo_conclusion, diagnosis, recommendations, billing_code, status)
                  VALUES 
-                    (:num, :pid, 1, :cdate, :ctime, :reason, :bp, :weight, :temp, :hr, :ddr, :terme, 
+                    (:num, :pid, :pname, 1, :cdate, :ctime, :reason, :bp, :weight, :temp, :hr, :ddr, :terme, 
                      :symptoms, :exam, :etype, :efind, :econcl, :diag, :recom, :bcode, 'Clôturée')";
 
         $cStmt = $db->prepare($cSql);
         $cStmt->execute([
             ':num' => $consultNumber,
             ':pid' => $patientId,
+            ':pname' => $patientName,
             ':cdate' => $date,
             ':ctime' => strlen($time) === 5 ? ($time . ":00") : $time,
             ':reason' => $reason,
@@ -255,19 +267,25 @@ function handleCreateConsultation($db) {
 
             if (count($validItems) > 0) {
                 $hasPrescription = true;
-                $prescCount = $db->query("SELECT COUNT(*) FROM prescriptions")->fetchColumn() + 1;
+                $prescCount = $db->query("SELECT COALESCE(MAX(id), 0) FROM prescriptions")->fetchColumn() + 1;
                 $prescNumber = $prescPayload['prescriptionNumber'] ?? sprintf("ORD-%s-%04d", $year, $prescCount);
+                $chkPNum = $db->prepare("SELECT COUNT(*) FROM prescriptions WHERE prescription_number = :num");
+                $chkPNum->execute([':num' => $prescNumber]);
+                if ($chkPNum->fetchColumn() > 0) {
+                    $prescNumber = sprintf("ORD-%s-%04d-%d", $year, $prescCount, rand(10, 99));
+                }
                 $docName = $prescPayload['doctorName'] ?? "Dr N. BELBACHIR OULD HENNIA";
 
                 $pSql = "INSERT INTO prescriptions 
-                            (prescription_number, consultation_id, patient_id, doctor_name, prescription_date, validity, ald, notes, validated)
+                            (prescription_number, consultation_id, patient_id, patient_name, doctor_name, prescription_date, validity, ald, notes, validated)
                          VALUES 
-                            (:pnum, :cid, :pid, :dname, :pdate, '3 mois', 0, :notes, 1)";
+                            (:pnum, :cid, :pid, :pname, :dname, :pdate, '3 mois', 0, :notes, 1)";
                 $pStmt = $db->prepare($pSql);
                 $pStmt->execute([
                     ':pnum' => $prescNumber,
                     ':cid' => $consultationId,
                     ':pid' => $patientId,
+                    ':pname' => $patientName,
                     ':dname' => $docName,
                     ':pdate' => $date,
                     ':notes' => $recommendations ?: "Respecter la posologie prescrite."
@@ -293,7 +311,23 @@ function handleCreateConsultation($db) {
                     ]);
                 }
 
-                // Mettre à jour la consultation avec la prescription liée
+                // Mettre à jour la consultation avec la prescription liée et ajouter au catalogue si nouveau
+                foreach ($validItems as $it) {
+                    try {
+                        $mName = trim($it['medication']);
+                        $chkMed = $db->prepare("SELECT id FROM medications WHERE LOWER(name) = LOWER(:name) LIMIT 1");
+                        $chkMed->execute([':name' => $mName]);
+                        if (!$chkMed->fetch()) {
+                            $insMed = $db->prepare("INSERT INTO medications (name, dosage, default_posology, default_duration) VALUES (:name, :dos, :pos, :dur)");
+                            $insMed->execute([
+                                ':name' => $mName,
+                                ':dos' => $it['dosage'] ?? null,
+                                ':pos' => $it['posology'] ?? '1 comprimé par jour',
+                                ':dur' => $it['duration'] ?? '5 jours'
+                            ]);
+                        }
+                    } catch (Exception $e) {}
+                }
                 $upStmt = $db->prepare("UPDATE consultations SET prescription_created = 1, prescription_id = :prid WHERE id = :cid");
                 $upStmt->execute([':prid' => $prescriptionId, ':cid' => $consultationId]);
 
@@ -307,37 +341,40 @@ function handleCreateConsultation($db) {
                     "validated" => true
                 ];
 
-                // Enregistrer l'ordonnance dans medical_documents pour le dossier médical
-                try {
-                    $docSql = "INSERT INTO medical_documents 
-                                (patient_id, consultation_id, title, category, doc_date, author, file_size, file_type, status)
-                               VALUES 
-                                (:pid, :cid, :title, 'Autre', :ddate, :author, 'Ordonnance', 'Prescription', 'Validée')";
-                    $db->prepare($docSql)->execute([
-                        ':pid' => $patientId,
-                        ':cid' => $consultationId,
-                        ':title' => "Ordonnance Médicale #" . $prescNumber,
-                        ':ddate' => $date,
-                        ':author' => $docName
-                    ]);
-                } catch (Exception $e) {}
+                // Enregistrer dans medical_documents UNIQUEMENT si le patient est enregistré avec dossier
+                if (!empty($patientId)) {
+                    try {
+                        $docSql = "INSERT INTO medical_documents 
+                                    (patient_id, consultation_id, title, category, doc_date, author, file_size, file_type, status)
+                                   VALUES 
+                                    (:pid, :cid, :title, 'Autre', :ddate, :author, 'Ordonnance', 'Prescription', 'Validée')";
+                        $db->prepare($docSql)->execute([
+                            ':pid' => $patientId,
+                            ':cid' => $consultationId,
+                            ':title' => "Ordonnance Médicale #" . $prescNumber,
+                            ':ddate' => $date,
+                            ':author' => $docName
+                        ]);
+                    } catch (Exception $e) {}
+                }
             }
         }
 
         // 2. Gestion du Compte-Rendu Échographique Spécialisé (si applicable)
         $hasEcho = !empty($examType) || !empty($body['echoData']) || !empty($echoType) || !empty($echoFindings);
         if ($hasEcho) {
-            $echoCount = $db->query("SELECT COUNT(*) FROM ultrasound_reports")->fetchColumn() + 1;
-            $reportNumber = sprintf("CR-ECHO-%s-%04d", $year, $echoCount);
+            $echoCount = $db->query("SELECT COALESCE(MAX(id), 0) FROM ultrasound_reports")->fetchColumn() + 1;
+            $reportNumber = sprintf("CR-ECHO-%s-%04d-%d", $year, $echoCount, rand(10, 99));
+
             $calc = $body['calculated'] ?? [];
             $echoData = $body['echoData'] ?? [];
 
             $repSql = "INSERT INTO ultrasound_reports 
-                        (report_number, consultation_id, patient_id, exam_type, exam_date, indication, 
+                        (report_number, consultation_id, patient_id, patient_name, exam_type, exam_date, indication, 
                          ddr, terme_sa, bip_mm, pc_mm, ca_mm, lf_mm, lcc_mm, cn_mm, epf_hadlock_g, 
                          morphology_details, findings, conclusion)
                        VALUES 
-                        (:rnum, :cid, :pid, :etype, :edate, :indic, :ddr, :terme, 
+                        (:rnum, :cid, :pid, :pname, :etype, :edate, :indic, :ddr, :terme, 
                          :bip, :pc, :ca, :lf, :lcc, :cn, :epf, :morpho, :find, :concl)";
 
             $repStmt = $db->prepare($repSql);
@@ -345,6 +382,7 @@ function handleCreateConsultation($db) {
                 ':rnum' => $reportNumber,
                 ':cid' => $consultationId,
                 ':pid' => $patientId,
+                ':pname' => $patientName,
                 ':etype' => in_array($examType, ['ob1','ob2','ob3','gyn','ggt1','ggt23']) ? $examType : 'ob2',
                 ':edate' => $date,
                 ':indic' => $reason,
@@ -362,30 +400,32 @@ function handleCreateConsultation($db) {
                 ':concl' => $echoConclusion ?: $diagnosis
             ]);
 
-            // Enregistrer automatiquement le rapport d'échographie dans medical_documents pour le dossier du patient
-            try {
-                $docSql = "INSERT INTO medical_documents 
-                            (patient_id, consultation_id, title, category, doc_date, author, file_size, file_type, status)
-                           VALUES 
-                            (:pid, :cid, :title, 'Imagerie & Radiologie', :ddate, 'Dr N. BELBACHIR OULD HENNIA', 'Compte-rendu officiel', 'Échographie', 'Archivé')";
-                $db->prepare($docSql)->execute([
-                    ':pid' => $patientId,
-                    ':cid' => $consultationId,
-                    ':title' => "Compte-Rendu Échographique (" . ($echoType ?: "Échographie") . ")",
-                    ':ddate' => $date
-                ]);
-            } catch (Exception $e) {}
+            // Enregistrer dans medical_documents UNIQUEMENT si le patient a un dossier
+            if (!empty($patientId)) {
+                try {
+                    $docSql = "INSERT INTO medical_documents 
+                                (patient_id, consultation_id, title, category, doc_date, author, file_size, file_type, status)
+                               VALUES 
+                                (:pid, :cid, :title, 'Imagerie & Radiologie', :ddate, 'Dr N. BELBACHIR OULD HENNIA', 'Compte-rendu officiel', 'Échographie', 'Archivé')";
+                    $db->prepare($docSql)->execute([
+                        ':pid' => $patientId,
+                        ':cid' => $consultationId,
+                        ':title' => "Compte-Rendu Échographique (" . ($echoType ?: "Échographie") . ")",
+                        ':ddate' => $date
+                    ]);
+                } catch (Exception $e) {}
+            }
         }
 
-        // 3. Enregistrer automatiquement la facture correspondante dans la section des factures
+        // 3. Enregistrer automatiquement la facture et l'entrée dans le Journal de Caisse
         try {
-            $invCount = $db->query("SELECT COUNT(*) FROM invoices")->fetchColumn() + 1;
-            $invNumber = sprintf("FAC-%s-%04d", $year, $invCount);
+            $invCount = $db->query("SELECT COALESCE(MAX(id), 0) FROM invoices")->fetchColumn() + 1;
+            $invNumber = sprintf("FAC-%s-%04d-%d", $year, $invCount, rand(10, 99));
 
             // Calcul automatique du montant selon la cotation
             $amount = 2500.00;
-            if (!empty($billingCode) && preg_match('/([\d\s]+)\s*DA/i', $billingCode, $m)) {
-                $clean = str_replace(' ', '', $m[1]);
+            if (!empty($billingCode) && preg_match('/\(([^)]*?)DA\)/i', $billingCode, $m)) {
+                $clean = preg_replace('/[^\d.]/', '', $m[1]);
                 if (is_numeric($clean) && floatval($clean) > 0) {
                     $amount = floatval($clean);
                 }
@@ -395,13 +435,49 @@ function handleCreateConsultation($db) {
 
             $actDesc = !empty($billingCode) ? $billingCode : ($reason ?: "Consultation médicale");
 
+            // Récupérer le nom et le téléphone pour la facture et la caisse
+            $partyName = !empty($patientName) ? $patientName : "Patient";
+            $partyPhone = "";
+            if (!empty($patientId)) {
+                $patInfoStmt = $db->prepare("SELECT CONCAT(first_name, ' ', last_name) AS full_name, phone FROM patients WHERE id = :pid LIMIT 1");
+                $patInfoStmt->execute([':pid' => $patientId]);
+                $patInfo = $patInfoStmt->fetch();
+                if ($patInfo) {
+                    $partyName = $patInfo['full_name'];
+                    $partyPhone = $patInfo['phone'] ?? "";
+                }
+            }
+
+            // 3b. Journal de Caisse (cash_entries)
+            try {
+                $isEchoAct = $hasEcho || stripos($reason, 'écho') !== false || stripos($reason, 'echo') !== false || stripos($billingCode, 'écho') !== false || stripos($billingCode, 'echo') !== false;
+                $cashCategory = $isEchoAct ? 'ÉCHOGRAPHIE & DIAGNOSTIC' : 'CONSULTATION MÉDICALE';
+                $cashRef = sprintf("REC-%s-%04d", str_replace('-', '', $date), $consultationId);
+                $cashNotes = ($reason ?: "Consultation médicale") . " — Réf: " . $consultNumber;
+
+                $cashSql = "INSERT INTO cash_entries 
+                                (type, reference, party_name, party_phone, category, amount, entry_date, payment_method, notes, operator)
+                            VALUES 
+                                ('RECETTE', :ref, :pname, :pphone, :cat, :amt, :edate, 'Espèces', :notes, 'Dr N. BELBACHIR OULD HENNIA')";
+                $db->prepare($cashSql)->execute([
+                    ':ref' => $cashRef,
+                    ':pname' => $partyName,
+                    ':pphone' => $partyPhone,
+                    ':cat' => $cashCategory,
+                    ':amt' => $amount,
+                    ':edate' => $date,
+                    ':notes' => $cashNotes
+                ]);
+            } catch (Exception $e) {}
+
             $invSql = "INSERT INTO invoices 
-                        (invoice_number, patient_id, consultation_id, invoice_date, act_description, amount, covered_amo, covered_amc, patient_remaining, payment_method, status)
+                        (invoice_number, patient_id, patient_name, consultation_id, invoice_date, act_description, amount, covered_amo, covered_amc, patient_remaining, payment_method, status)
                        VALUES 
-                        (:invNum, :pid, :cid, :idate, :actDesc, :amt, 0.00, 0.00, :rem, 'Espèces', 'Payée')";
+                        (:invNum, :pid, :pname, :cid, :idate, :actDesc, :amt, 0.00, 0.00, :rem, 'Espèces', 'Payée')";
             $db->prepare($invSql)->execute([
                 ':invNum' => $invNumber,
                 ':pid' => $patientId,
+                ':pname' => $partyName,
                 ':cid' => $consultationId,
                 ':idate' => $date,
                 ':actDesc' => $actDesc,
@@ -410,34 +486,36 @@ function handleCreateConsultation($db) {
             ]);
         } catch (Exception $e) {}
 
-        // Mettre à jour la fiche patient (dernière visite et antécédents obstétricaux si fournis)
-        try {
-            $patUpdates = ["last_visit = :lvisit"];
-            $patParams = [':lvisit' => $date, ':pid' => $patientId];
-            if (!empty($body['atcd']) && is_array($body['atcd'])) {
-                $atcd = $body['atcd'];
-                if (isset($atcd['gestite']) && is_numeric($atcd['gestite'])) {
-                    $patUpdates[] = "gravida = :grav";
-                    $patParams[':grav'] = intval($atcd['gestite']);
+        // Mettre à jour la fiche patient UNIQUEMENT si le patient a un compte/dossier
+        if (!empty($patientId)) {
+            try {
+                $patUpdates = ["last_visit = :lvisit"];
+                $patParams = [':lvisit' => $date, ':pid' => $patientId];
+                if (!empty($body['atcd']) && is_array($body['atcd'])) {
+                    $atcd = $body['atcd'];
+                    if (isset($atcd['gestite']) && is_numeric($atcd['gestite'])) {
+                        $patUpdates[] = "gravida = :grav";
+                        $patParams[':grav'] = intval($atcd['gestite']);
+                    }
+                    if (isset($atcd['parite']) && is_numeric($atcd['parite'])) {
+                        $patUpdates[] = "para = :para";
+                        $patParams[':para'] = intval($atcd['parite']);
+                    }
+                    if (isset($atcd['cesarienne']) && is_numeric($atcd['cesarienne'])) {
+                        $patUpdates[] = "cesarean = :cesar";
+                        $patParams[':cesar'] = intval($atcd['cesarienne']);
+                    }
+                    if (isset($atcd['faussesCouches']) && is_numeric($atcd['faussesCouches'])) {
+                        $patUpdates[] = "abortions = :abort";
+                        $patParams[':abort'] = intval($atcd['faussesCouches']);
+                    }
                 }
-                if (isset($atcd['parite']) && is_numeric($atcd['parite'])) {
-                    $patUpdates[] = "para = :para";
-                    $patParams[':para'] = intval($atcd['parite']);
-                }
-                if (isset($atcd['cesarienne']) && is_numeric($atcd['cesarienne'])) {
-                    $patUpdates[] = "cesarean = :cesar";
-                    $patParams[':cesar'] = intval($atcd['cesarienne']);
-                }
-                if (isset($atcd['faussesCouches']) && is_numeric($atcd['faussesCouches'])) {
-                    $patUpdates[] = "abortions = :abort";
-                    $patParams[':abort'] = intval($atcd['faussesCouches']);
-                }
-            }
-            $db->prepare("UPDATE patients SET " . implode(", ", $patUpdates) . " WHERE id = :pid")->execute($patParams);
-        } catch (Exception $e) {}
+                $db->prepare("UPDATE patients SET " . implode(", ", $patUpdates) . " WHERE id = :pid")->execute($patParams);
+            } catch (Exception $e) {}
+        }
 
-        // 4. Enregistrer les fichiers joints téléversés lors de la consultation dans medical_documents (Dossier Médical)
-        if (!empty($body['documents']) && is_array($body['documents'])) {
+        // Enregistrer les pièces jointes dans medical_documents UNIQUEMENT si le patient a un dossier
+        if (!empty($patientId) && !empty($body['documents']) && is_array($body['documents'])) {
             foreach ($body['documents'] as $doc) {
                 $docPath = $doc['filePath'] ?? ($doc['dataUrl'] ?? null);
                 if (!empty($docPath)) {
@@ -470,8 +548,14 @@ function handleCreateConsultation($db) {
         }
 
         // Si le patient était dans la salle d'attente, mettre à jour son statut à 'Terminé'
-        $upWait = $db->prepare("UPDATE waiting_room SET status = 'Terminé' WHERE patient_id = :pid AND status IN ('Attente', 'Appelé', 'En consultation')");
-        $upWait->execute([':pid' => $patientId]);
+        if (!empty($patientId)) {
+            $upWait = $db->prepare("UPDATE waiting_room SET status = 'Terminé' WHERE patient_id = :pid AND status IN ('Attente', 'Appelé', 'En consultation')");
+            $upWait->execute([':pid' => $patientId]);
+        } elseif (!empty($patientName)) {
+            $cleanPName = trim(preg_replace('/\s*\(sc\)\s*/i', '', $patientName));
+            $upWait = $db->prepare("UPDATE waiting_room SET status = 'Terminé' WHERE (patient_name LIKE :pname1 OR patient_name LIKE :pname2) AND status IN ('Attente', 'Appelé', 'En consultation')");
+            $upWait->execute([':pname1' => "%$cleanPName%", ':pname2' => "%$patientName%"]);
+        }
 
         $db->commit();
 
@@ -479,13 +563,15 @@ function handleCreateConsultation($db) {
             "id" => $consultationId,
             "consultationNumber" => $consultNumber,
             "patientId" => $patientId,
+            "isGuest" => empty($patientId),
+            "patientName" => $patientName,
             "date" => $date,
             "time" => substr($time, 0, 5),
             "reason" => $reason,
             "billingCode" => $billingCode,
             "prescriptionCreated" => $hasPrescription,
             "prescriptionData" => $prescriptionData
-        ], "Consultation enregistrée avec succès dans la base de données MySQL", 201);
+        ], "Consultation enregistrée avec succès", 201);
 
     } catch (Exception $e) {
         $db->rollBack();

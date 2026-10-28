@@ -138,7 +138,7 @@ const MedicalDocumentsPage = () => {
 
     Swal.fire({
       icon: "success",
-      title: "Document archivé dans la Base de Données",
+      title: "Document archivé avec succès",
       text: `"${created.title}" a été associé avec succès au dossier de ${created.patientName}.`,
       confirmButtonColor: "#1e60d5",
     });
@@ -321,8 +321,8 @@ const MedicalDocumentsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
-          <div className="input-group search-area w-100 w-sm-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <div className="input-group search-area" style={{ width: "auto", minWidth: "260px" }}>
             <input
               type="text"
               className="form-control"
@@ -336,7 +336,7 @@ const MedicalDocumentsPage = () => {
           </div>
 
           <select
-            className="form-control w-100 w-sm-auto default-select"
+            className="form-control default-select" style={{ width: "auto", minWidth: "210px" }}
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
           >
@@ -350,7 +350,7 @@ const MedicalDocumentsPage = () => {
 
         <Button
           variant="primary"
-          className="btn-rounded w-100 w-sm-auto"
+          className="btn-rounded ms-auto"
           onClick={() => setShowAddModal(true)}
         >
           <i className="flaticon-381-add-1 me-2"></i> Ajouter un Document

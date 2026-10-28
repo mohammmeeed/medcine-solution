@@ -27,11 +27,11 @@ function handleGetPrescriptions($db) {
         $patientId = isset($_GET['patient_id']) ? intval($_GET['patient_id']) : null;
 
         $sql = "SELECT pr.*, 
-                       CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
+                       COALESCE(CONCAT(p.first_name, ' ', p.last_name), pr.patient_name, 'Patient sans compte') AS patient_name,
                        p.dob AS patient_dob,
                        p.file_number AS patient_file_number
                 FROM prescriptions pr
-                JOIN patients p ON pr.patient_id = p.id ";
+                LEFT JOIN patients p ON pr.patient_id = p.id ";
 
         $params = [];
         if ($id) {
@@ -54,18 +54,25 @@ function handleGetPrescriptions($db) {
             $itStmt->execute([':pid' => $r['id']]);
             $items = $itStmt->fetchAll();
 
+            $isGuest = empty($r['patient_id']);
+
             $prescriptions[] = [
                 "id" => intval($r['id']),
                 "prescriptionNumber" => $r['prescription_number'],
-                "patientId" => intval($r['patient_id']),
+                "patientId" => !empty($r['patient_id']) ? intval($r['patient_id']) : null,
+                "isGuest" => $isGuest,
                 "patientName" => $r['patient_name'],
+                "patientDetails" => [
+                    "dob" => $r['patient_dob'] ?? "-",
+                    "fileNumber" => $r['patient_file_number'] ?? ($isGuest ? "SANS DOSSIER" : "-")
+                ],
                 "date" => $r['prescription_date'],
-                "validity" => $r['validity'] ?: "3 mois",
+                "validity" => $r['validity'],
                 "ald" => boolval($r['ald']),
                 "doctorName" => $r['doctor_name'],
+                "items" => $items,
                 "notes" => $r['notes'],
-                "validated" => boolval($r['validated']),
-                "items" => $items
+                "validated" => boolval($r['validated'])
             ];
         }
 
@@ -78,14 +85,16 @@ function handleGetPrescriptions($db) {
 function handleCreatePrescription($db) {
     $body = getRequestBody();
 
-    if (empty($body['patientId'])) {
-        sendResponse("error", null, "patientId est requis", 400);
+    $patientId = !empty($body['patientId']) ? intval($body['patientId']) : null;
+    $patientName = !empty($body['patientName']) ? trim($body['patientName']) : null;
+
+    if (empty($patientId) && empty($patientName)) {
+        sendResponse("error", null, "Patient ou nom requis", 400);
     }
 
     try {
         $db->beginTransaction();
 
-        $patientId = intval($body['patientId']);
         $date = !empty($body['date']) ? $body['date'] : date('Y-m-d');
         $year = date('Y', strtotime($date));
         $count = $db->query("SELECT COUNT(*) FROM prescriptions")->fetchColumn() + 1;
@@ -93,13 +102,14 @@ function handleCreatePrescription($db) {
         $doc = !empty($body['doctorName']) ? $body['doctorName'] : "Dr N. BELBACHIR OULD HENNIA";
 
         $sql = "INSERT INTO prescriptions 
-                    (prescription_number, patient_id, doctor_name, prescription_date, validity, ald, notes, validated)
+                    (prescription_number, patient_id, patient_name, doctor_name, prescription_date, validity, ald, notes, validated)
                 VALUES 
-                    (:num, :pid, :dname, :pdate, :val, :ald, :notes, 1)";
+                    (:num, :pid, :pname, :dname, :pdate, :val, :ald, :notes, 1)";
         $stmt = $db->prepare($sql);
         $stmt->execute([
             ':num' => $num,
             ':pid' => $patientId,
+            ':pname' => $patientName,
             ':dname' => $doc,
             ':pdate' => $date,
             ':val' => $body['validity'] ?? '3 mois',
@@ -122,6 +132,14 @@ function handleCreatePrescription($db) {
                         ':dur' => $it['duration'] ?? '5 jours',
                         ':ren' => $it['renewable'] ?? 'Non renouvelable'
                     ]);
+                    try { 
+                        $mName = trim($it['medication']); 
+                        $chkMed = $db->prepare("SELECT id FROM medications WHERE LOWER(name) = LOWER(:name) LIMIT 1"); 
+                        $chkMed->execute([':name' => $mName]); 
+                        if (!$chkMed->fetch()) { 
+                            $db->prepare("INSERT INTO medications (name, dosage, default_posology, default_duration) VALUES (:name, :dos, :pos, :dur)")->execute([':name' => $mName, ':dos' => $it['dosage'] ?? null, ':pos' => $it['posology'] ?? '1 comprimé par jour', ':dur' => $it['duration'] ?? '5 jours']); 
+                        } 
+                    } catch (Exception $e) {}
                 }
             }
         }
@@ -131,6 +149,7 @@ function handleCreatePrescription($db) {
             "id" => $prescId,
             "prescriptionNumber" => $num,
             "patientId" => $patientId,
+            "patientName" => $patientName,
             "date" => $date
         ], "Ordonnance enregistrée avec succès", 201);
     } catch (Exception $e) {
@@ -142,17 +161,19 @@ function handleCreatePrescription($db) {
 function handleDeletePrescription($db) {
     $id = isset($_GET['id']) ? intval($_GET['id']) : null;
     if (!$id) {
+        $body = getRequestBody();
+        $id = isset($body['id']) ? intval($body['id']) : null;
+    }
+
+    if (!$id) {
         sendResponse("error", null, "ID requis", 400);
     }
+
     try {
-        $db->beginTransaction();
-        $db->prepare("DELETE FROM prescription_items WHERE prescription_id = :id")->execute([':id' => $id]);
-        $db->prepare("DELETE FROM prescriptions WHERE id = :id")->execute([':id' => $id]);
-        $db->commit();
-        sendResponse("success", null, "Ordonnance supprimée avec succès");
+        $stmt = $db->prepare("DELETE FROM prescriptions WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        sendResponse("success", null, "Ordonnance supprimée");
     } catch (Exception $e) {
-        $db->rollBack();
-        sendResponse("error", null, "Erreur suppression ordonnance : " . $e->getMessage(), 500);
+        sendResponse("error", null, "Erreur suppression : " . $e->getMessage(), 500);
     }
 }
-

@@ -191,7 +191,7 @@ const WaitingRoomPage = () => {
   const handleRemovePatient = (id) => {
     Swal.fire({
       title: "Supprimer de la salle d'attente ?",
-      text: "Le patient sera définitivement supprimé de la base de données.",
+      text: "Le patient sera définitivement supprimé de la salle d'attente.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Oui, supprimer",
@@ -214,7 +214,7 @@ const WaitingRoomPage = () => {
         Swal.fire({
           icon: "success",
           title: "Supprimé !",
-          text: "Le patient a été supprimé de la salle d'attente et de la base de données.",
+          text: "Le patient a été supprimé de la salle d'attente.",
           timer: 1500,
           showConfirmButton: false,
         });
@@ -265,7 +265,7 @@ const WaitingRoomPage = () => {
       Swal.fire({
         icon: "success",
         title: "Arrivée enregistrée",
-        text: `${created.patientName} a été ajouté(e) en salle d'attente et sauvegardé(e) dans la base.`,
+        text: `${created.patientName} a été ajouté(e) en salle d'attente.`,
         timer: 1500,
         showConfirmButton: false,
       });
@@ -381,7 +381,7 @@ const WaitingRoomPage = () => {
                         ) : (
                           <span className="font-w600 text-dark">
                             {p.patientName}{" "}
-                            <span className="badge badge-xs badge-info light ms-1">En ligne</span>
+                            <span className="badge badge-xs badge-info light ms-1">(sc)</span>{p.phone ? <div className="text-muted fs-12 mt-1">📞 {p.phone}</div> : null}
                           </span>
                         )}
                         {/* Motif et statut visibles sous le nom uniquement sur mobile */}

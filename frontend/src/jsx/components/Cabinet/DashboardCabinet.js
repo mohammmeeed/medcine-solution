@@ -347,7 +347,7 @@ const DashboardCabinet = () => {
                     <tr>
                       <th style={{ width: "80px", minWidth: "75px" }}><strong>HEURE</strong></th>
                       <th><strong>PATIENT</strong></th>
-                      <th className="d-none d-md-table-cell"><strong>MOTIF</strong></th>
+                      <th className="d-none d-md-table-cell"><strong>DATE</strong></th>
                       <th className="d-none d-md-table-cell"><strong>TÉLÉPHONE</strong></th>
                       <th className="d-none d-sm-table-cell"><strong>STATUT</strong></th>
                       <th className="text-end" style={{ width: "95px" }}><strong>ACTION</strong></th>
@@ -368,17 +368,18 @@ const DashboardCabinet = () => {
                             className="font-w600 text-dark hover-primary"
                           >
                             {rdv.patientName}
+                            {!rdv.patientId && <span className="text-primary font-w700 ms-1">(sc)</span>}
                           </Link>
-                          {/* Motif et statut visibles sous le nom sur petit écran */}
+                          {/* Date et statut visibles sous le nom sur petit écran */}
                           <div className="d-block d-md-none text-muted fs-11 mt-1">
-                            {rdv.reason}
+                            {rdv.date}
                           </div>
                           <div className="d-block d-sm-none mt-1">
                             {getStatusBadge(rdv.status)}
                           </div>
                         </td>
                         <td className="d-none d-md-table-cell">
-                          <span className="text-muted">{rdv.reason}</span>
+                          <span className="text-muted">{rdv.date}</span>
                         </td>
                         <td className="d-none d-md-table-cell">{rdv.phone}</td>
                         <td className="d-none d-sm-table-cell">{getStatusBadge(rdv.status)}</td>

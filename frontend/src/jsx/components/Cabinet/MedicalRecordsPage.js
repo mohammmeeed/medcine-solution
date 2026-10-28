@@ -58,7 +58,7 @@ const MedicalRecordsPage = () => {
 
       {/* Barre d'action et recherche */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="input-group search-area w-100 w-sm-auto">
+        <div className="input-group search-area" style={{ width: "auto", minWidth: "260px" }}>
           <input
             type="text"
             className="form-control"
@@ -71,7 +71,7 @@ const MedicalRecordsPage = () => {
           </span>
         </div>
 
-        <Link to="/admin/patients" className="btn btn-primary btn-rounded w-100 w-sm-auto">
+        <Link to="/admin/patients" className="btn btn-primary btn-rounded ms-auto">
           <i className="flaticon-381-add-1 me-2"></i> Nouveau Dossier Patient
         </Link>
       </div>

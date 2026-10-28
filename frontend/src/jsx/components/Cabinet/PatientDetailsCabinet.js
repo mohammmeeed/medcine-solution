@@ -541,7 +541,7 @@ const PatientDetailsCabinet = () => {
           pdf.setFontSize(9);
           pdf.setTextColor(26, 58, 92);
           pdf.text(
-            `${idx + 1}. ${item.medication || item.nom} ${item.dosage || ""}`,
+            `${idx + 1}. ${item.medication || item.nom}`,
             22,
             curY
           );

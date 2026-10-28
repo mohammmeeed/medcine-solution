@@ -48,10 +48,10 @@ function calculateWaitingTicketNumber($timeStr) {
 function handleGetWaitingRoom($db) {
     try {
         $sql = "SELECT w.*, 
-                       COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))), ''), NULLIF(TRIM(w.patient_name), ''), 'Patient') AS patient_name,
+                       COALESCE(NULLIF(TRIM(w.patient_name), ''), NULLIF(TRIM(CONCAT(COALESCE(p.first_name, ''), ' ', COALESCE(p.last_name, ''))), ''), 'Patient') AS patient_name,
                        p.dob AS patient_dob,
                        p.file_number AS patient_file_number,
-                       COALESCE(NULLIF(TRIM(p.phone), ''), NULLIF(TRIM(w.patient_phone), ''), '') AS patient_phone,
+                       COALESCE(NULLIF(TRIM(w.patient_phone), ''), NULLIF(TRIM(p.phone), ''), '') AS patient_phone,
                        a.notes AS appointment_notes,
                        a.appointment_time AS apt_time
                 FROM waiting_room w

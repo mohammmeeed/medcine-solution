@@ -186,7 +186,7 @@ const PrescriptionPreviewModal = ({ show, onHide, prescription }) => {
               <div>
                 <span className="text-muted fs-13">Patient(e) :</span>
                 <div className="fs-18 font-w600 text-dark">
-                  {prescription.patientName}
+                  {(prescription.patientName || "").replace(/\s*\(sc\)\s*/gi, "").trim()}
                 </div>
               </div>
               <div className="text-end">
@@ -223,7 +223,7 @@ const PrescriptionPreviewModal = ({ show, onHide, prescription }) => {
                       <strong className="text-dark" style={{ fontSize: "16px" }}>
                         {item.medication}
                       </strong>
-                      {item.dosage && (
+                      {false && item.dosage && (
                         <span className="text-muted fs-13 ms-2">
                           ({item.dosage})
                         </span>

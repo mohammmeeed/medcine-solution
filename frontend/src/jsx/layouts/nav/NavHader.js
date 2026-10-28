@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { navtoggle } from "../../../store/actions/AuthActions";
 
 /// React router dom
-import { Link } from "react-router-dom";
+
 import { ThemeContext } from "../../../context/ThemeContext";
 import DoctorLogo from "./DoctorLogo";
 
@@ -20,9 +20,9 @@ const NavHader = () => {
 
   return (
     <div className="nav-header">
-      <Link to="/" className="brand-logo d-none d-md-flex" style={{ alignItems: "center" }}>
+      <div className="brand-logo d-none d-md-flex" style={{ alignItems: "center", cursor: "default", pointerEvents: "none" }}>
         <DoctorLogo isDark={isDark} className="logo-abbr" />
-      </Link>
+      </div>
 
       <div
         className="nav-control"

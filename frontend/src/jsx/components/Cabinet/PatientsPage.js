@@ -173,7 +173,7 @@ const PatientsPage = () => {
         Swal.fire({
           icon: "success",
           title: "Dossier patient mis à jour",
-          text: "Les modifications ont été enregistrées dans la base de données.",
+          text: "Les modifications ont été enregistrées.",
           timer: 1800,
           showConfirmButton: false,
         });
@@ -199,7 +199,7 @@ const PatientsPage = () => {
           icon: "success",
           title: "Patient enregistré avec succès",
           html: `
-            <p class="mb-3">Le nouveau patient a été enregistré dans la base de données MySQL.</p>
+            <p class="mb-3">Le nouveau patient a été enregistré.</p>
             <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid #38bdf8; border-radius: 12px; padding: 14px; text-align: left;">
               <div style="color: #0284c7; font-weight: 700; font-size: 13px; text-transform: uppercase; margin-bottom: 6px;">
                 <i class="fa fa-key me-1"></i> Accès Portail Patient Généré :
@@ -222,7 +222,7 @@ const PatientsPage = () => {
       Swal.fire({
         icon: "error",
         title: "Erreur d'enregistrement",
-        text: err?.response?.data?.message || "Impossible de sauvegarder le patient dans la base de données.",
+        text: err?.response?.data?.message || "Impossible de sauvegarder le patient.",
       });
     }
   };
@@ -230,7 +230,7 @@ const PatientsPage = () => {
   const handleDeletePatient = (id) => {
     Swal.fire({
       title: "Supprimer ce patient ?",
-      text: "Le dossier sera définitivement supprimé de la base de données.",
+      text: "Le dossier sera définitivement supprimé.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#f72b50",
@@ -242,10 +242,10 @@ const PatientsPage = () => {
         try {
           await ApiService.deletePatient(id);
           await loadPatients();
-          Swal.fire("Supprimé", "Le dossier patient a été retiré de la base de données.", "success");
+          Swal.fire("Supprimé", "Le dossier patient a été supprimé.", "success");
         } catch (err) {
           console.error("Erreur suppression patient:", err);
-          Swal.fire("Erreur", "Impossible de supprimer le patient de la base de données.", "error");
+          Swal.fire("Erreur", "Impossible de supprimer le patient.", "error");
         }
       }
     });
@@ -271,8 +271,8 @@ const PatientsPage = () => {
 
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
-          <div className="input-group search-area w-100 w-sm-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <div className="input-group search-area" style={{ width: "auto", minWidth: "260px" }}>
             <input
               type="text"
               className="form-control"
@@ -286,7 +286,7 @@ const PatientsPage = () => {
           </div>
 
           <select
-            className="form-control w-100 w-sm-auto default-select"
+            className="form-control default-select" style={{ width: "auto", minWidth: "180px" }}
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
@@ -298,7 +298,7 @@ const PatientsPage = () => {
 
         <Button
           variant={showModal && !editId ? "outline-primary" : "primary"}
-          className="btn-rounded w-100 w-sm-auto"
+          className="btn-rounded ms-auto"
           onClick={() => {
             if (showModal && !editId) {
               setShowModal(false);
@@ -443,7 +443,7 @@ const PatientsPage = () => {
                       type="text"
                       className="form-control font-w700 text-primary"
                       style={{ fontSize: "15px", letterSpacing: "1px", fontFamily: "monospace" }}
-                      placeholder="Ex: gm109"
+                      placeholder=""
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value, customPassword: true })}
                       required
@@ -461,7 +461,7 @@ const PatientsPage = () => {
                     </button>
                   </div>
                   <small className="text-muted fs-11">
-                    Généré automatiquement (ex : <code>gm109</code>). Ce mot de passe est remis au patient pour son accès en ligne.
+
                   </small>
                 </div>
               </div>
@@ -534,7 +534,7 @@ const PatientsPage = () => {
                 {loading ? (
                   <tr>
                     <td colSpan="5" className="text-center py-4 text-muted">
-                      <i className="fa fa-spinner fa-spin me-2"></i> Chargement des patients depuis la base de données...
+                      <i className="fa fa-spinner fa-spin me-2"></i> Chargement des patients...
                     </td>
                   </tr>
                 ) : filteredPatients.length === 0 ? (
@@ -583,7 +583,7 @@ const PatientsPage = () => {
                       <td style={{ width: "125px", whiteSpace: "nowrap" }} className="text-end pe-0">
                         <div className="d-flex align-items-center justify-content-end">
                           <Link
-                            to={`/patient-details?id=${p.id}`}
+                            to={`/admin/patient-details?id=${p.id}`}
                             className="btn btn-primary shadow btn-xs sharp me-1"
                             title="Ouvrir le dossier médical"
                           >
@@ -600,7 +600,7 @@ const PatientsPage = () => {
                           <button
                             type="button"
                             className="btn btn-success shadow btn-xs sharp me-1"
-                            onClick={() => navigate(`/consultations?patientId=${p.id}`)}
+                            onClick={() => navigate(`/admin/consultations?patientId=${p.id}`)}
                             title="Démarrer consultation"
                           >
                             <i className="fa fa-stethoscope"></i>

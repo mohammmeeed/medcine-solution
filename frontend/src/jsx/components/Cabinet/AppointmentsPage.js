@@ -61,6 +61,76 @@ const AppointmentsPage = () => {
   const [defaultConsultationTypeName, setDefaultConsultationTypeName] = useState("Consultation de médecine générale");
 
   const [showModal, setShowModal] = useState(false);
+  const [showClosureModal, setShowClosureModal] = useState(false);
+  const [cabinetInfo, setCabinetInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem("cabinet_info");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return { closedDays: "Vendredi: Fermé", closedDates: [] };
+  });
+  const [newClosure, setNewClosure] = useState({
+    mode: "single",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: new Date().toISOString().split("T")[0],
+    reason: "Jour férié",
+  });
+
+  const getClosedDateMatch = (isoDate) => {
+    if (!isoDate || !Array.isArray(cabinetInfo?.closedDates)) return null;
+    return (
+      cabinetInfo.closedDates.find((item) => {
+        const start = item.startDate;
+        const end = item.endDate || item.startDate;
+        return start && isoDate >= start && isoDate <= end;
+      }) || null
+    );
+  };
+
+  const handleAddClosure = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!newClosure.startDate) return;
+    const start = newClosure.startDate;
+    const end =
+      newClosure.mode === "range" && newClosure.endDate && newClosure.endDate >= start
+        ? newClosure.endDate
+        : start;
+    const entry = {
+      id: Date.now(),
+      startDate: start,
+      endDate: end,
+      reason: (newClosure.reason || "").trim() || (start !== end ? "Vacances / Congé" : "Jour férié"),
+    };
+    const updatedDates = [...(Array.isArray(cabinetInfo?.closedDates) ? cabinetInfo.closedDates : []), entry];
+    const updatedCabinet = { ...cabinetInfo, closedDates: updatedDates };
+    setCabinetInfo(updatedCabinet);
+    try {
+      localStorage.setItem("cabinet_info", JSON.stringify(updatedCabinet));
+      await ApiService.updateCabinetInfo(updatedCabinet);
+    } catch (err) {}
+    Swal.fire({
+      icon: "success",
+      title: start !== end ? "Période de fermeture ajoutée" : "Jour de fermeture ajouté",
+      text:
+        start !== end
+          ? `Cabinet fermé du ${start} au ${end} (${entry.reason}).`
+          : `Cabinet fermé le ${start} (${entry.reason}).`,
+      timer: 1800,
+      showConfirmButton: false,
+    });
+  };
+
+  const handleRemoveClosure = async (id) => {
+    const updatedDates = (Array.isArray(cabinetInfo?.closedDates) ? cabinetInfo.closedDates : []).filter(
+      (item) => item.id !== id
+    );
+    const updatedCabinet = { ...cabinetInfo, closedDates: updatedDates };
+    setCabinetInfo(updatedCabinet);
+    try {
+      localStorage.setItem("cabinet_info", JSON.stringify(updatedCabinet));
+      await ApiService.updateCabinetInfo(updatedCabinet);
+    } catch (err) {}
+  };
   const [editId, setEditId] = useState(null);
   const [formRdv, setFormRdv] = useState({
     patientId: 1,
@@ -78,11 +148,18 @@ const AppointmentsPage = () => {
   const fetchAppointments = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const [aptData, patData, settData] = await Promise.all([
+      const [aptData, patData, settData, cabData] = await Promise.all([
         ApiService.getAppointments(),
         ApiService.getPatients(),
         ApiService.getSettings().catch(() => null),
+        ApiService.getCabinetInfo().catch(() => null),
       ]);
+      if (cabData) {
+        setCabinetInfo((prev) => ({ ...prev, ...cabData }));
+        try {
+          localStorage.setItem("cabinet_info", JSON.stringify(cabData));
+        } catch (e) {}
+      }
       if (Array.isArray(aptData)) {
         setAppointments(aptData);
       }
@@ -164,7 +241,7 @@ const AppointmentsPage = () => {
   // Événements pour FullCalendar
   const calendarEvents = appointments.map((rdv, idx) => ({
     id: String(rdv.id),
-    title: `${rdv.time} - ${rdv.patientName} (${rdv.reason})`,
+    title: `${rdv.time} - ${rdv.patientName}${!rdv.patientId ? " (sc)" : ""}${rdv.phone ? ` (${rdv.phone})` : ""}`,
     start: `${rdv.date}T${rdv.time}:00`,
     end: calculateEndTime(rdv.date, rdv.time, rdv.duration || "60 min"),
     extendedProps: {
@@ -299,7 +376,7 @@ const AppointmentsPage = () => {
       (t) => t.name === rdv.consultationType || t.name === rdv.reason
     );
     setFormRdv({
-      patientId: rdv.patientId,
+      patientId: rdv.patientId, phone: rdv.phone || "",
       date: rdv.date,
       time: rdv.time,
       duration: rdv.duration || "20 min",
@@ -377,6 +454,21 @@ const AppointmentsPage = () => {
 
   const handleSaveRdv = (e) => {
     e.preventDefault();
+    const closedHit = getClosedDateMatch(formRdv.date);
+    if (closedHit) {
+      Swal.fire({
+        icon: "warning",
+        title: "Cabinet fermé à cette date",
+        text: `Le cabinet est fermé (${closedHit.reason || "Fermeture exceptionnelle"}) ${
+          closedHit.endDate && closedHit.endDate !== closedHit.startDate
+            ? `du ${closedHit.startDate} au ${closedHit.endDate}`
+            : `le ${closedHit.startDate}`
+        }. Veuillez choisir une autre date.`,
+        confirmButtonColor: "#1e60d5",
+      });
+      return;
+    }
+    e.preventDefault();
 
     // Règle métier : Prévention des chevauchements réels de rendez-vous pour le praticien
     const toMinutes = (timeStr) => {
@@ -418,7 +510,7 @@ const AppointmentsPage = () => {
       lastName: existingApt?.lastName || (existingApt?.patientName?.split(" ").slice(1).join(" ") || ""),
       phone: existingApt?.phone || "",
     };
-    const pFullName = (existingApt && !formRdv.patientId) ? (existingApt.patientName || "Patient") : `${patient.firstName} ${patient.lastName}`.trim();
+    const pFullName = (existingApt && String(formRdv.patientId || "") === String(existingApt.patientId || "")) ? (existingApt.patientName || "Patient") : `${patient.firstName} ${patient.lastName}`.trim();
 
     if (editId) {
       setAppointments(
@@ -444,7 +536,7 @@ const AppointmentsPage = () => {
 
       // Synchronisation MySQL
       ApiService.updateAppointment({
-        id: editId,
+        id: editId, phone: formRdv.phone || patient.phone || "",
         date: formRdv.date,
         time: formRdv.time,
         duration: formRdv.duration,
@@ -475,7 +567,7 @@ const AppointmentsPage = () => {
       } else {
         Swal.fire({
           icon: "success",
-          title: "Rendez-vous mis à jour dans la Base de Données",
+          title: "Rendez-vous mis à jour",
           timer: 1500,
           showConfirmButton: false,
         });
@@ -532,7 +624,7 @@ const AppointmentsPage = () => {
       } else {
         Swal.fire({
           icon: "success",
-          title: "Rendez-vous créé dans la Base de Données",
+          title: "Rendez-vous créé avec succès",
           timer: 1500,
           showConfirmButton: false,
         });
@@ -542,10 +634,37 @@ const AppointmentsPage = () => {
     setShowModal(false);
   };
 
+  const handleMarkArrived = async (rdv) => {
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === rdv.id ? { ...a, status: "Arrivé" } : a))
+    );
+    try {
+      await ApiService.updateAppointment({ id: rdv.id, status: "Arrivé" });
+    } catch (err) {
+      console.warn("Erreur mise à jour statut Arrivé :", err);
+    }
+    syncArrivalToWaitingRoom({
+      appointmentId: rdv.id,
+      patientId: rdv.patientId || null,
+      patientName: rdv.patientName || "Patient",
+      phone: rdv.phone || "",
+      ticketNumber: rdv.ticketNumber,
+      appointmentTime: rdv.time,
+      reason: rdv.reason || "Consultation générale",
+    });
+    Swal.fire({
+      icon: "success",
+      title: "Patient en Salle d'attente !",
+      text: `${rdv.patientName || "Le patient"} a été marqué(e) comme Arrivé et ajouté(e) dans la Salle d'attente.`,
+      timer: 1600,
+      showConfirmButton: false,
+    });
+  };
+
   const handleDeleteRdv = (id) => {
     Swal.fire({
       title: "Annuler ce rendez-vous ?",
-      text: "Le créneau sera libéré dans l'agenda et archivé dans la base de données.",
+      text: "Le créneau sera libéré dans l'agenda.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#f72b50",
@@ -560,7 +679,7 @@ const AppointmentsPage = () => {
         } catch (e) {
           console.warn("Erreur suppression rdv MySQL :", e);
         }
-        Swal.fire("Annulé", "Le rendez-vous a été retiré de la base de données.", "success");
+        Swal.fire("Annulé", "Le rendez-vous a été annulé avec succès.", "success");
       }
     });
   };
@@ -630,6 +749,7 @@ const AppointmentsPage = () => {
         .btn-action-simple:hover {
           transform: translateY(-1px);
         }
+        .btn-action-simple.btn-arrive:hover, .btn-action-simple.btn-arrive.active { background-color: #ecfdf5; border-color: #a7f3d0; color: #10b981; }
         .btn-action-simple.btn-edit:hover {
           background-color: #eff6ff;
           border-color: #bfdbfe;
@@ -645,8 +765,8 @@ const AppointmentsPage = () => {
       {/* Barre d'action supérieure */}
       <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
         {/* Recherche et filtres à gauche */}
-        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto">
-          <div className="input-group search-area w-100 w-sm-auto">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <div className="input-group search-area" style={{ width: "auto", minWidth: "250px" }}>
             <input
               type="text"
               className="form-control"
@@ -660,7 +780,7 @@ const AppointmentsPage = () => {
           </div>
 
           <select
-            className="form-control w-100 w-sm-auto default-select"
+            className="form-control default-select" style={{ width: "auto", minWidth: "180px" }}
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
@@ -674,7 +794,7 @@ const AppointmentsPage = () => {
         </div>
 
         {/* Boutons d'action et mode à droite */}
-        <div className="d-flex align-items-center gap-2 flex-wrap w-100 w-sm-auto justify-content-between justify-content-sm-end">
+        <div className="d-flex align-items-center gap-2 flex-wrap ms-auto justify-content-end">
           <div className="btn-group" role="group">
             <button
               type="button"
@@ -693,8 +813,24 @@ const AppointmentsPage = () => {
           </div>
 
           <Button
+            variant={showClosureModal ? "danger" : "outline-danger"}
+            className="btn-rounded"
+            onClick={() => {
+              setShowClosureModal((prev) => !prev);
+              if (!showClosureModal) setShowModal(false);
+            }}
+          >
+            <i className={showClosureModal ? "fa fa-times me-2" : "fa fa-calendar-times me-2"}></i>
+            Jours fériés / Vacances
+            {Array.isArray(cabinetInfo?.closedDates) && cabinetInfo.closedDates.length > 0 && (
+              <span className="badge bg-danger text-white ms-2 rounded-pill">
+                {cabinetInfo.closedDates.length}
+              </span>
+            )}
+          </Button>
+          <Button
             variant={showModal && !editId ? "outline-primary" : "primary"}
-            className="btn-rounded w-100 w-sm-auto"
+            className="btn-rounded"
             onClick={() => {
               if (showModal && !editId) {
                 setShowModal(false);
@@ -708,6 +844,156 @@ const AppointmentsPage = () => {
           </Button>
         </div>
       </div>
+
+      {/* Panneau Jours fériés & Vacances / Fermetures exceptionnelles */}
+      {showClosureModal && (
+        <div className="card mb-4 border-danger" style={{ borderWidth: "1px" }}>
+          <div className="card-header border-0 pb-0 d-flex justify-content-between align-items-center">
+            <div>
+              <h4 className="card-title text-danger mb-1">
+                <i className="fa fa-calendar-times me-2"></i>
+                Jours fériés & Vacances (Fermeture du cabinet)
+              </h4>
+              <p className="text-muted fs-13 mb-0">
+                Ajoutez un jour précis (jour férié) ou plusieurs jours (vacances / congé) pour bloquer les réservations à ces dates.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-close"
+              aria-label="Fermer"
+              onClick={() => setShowClosureModal(false)}
+            ></button>
+          </div>
+          <div className="card-body">
+            <form onSubmit={handleAddClosure} className="row g-2 align-items-end mb-3 p-3 rounded" style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+              <div className="col-md-3">
+                <label className="form-label fs-12 font-w600 mb-1">Type de fermeture</label>
+                <select
+                  className="form-control form-control-sm"
+                  value={newClosure.mode}
+                  onChange={(e) => {
+                    const mode = e.target.value;
+                    setNewClosure((prev) => ({
+                      ...prev,
+                      mode,
+                      endDate: mode === "single" ? prev.startDate : prev.endDate,
+                      reason:
+                        mode === "range" && prev.reason === "Jour férié"
+                          ? "Vacances / Congé"
+                          : mode === "single" && prev.reason === "Vacances / Congé"
+                          ? "Jour férié"
+                          : prev.reason,
+                    }));
+                  }}
+                >
+                  <option value="single">Un seul jour (Jour férié...)</option>
+                  <option value="range">Plusieurs jours (Vacances / Congé)</option>
+                </select>
+              </div>
+
+              <div className={newClosure.mode === "range" ? "col-md-2" : "col-md-3"}>
+                <label className="form-label fs-12 font-w600 mb-1">
+                  {newClosure.mode === "range" ? "Date de début *" : "Date du jour fermé *"}
+                </label>
+                <input
+                  type="date"
+                  className="form-control form-control-sm"
+                  value={newClosure.startDate}
+                  onChange={(e) =>
+                    setNewClosure((prev) => ({
+                      ...prev,
+                      startDate: e.target.value,
+                      endDate: prev.mode === "single" || prev.endDate < e.target.value ? e.target.value : prev.endDate,
+                    }))
+                  }
+                  required
+                />
+              </div>
+
+              {newClosure.mode === "range" && (
+                <div className="col-md-2">
+                  <label className="form-label fs-12 font-w600 mb-1">Date de fin *</label>
+                  <input
+                    type="date"
+                    className="form-control form-control-sm"
+                    min={newClosure.startDate}
+                    value={newClosure.endDate}
+                    onChange={(e) => setNewClosure((prev) => ({ ...prev, endDate: e.target.value }))}
+                    required
+                  />
+                </div>
+              )}
+
+              <div className={newClosure.mode === "range" ? "col-md-3" : "col-md-4"}>
+                <label className="form-label fs-12 font-w600 mb-1">Motif (Jour férié, Vacances...)</label>
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  list="agenda-closure-reasons"
+                  placeholder="Ex: Jour férié, Vacances..."
+                  value={newClosure.reason}
+                  onChange={(e) => setNewClosure((prev) => ({ ...prev, reason: e.target.value }))}
+                />
+                <datalist id="agenda-closure-reasons">
+                  <option value="Jour férié" />
+                  <option value="Vacances / Congé annuel" />
+                  <option value="Aïd El-Fitr (Férié)" />
+                  <option value="Aïd El-Adha (Férié)" />
+                  <option value="Formation / Congrès médical" />
+                  <option value="Fermeture exceptionnelle" />
+                </datalist>
+              </div>
+
+              <div className="col-md-2 d-grid">
+                <button type="submit" className="btn btn-danger btn-sm font-w600">
+                  <i className="fa fa-plus me-1"></i> Ajouter
+                </button>
+              </div>
+            </form>
+
+            {Array.isArray(cabinetInfo?.closedDates) && cabinetInfo.closedDates.length > 0 ? (
+              <div className="d-flex flex-wrap gap-2">
+                {cabinetInfo.closedDates.map((item) => {
+                  const isRange = item.endDate && item.endDate !== item.startDate;
+                  return (
+                    <div
+                      key={item.id || `${item.startDate}-${item.endDate}`}
+                      className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded"
+                      style={{
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        color: "#991b1b",
+                        fontSize: "13px",
+                      }}
+                    >
+                      <i className="fa fa-ban text-danger"></i>
+                      <div>
+                        <strong>
+                          {isRange ? `Du ${item.startDate} au ${item.endDate}` : `Le ${item.startDate}`}
+                        </strong>
+                        {item.reason && <span className="ms-1 text-muted">({item.reason})</span>}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-outline-danger ms-1 py-0 px-2"
+                        title="Supprimer cette fermeture"
+                        onClick={() => handleRemoveClosure(item.id)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-muted fs-13">
+                Aucun jour férié ou période de vacances programmé.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Formulaire Ajout / Modification de RDV (Intégré dans la page sans popup) */}
       {showModal && (
@@ -733,7 +1019,7 @@ const AppointmentsPage = () => {
           <form onSubmit={handleSaveRdv}>
             <div className="card-body">
               <div className="row">
-                <div className="col-md-6 mb-3">
+                <div className="col-md-4 mb-3">
                   <label className="form-label">Patient</label>
                   <select
                     className="form-control"
@@ -742,7 +1028,7 @@ const AppointmentsPage = () => {
                   >
                     {editId && !patients.some((p) => p.id === parseInt(formRdv.patientId)) && (
                       <option value={formRdv.patientId}>
-                        {appointments.find((a) => a.id === editId)?.patientName || "Patient en cours"}
+                        {appointments.find((a) => a.id === editId)?.patientName || "Patient en cours"} (sc){appointments.find((a) => a.id === editId)?.phone ? ` — ${appointments.find((a) => a.id === editId)?.phone}` : ""}
                       </option>
                     )}
                     {(patients && patients.length > 0 ? patients : initialPatients).map((p) => (
@@ -774,57 +1060,17 @@ const AppointmentsPage = () => {
                 </div>
               </div>
 
-              {/* Sélection Type de consultation et Prix de la consultation */}
-              <div className="row mb-3 p-3 mx-0 rounded" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                <div className="col-md-7 mb-2">
-                  <label className="form-label font-w600 text-dark">
-                    <i className="flaticon-381-notepad me-1 text-primary"></i>
-                    Type de consultation
-                  </label>
-                  <select
-                    className="form-control"
-                    value={formRdv.consultationType}
-                    onChange={(e) => {
-                      const sel = e.target.value;
-                      const found = consultationTypesList.find((t) => t.name === sel);
-                      setFormRdv({
-                        ...formRdv,
-                        consultationType: sel,
-                        price: found ? found.price : formRdv.price,
-                        duration: found?.duration ? found.duration : formRdv.duration,
-                        reason: (!formRdv.reason || formRdv.reason.includes("Consultation") || formRdv.reason === "Consultation de routine") ? sel : formRdv.reason,
-                      });
-                    }}
-                  >
-                    {consultationTypesList.map((t) => (
-                      <option key={t.id || t.name} value={t.name}>
-                        {t.name} — ({Number(t.price).toLocaleString("fr-FR")} DA)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-5 mb-2">
-                  <label className="form-label font-w600 text-dark">
-                    <i className="flaticon-381-price-tag me-1 text-primary"></i>
-                    Prix de la consultation (DA)
-                  </label>
-                  <div className="input-group">
-                    <input
-                      type="number"
-                      step="100"
-                      min="0"
-                      className="form-control font-w700 text-primary fs-15"
-                      value={formRdv.price}
-                      onChange={(e) => setFormRdv({ ...formRdv, price: parseFloat(e.target.value) || 0 })}
-                      placeholder="Ex: 2500"
-                      required
-                    />
-                    <span className="input-group-text font-w700 bg-white text-primary">DA</span>
-                  </div>
-                </div>
-              </div>
-
               <div className="row">
+                <div className="col-md-4 mb-3">
+                  <label className="form-label">Téléphone</label>
+                  <input
+                    type="tel"
+                    className="form-control"
+                    placeholder="Numéro de téléphone"
+                    value={formRdv.phone || ""}
+                    onChange={(e) => setFormRdv({ ...formRdv, phone: e.target.value })}
+                  />
+                </div>
                 <div className="col-md-4 mb-3">
                   <label className="form-label">Durée</label>
                   <select
@@ -853,17 +1099,6 @@ const AppointmentsPage = () => {
                     <option value="Absent">Absent</option>
                     <option value="Annulé">Annulé</option>
                   </select>
-                </div>
-                <div className="col-md-4 mb-3">
-                  <label className="form-label">Motif de la consultation</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Ex: Contrôle tension, renouvellement, certificat..."
-                    value={formRdv.reason}
-                    onChange={(e) => setFormRdv({ ...formRdv, reason: e.target.value })}
-                    required
-                  />
                 </div>
               </div>
 
@@ -1086,7 +1321,7 @@ const AppointmentsPage = () => {
                 border: 1px solid #e2e8f0;
                 border-radius: 6px;
                 padding: 5px 12px;
-                font-size: 12.5px;
+                font-size: 11.5px;
                 color: #475569;
                 font-weight: 500;
                 cursor: pointer;
@@ -1124,7 +1359,7 @@ const AppointmentsPage = () => {
                 border: 1px solid #e2e8f0;
                 border-radius: 6px;
                 padding: 5px 12px;
-                font-size: 12.5px;
+                font-size: 11.5px;
                 color: #475569;
                 font-weight: 500;
                 cursor: pointer;
@@ -1207,14 +1442,14 @@ const AppointmentsPage = () => {
                 color: #0f172a;
               }
               .cal-day-name {
-                font-size: 14.5px;
+                font-size: 13px;
                 font-weight: 600;
                 color: #64748b;
               }
               .cal-day-pill-today {
                 background-color: #2563eb;
                 color: #ffffff !important;
-                font-size: 14.5px;
+                font-size: 13px;
                 font-weight: 800;
                 width: 32px;
                 height: 32px;
@@ -1249,13 +1484,13 @@ const AppointmentsPage = () => {
                 color: #0f172a !important;
               }
               .modern-calendar-wrapper .fc-timegrid-slot {
-                height: 85px !important;
+                height: 92px !important;
               }
               .modern-calendar-wrapper .fc-timegrid-slot-lane {
-                height: 85px !important;
+                height: 92px !important;
               }
               .modern-calendar-wrapper .fc-timegrid-slot-label {
-                height: 85px !important;
+                height: 92px !important;
                 vertical-align: middle !important;
               }
               .modern-calendar-wrapper .fc-timegrid-slot-minor {
@@ -1311,7 +1546,7 @@ const AppointmentsPage = () => {
                 border-top-right-radius: 8px;
               }
               .cal-card-content {
-                padding: 8px 10px;
+                padding: 5px 8px;
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
@@ -1320,7 +1555,7 @@ const AppointmentsPage = () => {
                 gap: 4px;
               }
               .cal-patient-name {
-                font-size: 14.5px;
+                font-size: 13px;
                 font-weight: 700;
                 color: #0f172a;
                 white-space: nowrap;
@@ -1331,7 +1566,7 @@ const AppointmentsPage = () => {
                 letter-spacing: -0.2px;
               }
               .cal-patient-reason {
-                font-size: 12.5px;
+                font-size: 11.5px;
                 color: #475569;
                 font-weight: 500;
                 white-space: nowrap;
@@ -1559,11 +1794,14 @@ const AppointmentsPage = () => {
                   const dayName = dayNames[d.getDay()];
                   const isSunday = d.getDay() === 0;
                   const isFriday = d.getDay() === 5;
+                  const isoD = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+                  const closedMatch = getClosedDateMatch(isoD);
                   const isToday = arg.isToday;
 
                   return (
                     <div
-                      className={`cal-custom-day-header ${isToday ? "cal-header-today" : ""} ${isSunday || isFriday ? "cal-header-sunday" : ""}`}
+                      className={`cal-custom-day-header ${isToday ? "cal-header-today" : ""} ${isSunday || isFriday || closedMatch ? "cal-header-sunday" : ""}`}
+                      title={closedMatch ? `Fermé : ${closedMatch.reason || "Jour férié / Vacances"}` : undefined}
                     >
                       {isToday ? (
                         <span className="cal-day-pill-today">{dayNum}</span>
@@ -1571,6 +1809,11 @@ const AppointmentsPage = () => {
                         <span className="cal-day-num">{dayNum}</span>
                       )}
                       <span className="cal-day-name">
+                        {closedMatch && (
+                          <span className="badge bg-danger text-white me-1" style={{ fontSize: "9px", padding: "2px 5px" }}>
+                            Fermé
+                          </span>
+                        )}
                         {isToday ? (
                           <>
                             <span className="d-none d-md-inline">Aujourd'hui</span>
@@ -1609,10 +1852,10 @@ const AppointmentsPage = () => {
                       <div className="cal-card-content">
                         <div>
                           <div className="cal-patient-name" title={rdv.patientName}>
-                            {rdv.patientName}
+                            {rdv.patientName}{!rdv.patientId ? " (sc)" : ""}
                           </div>
-                          <div className="cal-patient-reason" title={rdv.reason}>
-                            {rdv.reason}
+                          <div className="cal-patient-reason" title={rdv.date}>
+                            {rdv.phone && <div style={{ fontWeight: 600, color: "#0f172a" }}>📞 {rdv.phone}</div>}<div>{rdv.date}</div>
                           </div>
                         </div>
                         <div className="cal-card-footer">
@@ -1631,10 +1874,7 @@ const AppointmentsPage = () => {
                               <circle cx="12" cy="12" r="10" />
                               <polyline points="12 6 12 12 16 14" />
                             </svg>
-                            {timeRange}
-                          </span>
-                          <span className="cal-badge-new" style={{ backgroundColor: "#0284c7" }}>
-                            {rdv.price ? `${Number(rdv.price).toLocaleString("fr-FR")} DA` : "RÉSERVÉ"}
+                            {rdv.time || timeRange}
                           </span>
                         </div>
                       </div>
@@ -1709,7 +1949,10 @@ const AppointmentsPage = () => {
                           </span>
                         </td>
                         <td>
-                          <span className="font-w600 text-dark d-block">{rdv.patientName}</span>
+                          <span className="font-w600 text-dark d-block">
+                            {rdv.patientName}
+                            {!rdv.patientId && <span className="text-primary font-w700 ms-1">(sc)</span>}
+                          </span>
                           <div className="d-block d-md-none mt-1">
                             {getStatusBadge(rdv.status)}
                             <span className="text-muted fs-11 ms-2">⏱ {rdv.duration}</span>
@@ -1720,6 +1963,27 @@ const AppointmentsPage = () => {
                         <td className="d-none d-md-table-cell">{getStatusBadge(rdv.status)}</td>
                         <td className="text-end">
                           <div className="d-inline-flex align-items-center gap-2">
+                            <button
+                              type="button"
+                              className={`btn-action-simple btn-arrive ${rdv.status === "Arrivé" ? "active" : ""}`}
+                              onClick={() => handleMarkArrived(rdv)}
+                              title="Marquer comme Arrivé (Ajouter à la salle d'attente)"
+                            >
+                              <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                <circle cx="8.5" cy="7" r="4" />
+                                <polyline points="17 11 19 13 23 9" />
+                              </svg>
+                            </button>
                             <button
                               type="button"
                               className="btn-action-simple btn-edit"

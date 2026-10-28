@@ -28,6 +28,10 @@ function handleGetCabinetInfo($db) {
             if (!$colCheck) {
                 $db->exec("ALTER TABLE cabinet_info ADD COLUMN doctor_photo LONGTEXT NULL");
             }
+            $colCheckDates = $db->query("SHOW COLUMNS FROM cabinet_info LIKE 'closed_dates'")->fetch();
+            if (!$colCheckDates) {
+                $db->exec("ALTER TABLE cabinet_info ADD COLUMN closed_dates LONGTEXT NULL");
+            }
         } catch (Exception $e) {}
 
         $stmt = $db->query("SELECT * FROM cabinet_info ORDER BY id ASC LIMIT 1");
@@ -93,6 +97,7 @@ function handleGetCabinetInfo($db) {
             'slotEndEvening' => $row['slot_end_evening'] ?? '18:00',
             'secretaryPhone' => $row['secretary_phone'] ?? '0560 06 74 66',
             'closedDays' => $row['closed_days'] ?? 'Vendredi: Fermé',
+            'closedDates' => !empty($row['closed_dates']) ? (json_decode($row['closed_dates'], true) ?: []) : [],
             'mapsUrl' => $row['maps_url'] ?? '',
             'mapsIframe' => $row['maps_iframe'] ?? '',
             'doctorPhoto' => !empty($row['doctor_photo']) ? $row['doctor_photo'] : '/doctor.jpg',
@@ -109,6 +114,12 @@ function handleUpdateCabinetInfo($db) {
     $input = getRequestBody();
 
     try {
+        try {
+            $colCheckDates = $db->query("SHOW COLUMNS FROM cabinet_info LIKE 'closed_dates'")->fetch();
+            if (!$colCheckDates) {
+                $db->exec("ALTER TABLE cabinet_info ADD COLUMN closed_dates LONGTEXT NULL");
+            }
+        } catch (Exception $e) {}
         $existing = $db->query("SELECT * FROM cabinet_info LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 
         $defaultAboutText = "Cabinet médical de gynécologie obstétrique et d'échographie du Dr N. BELBACHIR OULD HENNIA, situé à Haï Essedikia (Avenue Seghier Benali) à Oran.\n\nDédié à la santé et au bien-être de la femme, notre cabinet assure un suivi bienveillant et personnalisé de votre grossesse, de la conception jusqu'au terme. Équipée des dernières technologies d'imagerie ultrasonore avec Doppler couleur et rendu 3D/4D HD Live, la praticienne réalise vos bilans morphologiques et diagnostics prénataux avec la plus haute précision.\n\nNous assurons également les consultations de gynécologie générale, le dépistage précoce, les bilans de fertilité et la contraception, dans un cadre serein privilégiant l'écoute attentive, le respect du secret médical et la ponctualité.";
@@ -141,6 +152,9 @@ function handleUpdateCabinetInfo($db) {
         $slotEndEvening = (array_key_exists('slotEndEvening', $input) && !empty($input['slotEndEvening'])) ? $input['slotEndEvening'] : ($existing['slot_end_evening'] ?? '18:00');
         $secretaryPhone = (array_key_exists('secretaryPhone', $input) && !empty($input['secretaryPhone'])) ? $input['secretaryPhone'] : ($existing['secretary_phone'] ?? '0560 06 74 66');
         $closedDays = array_key_exists('closedDays', $input) ? $input['closedDays'] : ($existing['closed_days'] ?? 'Vendredi: Fermé');
+        $closedDates = array_key_exists('closedDates', $input)
+            ? (is_string($input['closedDates']) ? $input['closedDates'] : json_encode($input['closedDates'], JSON_UNESCAPED_UNICODE))
+            : ($existing['closed_dates'] ?? '[]');
         $mapsUrl = (array_key_exists('mapsUrl', $input) && !empty($input['mapsUrl'])) ? $input['mapsUrl'] : (!empty($existing['maps_url']) ? $existing['maps_url'] : 'https://maps.google.com/?q=Gynecologue+Belbachir+Ouldhennia!5e0');
         $mapsIframe = (array_key_exists('mapsIframe', $input) && !empty($input['mapsIframe'])) ? $input['mapsIframe'] : (!empty($existing['maps_iframe']) ? $existing['maps_iframe'] : $defaultMapsIframe);
         $doctorPhoto = (array_key_exists('doctorPhoto', $input) && !empty($input['doctorPhoto'])) ? $input['doctorPhoto'] : ($existing['doctor_photo'] ?? '/doctor.jpg');
@@ -174,6 +188,7 @@ function handleUpdateCabinetInfo($db) {
                     slot_end_evening = :slotEndEvening,
                     secretary_phone = :secretaryPhone,
                     closed_days = :closedDays,
+                    closed_dates = :closedDates,
                     maps_url = :mapsUrl,
                     maps_iframe = :mapsIframe,
                     doctor_photo = :doctorPhoto
@@ -206,6 +221,7 @@ function handleUpdateCabinetInfo($db) {
                 ':slotEndEvening' => $slotEndEvening,
                 ':secretaryPhone' => $secretaryPhone,
                 ':closedDays' => $closedDays,
+                ':closedDates' => $closedDates,
                 ':mapsUrl' => $mapsUrl,
                 ':mapsIframe' => $mapsIframe,
                 ':doctorPhoto' => $doctorPhoto,
@@ -219,14 +235,14 @@ function handleUpdateCabinetInfo($db) {
                     convention, email, phone, address, hours, legal_notice,
                     about_text, about_summary, slot_duration, slot_start_morning,
                     slot_end_morning, slot_start_evening, slot_end_evening,
-                    secretary_phone, closed_days, maps_url, maps_iframe, doctor_photo
+                    secretary_phone, closed_days, closed_dates, maps_url, maps_iframe, doctor_photo
                 ) VALUES (
                     :clinicName, :doctorName, :doctorNameAr, :title, :titleAr,
                     :specialty, :subSpecialty, :rpps, :adeli, :siret, :orderNumber,
                     :convention, :email, :phone, :address, :hours, :legalNotice,
                     :aboutText, :aboutSummary, :slotDuration, :slotStartMorning,
                     :slotEndMorning, :slotStartEvening, :slotEndEvening,
-                    :secretaryPhone, :closedDays, :mapsUrl, :mapsIframe, :doctorPhoto
+                    :secretaryPhone, :closedDays, :closedDates, :mapsUrl, :mapsIframe, :doctorPhoto
                 )
             ");
             $stmt->execute([
@@ -256,6 +272,7 @@ function handleUpdateCabinetInfo($db) {
                 ':slotEndEvening' => $slotEndEvening,
                 ':secretaryPhone' => $secretaryPhone,
                 ':closedDays' => $closedDays,
+                ':closedDates' => $closedDates,
                 ':mapsUrl' => $mapsUrl,
                 ':mapsIframe' => $mapsIframe,
                 ':doctorPhoto' => $doctorPhoto,
