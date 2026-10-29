@@ -61,19 +61,12 @@ const AppointmentsPage = () => {
   const [defaultConsultationTypeName, setDefaultConsultationTypeName] = useState("Consultation de médecine générale");
 
   const [showModal, setShowModal] = useState(false);
-  const [showClosureModal, setShowClosureModal] = useState(false);
   const [cabinetInfo, setCabinetInfo] = useState(() => {
     try {
       const saved = localStorage.getItem("cabinet_info");
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     return { closedDays: "Vendredi: Fermé", closedDates: [] };
-  });
-  const [newClosure, setNewClosure] = useState({
-    mode: "single",
-    startDate: new Date().toISOString().split("T")[0],
-    endDate: new Date().toISOString().split("T")[0],
-    reason: "Jour férié",
   });
 
   const getClosedDateMatch = (isoDate) => {
@@ -87,50 +80,6 @@ const AppointmentsPage = () => {
     );
   };
 
-  const handleAddClosure = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!newClosure.startDate) return;
-    const start = newClosure.startDate;
-    const end =
-      newClosure.mode === "range" && newClosure.endDate && newClosure.endDate >= start
-        ? newClosure.endDate
-        : start;
-    const entry = {
-      id: Date.now(),
-      startDate: start,
-      endDate: end,
-      reason: (newClosure.reason || "").trim() || (start !== end ? "Vacances / Congé" : "Jour férié"),
-    };
-    const updatedDates = [...(Array.isArray(cabinetInfo?.closedDates) ? cabinetInfo.closedDates : []), entry];
-    const updatedCabinet = { ...cabinetInfo, closedDates: updatedDates };
-    setCabinetInfo(updatedCabinet);
-    try {
-      localStorage.setItem("cabinet_info", JSON.stringify(updatedCabinet));
-      await ApiService.updateCabinetInfo(updatedCabinet);
-    } catch (err) {}
-    Swal.fire({
-      icon: "success",
-      title: start !== end ? "Période de fermeture ajoutée" : "Jour de fermeture ajouté",
-      text:
-        start !== end
-          ? `Cabinet fermé du ${start} au ${end} (${entry.reason}).`
-          : `Cabinet fermé le ${start} (${entry.reason}).`,
-      timer: 1800,
-      showConfirmButton: false,
-    });
-  };
-
-  const handleRemoveClosure = async (id) => {
-    const updatedDates = (Array.isArray(cabinetInfo?.closedDates) ? cabinetInfo.closedDates : []).filter(
-      (item) => item.id !== id
-    );
-    const updatedCabinet = { ...cabinetInfo, closedDates: updatedDates };
-    setCabinetInfo(updatedCabinet);
-    try {
-      localStorage.setItem("cabinet_info", JSON.stringify(updatedCabinet));
-      await ApiService.updateCabinetInfo(updatedCabinet);
-    } catch (err) {}
-  };
   const [editId, setEditId] = useState(null);
   const [formRdv, setFormRdv] = useState({
     patientId: 1,
@@ -813,22 +762,6 @@ const AppointmentsPage = () => {
           </div>
 
           <Button
-            variant={showClosureModal ? "danger" : "outline-danger"}
-            className="btn-rounded"
-            onClick={() => {
-              setShowClosureModal((prev) => !prev);
-              if (!showClosureModal) setShowModal(false);
-            }}
-          >
-            <i className={showClosureModal ? "fa fa-times me-2" : "fa fa-calendar-times me-2"}></i>
-            Jours fériés / Vacances
-            {Array.isArray(cabinetInfo?.closedDates) && cabinetInfo.closedDates.length > 0 && (
-              <span className="badge bg-danger text-white ms-2 rounded-pill">
-                {cabinetInfo.closedDates.length}
-              </span>
-            )}
-          </Button>
-          <Button
             variant={showModal && !editId ? "outline-primary" : "primary"}
             className="btn-rounded"
             onClick={() => {
@@ -845,155 +778,6 @@ const AppointmentsPage = () => {
         </div>
       </div>
 
-      {/* Panneau Jours fériés & Vacances / Fermetures exceptionnelles */}
-      {showClosureModal && (
-        <div className="card mb-4 border-danger" style={{ borderWidth: "1px" }}>
-          <div className="card-header border-0 pb-0 d-flex justify-content-between align-items-center">
-            <div>
-              <h4 className="card-title text-danger mb-1">
-                <i className="fa fa-calendar-times me-2"></i>
-                Jours fériés & Vacances (Fermeture du cabinet)
-              </h4>
-              <p className="text-muted fs-13 mb-0">
-                Ajoutez un jour précis (jour férié) ou plusieurs jours (vacances / congé) pour bloquer les réservations à ces dates.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn-close"
-              aria-label="Fermer"
-              onClick={() => setShowClosureModal(false)}
-            ></button>
-          </div>
-          <div className="card-body">
-            <form onSubmit={handleAddClosure} className="row g-2 align-items-end mb-3 p-3 rounded" style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-              <div className="col-md-3">
-                <label className="form-label fs-12 font-w600 mb-1">Type de fermeture</label>
-                <select
-                  className="form-control form-control-sm"
-                  value={newClosure.mode}
-                  onChange={(e) => {
-                    const mode = e.target.value;
-                    setNewClosure((prev) => ({
-                      ...prev,
-                      mode,
-                      endDate: mode === "single" ? prev.startDate : prev.endDate,
-                      reason:
-                        mode === "range" && prev.reason === "Jour férié"
-                          ? "Vacances / Congé"
-                          : mode === "single" && prev.reason === "Vacances / Congé"
-                          ? "Jour férié"
-                          : prev.reason,
-                    }));
-                  }}
-                >
-                  <option value="single">Un seul jour (Jour férié...)</option>
-                  <option value="range">Plusieurs jours (Vacances / Congé)</option>
-                </select>
-              </div>
-
-              <div className={newClosure.mode === "range" ? "col-md-2" : "col-md-3"}>
-                <label className="form-label fs-12 font-w600 mb-1">
-                  {newClosure.mode === "range" ? "Date de début *" : "Date du jour fermé *"}
-                </label>
-                <input
-                  type="date"
-                  className="form-control form-control-sm"
-                  value={newClosure.startDate}
-                  onChange={(e) =>
-                    setNewClosure((prev) => ({
-                      ...prev,
-                      startDate: e.target.value,
-                      endDate: prev.mode === "single" || prev.endDate < e.target.value ? e.target.value : prev.endDate,
-                    }))
-                  }
-                  required
-                />
-              </div>
-
-              {newClosure.mode === "range" && (
-                <div className="col-md-2">
-                  <label className="form-label fs-12 font-w600 mb-1">Date de fin *</label>
-                  <input
-                    type="date"
-                    className="form-control form-control-sm"
-                    min={newClosure.startDate}
-                    value={newClosure.endDate}
-                    onChange={(e) => setNewClosure((prev) => ({ ...prev, endDate: e.target.value }))}
-                    required
-                  />
-                </div>
-              )}
-
-              <div className={newClosure.mode === "range" ? "col-md-3" : "col-md-4"}>
-                <label className="form-label fs-12 font-w600 mb-1">Motif (Jour férié, Vacances...)</label>
-                <input
-                  type="text"
-                  className="form-control form-control-sm"
-                  list="agenda-closure-reasons"
-                  placeholder="Ex: Jour férié, Vacances..."
-                  value={newClosure.reason}
-                  onChange={(e) => setNewClosure((prev) => ({ ...prev, reason: e.target.value }))}
-                />
-                <datalist id="agenda-closure-reasons">
-                  <option value="Jour férié" />
-                  <option value="Vacances / Congé annuel" />
-                  <option value="Aïd El-Fitr (Férié)" />
-                  <option value="Aïd El-Adha (Férié)" />
-                  <option value="Formation / Congrès médical" />
-                  <option value="Fermeture exceptionnelle" />
-                </datalist>
-              </div>
-
-              <div className="col-md-2 d-grid">
-                <button type="submit" className="btn btn-danger btn-sm font-w600">
-                  <i className="fa fa-plus me-1"></i> Ajouter
-                </button>
-              </div>
-            </form>
-
-            {Array.isArray(cabinetInfo?.closedDates) && cabinetInfo.closedDates.length > 0 ? (
-              <div className="d-flex flex-wrap gap-2">
-                {cabinetInfo.closedDates.map((item) => {
-                  const isRange = item.endDate && item.endDate !== item.startDate;
-                  return (
-                    <div
-                      key={item.id || `${item.startDate}-${item.endDate}`}
-                      className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded"
-                      style={{
-                        background: "#fef2f2",
-                        border: "1px solid #fecaca",
-                        color: "#991b1b",
-                        fontSize: "13px",
-                      }}
-                    >
-                      <i className="fa fa-ban text-danger"></i>
-                      <div>
-                        <strong>
-                          {isRange ? `Du ${item.startDate} au ${item.endDate}` : `Le ${item.startDate}`}
-                        </strong>
-                        {item.reason && <span className="ms-1 text-muted">({item.reason})</span>}
-                      </div>
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-outline-danger ms-1 py-0 px-2"
-                        title="Supprimer cette fermeture"
-                        onClick={() => handleRemoveClosure(item.id)}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-muted fs-13">
-                Aucun jour férié ou période de vacances programmé.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Formulaire Ajout / Modification de RDV (Intégré dans la page sans popup) */}
       {showModal && (
