@@ -87,12 +87,8 @@ const PatientDetailsCabinet = () => {
           if (Array.isArray(prData)) {
             setPrescriptions(prData);
           }
-          if (Array.isArray(docData) && docData.length > 0) {
-            setAllDocuments((prev) => {
-              const prevIds = new Set(prev.map((d) => d.id));
-              const newDocs = docData.filter((d) => !prevIds.has(d.id));
-              return [...newDocs, ...prev];
-            });
+          if (Array.isArray(docData)) {
+            setAllDocuments(docData);
           }
           if (Array.isArray(invData)) {
             setInvoices(invData);
@@ -173,7 +169,7 @@ const PatientDetailsCabinet = () => {
     setShowAddDocForm(false);
   };
 
-  const handleSaveDocument = (e) => {
+  const handleSaveDocument = async (e) => {
     e.preventDefault();
     if (!docTitle.trim()) {
       Swal.fire({
@@ -201,18 +197,42 @@ const PatientDetailsCabinet = () => {
       title: docTitle.trim(),
       category: docCategory,
       date: docDate,
-      author: docAuthor.trim() || "Cabinet Médical",
+      author: docAuthor.trim() || "Dr N. BELBACHIR OULD HENNIA",
       fileSize: fileSizeStr,
       type: fileExt,
+      fileType: fileExt,
       isImage: isImage,
       fileDataUrl: docFilePreview || null,
+      filePath: docFilePreview || null,
       fileName: docFile ? docFile.name : null,
-      status: "Validé par le médecin",
+      status: "Validé",
     };
 
     setAllDocuments((prev) => [newDocument, ...prev]);
-    initialDocuments.unshift(newDocument);
     handleResetDocForm();
+
+    try {
+      const res = await ApiService.saveDocument({
+        patientId: patient.id,
+        title: newDocument.title,
+        category: newDocument.category,
+        date: newDocument.date,
+        author: newDocument.author,
+        filePath: newDocument.fileDataUrl,
+        fileSize: newDocument.fileSize,
+        fileType: newDocument.type,
+        status: newDocument.status,
+      });
+      if (res && res.data && res.data.id) {
+        newDocument.id = res.data.id;
+      }
+      const refreshedDocs = await ApiService.getDocuments(patient.id);
+      if (Array.isArray(refreshedDocs)) {
+        setAllDocuments(refreshedDocs);
+      }
+    } catch (err) {
+      console.warn("Erreur sauvegarde document MySQL :", err);
+    }
 
     Swal.fire({
       icon: "success",
@@ -233,9 +253,14 @@ const PatientDetailsCabinet = () => {
       cancelButtonColor: "#64748b",
       confirmButtonText: "Oui, supprimer",
       cancelButtonText: "Annuler",
-    }).then((result) => {
+    }).then(async (result) => {
       if (result.isConfirmed) {
         setAllDocuments((prev) => prev.filter((d) => d.id !== docId));
+        try {
+          await ApiService.deleteDocument(docId);
+        } catch (err) {
+          console.warn("Erreur suppression document MySQL :", err);
+        }
         Swal.fire({
           icon: "success",
           title: "Document supprimé",

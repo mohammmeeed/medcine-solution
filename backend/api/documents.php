@@ -86,9 +86,9 @@ function handleSaveDocument($db) {
         $category = $input['category'] ?? 'Autre';
         $docDate = $input['date'] ?? date('Y-m-d');
         $author = $input['author'] ?? 'Dr N. BELBACHIR OULD HENNIA';
-        $filePath = $input['filePath'] ?? ($input['previewUrl'] ?? null);
+        $filePath = $input['filePath'] ?? ($input['previewUrl'] ?? ($input['fileDataUrl'] ?? null));
         $fileSize = $input['fileSize'] ?? '1.2 Mo';
-        $fileType = $input['fileType'] ?? 'PDF';
+        $fileType = $input['fileType'] ?? ($input['type'] ?? 'PDF');
         $status = $input['status'] ?? 'Validé';
 
         $stmt = $db->prepare("
