@@ -35,6 +35,7 @@ function handleGetStaff($db) {
             return [
                 'id' => (int)$row['id'],
                 'name' => $row['name'],
+                'username' => $row['username'] ?? ($row['type'] === 'doctor' ? 'admin' : 'secretaire'),
                 'email' => $row['email'],
                 'phone' => $row['phone'] ?? '',
                 'role' => $row['role'],
@@ -71,6 +72,7 @@ function handleSaveStaff($db) {
     try {
         $name = trim($input['name']);
         $email = trim($input['email']);
+        $username = !empty($input['username']) ? trim($input['username']) : ($input['type'] === 'doctor' ? 'admin' : null);
         $phone = $input['phone'] ?? '';
         $role = $input['role'] ?? ($input['roleName'] ?? 'Secrétaire Médicale');
         $type = $input['type'] ?? 'secretary';
@@ -101,6 +103,7 @@ function handleSaveStaff($db) {
             $sql = "UPDATE staff_users SET
                         name = :name,
                         email = :email,
+                        username = COALESCE(:username, username),
                         phone = :phone,
                         role = :role,
                         type = :type,
@@ -110,6 +113,7 @@ function handleSaveStaff($db) {
             $params = [
                 ':name' => $name,
                 ':email' => $email,
+                ':username' => $username,
                 ':phone' => $phone,
                 ':role' => $role,
                 ':type' => $type,
@@ -143,14 +147,15 @@ function handleSaveStaff($db) {
             $pwdHash = $password ?: password_hash('123456', PASSWORD_DEFAULT);
             $stmt = $db->prepare("
                 INSERT INTO staff_users (
-                    name, email, password_hash, phone, role, type, status, access_level
+                    name, email, username, password_hash, phone, role, type, status, access_level
                 ) VALUES (
-                    :name, :email, :pwd, :phone, :role, :type, :status, :access_level
+                    :name, :email, :username, :pwd, :phone, :role, :type, :status, :access_level
                 )
             ");
             $stmt->execute([
                 ':name' => $name,
                 ':email' => $email,
+                ':username' => $username,
                 ':pwd' => $pwdHash,
                 ':phone' => $phone,
                 ':role' => $role,

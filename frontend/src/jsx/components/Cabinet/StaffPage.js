@@ -456,6 +456,7 @@ const StaffPage = ({ initialView = "list" }) => {
         await ApiService.saveStaffUser({
           id: editingAccountId,
           name: cleanName,
+          username: cleanUsername,
           email: accountForm.email.trim() || `${cleanUsername}@cabinet.dz`,
           phone: accountForm.phone.trim(),
           role: assignedRole.name,
@@ -493,6 +494,7 @@ const StaffPage = ({ initialView = "list" }) => {
         // Enregistrement dans MySQL
         await ApiService.saveStaffUser({
           name: cleanName,
+          username: cleanUsername,
           email: accountForm.email.trim() || `${cleanUsername}@cabinet.dz`,
           phone: accountForm.phone.trim(),
           role: assignedRole.name,

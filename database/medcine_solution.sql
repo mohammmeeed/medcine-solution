@@ -669,6 +669,7 @@ CREATE TABLE `staff_users` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(150) NOT NULL,
   `email` varchar(120) NOT NULL,
+  `username` varchar(100) DEFAULT NULL,
   `password_hash` varchar(255) DEFAULT NULL,
   `phone` varchar(50) DEFAULT NULL,
   `role` varchar(100) NOT NULL,

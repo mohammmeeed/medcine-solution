@@ -200,6 +200,37 @@ export const ApiService = {
   },
 
   // ----------------------------------------------------
+  // AUTHENTIFICATION & CONNEXION DIRECTE MYSQL (STAFF_USERS)
+  // ----------------------------------------------------
+  async login(username, password) {
+    try {
+      const res = await apiClient.post("/auth.php", { username, password });
+      return res.data;
+    } catch (err) {
+      if (err.response && err.response.data) {
+        return err.response.data;
+      }
+      return { status: "error", message: err.message || "Erreur de connexion au serveur" };
+    }
+  },
+
+  async changePassword(userId, newPassword) {
+    try {
+      const res = await apiClient.post("/auth.php", {
+        action: "change_password",
+        userId,
+        newPassword,
+      });
+      return res.data;
+    } catch (err) {
+      if (err.response && err.response.data) {
+        return err.response.data;
+      }
+      throw err;
+    }
+  },
+
+  // ----------------------------------------------------
   // PERSONNEL ET GESTION DES COMPTES (STAFF USERS)
   // ----------------------------------------------------
   async getStaff() {

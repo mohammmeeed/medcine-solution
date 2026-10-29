@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
+import ApiService from "../../services/ApiService";
 
 const Login = () => {
   const [username, setUsername] = useState("");
@@ -25,12 +26,12 @@ const Login = () => {
     }
   }, [navigate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
     setLoading(true);
 
-    const cleanUser = username.trim().toLowerCase();
+    const cleanUser = username.trim();
     const cleanPass = password.trim();
 
     if (!cleanUser || !cleanPass) {
@@ -39,63 +40,23 @@ const Login = () => {
       return;
     }
 
-    // Vérification des comptes dynamiques configurés dans Personnel & Droits
-    let dynamicAccounts = [];
     try {
-      dynamicAccounts = JSON.parse(localStorage.getItem("cabinet_staff_accounts") || "[]");
-    } catch (err) {
-      dynamicAccounts = [];
-    }
+      // Authentification directe depuis MySQL (staff_users)
+      const res = await ApiService.login(cleanUser, cleanPass);
 
-    const matchedAccount = dynamicAccounts.find(
-      (acc) =>
-        (acc.username?.toLowerCase() === cleanUser || acc.email?.toLowerCase() === cleanUser)
-    );
-
-    const customPass = localStorage.getItem("cabinet_admin_password");
-
-    // Identifiants Médecin / Administrateur par défaut
-    const isDoctorUser =
-      cleanUser === "admin" ||
-      cleanUser === "dr.belbachir" ||
-      cleanUser === "belbachir" ||
-      cleanUser === "docteur" ||
-      cleanUser === "doctor" ||
-      cleanUser === "dr.belbachir@cabinet-medical.dz";
-
-    const isDoctorPass =
-      (customPass && cleanPass === customPass) ||
-      cleanPass === "admin" ||
-      cleanPass === "admin123" ||
-      cleanPass === "123456";
-
-    // Identifiants Secrétariat Médical par défaut
-    const isSecretaryUser = cleanUser === "secretaire" || cleanUser === "secretariat";
-    const isSecretaryPass = cleanPass === "123" || cleanPass === "secretaire" || cleanPass === "admin";
-
-    setTimeout(() => {
-      // 1. Vérification d'un compte dynamique
-      if (matchedAccount) {
-        if (matchedAccount.password !== cleanPass) {
-          setLoading(false);
-          setErrorMsg("Mot de passe incorrect pour cet utilisateur.");
-          return;
-        }
-        if (matchedAccount.status === "Inactif") {
-          setLoading(false);
-          setErrorMsg("Ce compte utilisateur est actuellement désactivé par l'administrateur.");
-          return;
-        }
-
+      if (res && res.status === "success" && res.data) {
+        const user = res.data;
         const sessionUser = {
-          id: matchedAccount.id,
-          username: matchedAccount.username,
-          name: matchedAccount.name,
-          role: matchedAccount.roleName || matchedAccount.role,
-          roleId: matchedAccount.roleId,
-          type: matchedAccount.type || "admin",
-          email: matchedAccount.email,
-          loginTime: new Date().toISOString(),
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+          roleName: user.role,
+          type: user.type,
+          email: user.email,
+          permissions: user.permissions,
+          token: user.token,
+          loginTime: user.loginTime || new Date().toISOString(),
         };
         localStorage.setItem("cabinet_auth_user", JSON.stringify(sessionUser));
         if (rememberMe) {
@@ -107,55 +68,20 @@ const Login = () => {
         Swal.fire({
           icon: "success",
           title: "Accès Autorisé",
-          text: `Bienvenue ${matchedAccount.name}`,
+          text: `Bienvenue ${user.name}`,
           timer: 1400,
           showConfirmButton: false,
         });
 
-        navigate("/admin/dashboard");
-        return;
-      }
-
-      // 2. Fallbacks système par défaut
-      if (isDoctorUser && isDoctorPass) {
-        const sessionUser = {
-          username: cleanUser,
-          name: "Dr N. BELBACHIR OULD HENNIA",
-          role: "Médecin Titulaire (Super Admin)",
-          type: "doctor",
-          loginTime: new Date().toISOString(),
-        };
-        localStorage.setItem("cabinet_auth_user", JSON.stringify(sessionUser));
-        if (rememberMe) {
-          localStorage.setItem("cabinet_remember_user", cleanUser);
-        } else {
-          localStorage.removeItem("cabinet_remember_user");
-        }
-
-        Swal.fire({
-          icon: "success",
-          title: "Accès Autorisé",
-          text: "Bienvenue Dr N. BELBACHIR OULD HENNIA",
-          timer: 1400,
-          showConfirmButton: false,
-        });
-
-        navigate("/admin/dashboard");
-      } else if (isSecretaryUser && isSecretaryPass) {
-        const sessionUser = {
-          username: cleanUser,
-          name: "Secrétariat Médical",
-          role: "Secrétaire Médicale",
-          type: "secretary",
-          loginTime: new Date().toISOString(),
-        };
-        localStorage.setItem("cabinet_auth_user", JSON.stringify(sessionUser));
         navigate("/admin/dashboard");
       } else {
         setLoading(false);
-        setErrorMsg("Identifiant ou mot de passe incorrect. Veuillez vérifier vos accès.");
+        setErrorMsg(res?.message || "Identifiant ou mot de passe incorrect.");
       }
-    }, 350);
+    } catch (err) {
+      setLoading(false);
+      setErrorMsg(err.response?.data?.message || "Erreur de connexion au serveur de base de données.");
+    }
   };
 
   return (

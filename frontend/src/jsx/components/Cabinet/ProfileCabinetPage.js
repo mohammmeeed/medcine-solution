@@ -3,6 +3,7 @@ import { Button } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import profile2 from "../../../images/profile/pic1.jpg";
+import ApiService from "../../../services/ApiService";
 import { initialDoctor } from "../../../services/CabinetData";
 
 const ProfileCabinetPage = () => {
@@ -18,19 +19,31 @@ const ProfileCabinetPage = () => {
     newPassword: "",
   });
 
-  const handleUpdate = (e) => {
+  const handleUpdate = async (e) => {
     e.preventDefault();
-    if (profile.newPassword && profile.newPassword.trim()) {
-      localStorage.setItem("cabinet_admin_password", profile.newPassword.trim());
+    try {
+      if (profile.newPassword && profile.newPassword.trim()) {
+        const storedUser = JSON.parse(localStorage.getItem("cabinet_auth_user") || "{}");
+        const userId = storedUser.id || 1;
+        await ApiService.changePassword(userId, profile.newPassword.trim());
+      }
+      Swal.fire({
+        icon: "success",
+        title: "Profil praticien mis à jour",
+        text: profile.newPassword
+          ? "Vos informations et votre nouveau mot de passe ont été enregistrés avec succès dans MySQL."
+          : "Vos informations de connexion et d'exercice ont été enregistrées.",
+        confirmButtonColor: "#1e60d5",
+      });
+      setProfile((prev) => ({ ...prev, currentPassword: "", newPassword: "" }));
+    } catch (err) {
+      Swal.fire({
+        icon: "error",
+        title: "Erreur",
+        text: "Impossible d'enregistrer le mot de passe dans MySQL.",
+        confirmButtonColor: "#dc2626",
+      });
     }
-    Swal.fire({
-      icon: "success",
-      title: "Profil praticien mis à jour",
-      text: profile.newPassword
-        ? "Vos informations et votre nouveau mot de passe ont été enregistrés avec succès."
-        : "Vos informations de connexion et d'exercice ont été enregistrées.",
-      confirmButtonColor: "#1e60d5",
-    });
   };
 
   return (
