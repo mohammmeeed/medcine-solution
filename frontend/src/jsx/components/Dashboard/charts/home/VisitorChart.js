@@ -309,39 +309,39 @@ class VisitorChart extends Component {
           </div>
 
           {/* Boutons de bascule de vue : 14 Jours | Par Mois | Par Année | Aujourd'hui */}
-          <div className="btn-group btn-group-sm" role="group">
-            <button
-              type="button"
-              className={`btn btn-xs ${viewMode === "daily" ? "btn-primary" : "btn-light"}`}
-              style={{ borderRadius: "6px 0 0 6px", fontSize: "11px", fontWeight: "600", padding: "5px 11px" }}
-              onClick={() => this.handleModeChange("daily")}
-            >
-              14 Jours
-            </button>
-            <button
-              type="button"
-              className={`btn btn-xs ${viewMode === "monthly" ? "btn-primary" : "btn-light"}`}
-              style={{ borderRadius: "0", fontSize: "11px", fontWeight: "600", padding: "5px 11px" }}
-              onClick={() => this.handleModeChange("monthly")}
-            >
-              Par Mois
-            </button>
-            <button
-              type="button"
-              className={`btn btn-xs ${viewMode === "yearly" ? "btn-primary" : "btn-light"}`}
-              style={{ borderRadius: "0", fontSize: "11px", fontWeight: "600", padding: "5px 11px" }}
-              onClick={() => this.handleModeChange("yearly")}
-            >
-              Par Année
-            </button>
-            <button
-              type="button"
-              className={`btn btn-xs ${viewMode === "hourly" ? "btn-primary" : "btn-light"}`}
-              style={{ borderRadius: "0 6px 6px 0", fontSize: "11px", fontWeight: "600", padding: "5px 11px" }}
-              onClick={() => this.handleModeChange("hourly")}
-            >
-              Aujourd'hui (Heures)
-            </button>
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            {[
+              { key: "daily", label: "14 Jours" },
+              { key: "monthly", label: "Par Mois" },
+              { key: "yearly", label: "Par Année" },
+              { key: "hourly", label: "Aujourd'hui (Heures)" },
+            ].map((item) => {
+              const active = viewMode === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className="btn btn-xs"
+                  style={{
+                    background: active ? "#2060e2" : "#ffffff",
+                    color: active ? "#ffffff" : "#475569",
+                    border: active ? "1px solid #2060e2" : "1px solid #cbd5e1",
+                    borderRadius: "20px",
+                    fontSize: "11.5px",
+                    fontWeight: 600,
+                    padding: "5px 13px",
+                    boxShadow: active
+                      ? "0 2px 6px rgba(32, 96, 226, 0.28)"
+                      : "0 1px 2px rgba(0,0,0,0.04)",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  onClick={() => this.handleModeChange(item.key)}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 

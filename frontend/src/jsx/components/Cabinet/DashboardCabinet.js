@@ -17,16 +17,15 @@ import {
 const VisitorChart = loadable(() =>
   pMinDelay(import("../Dashboard/charts/home/VisitorChart"), 600)
 );
-const ChartCircle = loadable(() =>
-  pMinDelay(import("../Dashboard/charts/home/ChartCircle"), 600)
-);
+// ChartCircle hidden
 
 const DashboardCabinet = () => {
   const navigate = useNavigate();
   const { changeBackground } = useContext(ThemeContext);
 
   const [patients, setPatients] = useState([]);
-  const [appointments, setAppointments] = useState(initialAppointments);
+  const [appointments, setAppointments] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [waitingRoom, setWaitingRoom] = useState(() => {
     try {
       const saved = localStorage.getItem("cabinet_waiting_list");
@@ -50,13 +49,17 @@ const DashboardCabinet = () => {
     reason: "Consultation générale",
   });
 
-  useEffect(() => {
-    changeBackground({ value: "light", label: "Light" });
+  const fetchDashboardData = async () => {
+    try {
+      const [patData, aptData, waitData, invData] = await Promise.all([
+        ApiService.getPatients().catch(() => []),
+        ApiService.getAppointments().catch(() => []),
+        ApiService.getWaitingRoom().catch(() => []),
+        ApiService.getInvoices().catch(() => []),
+      ]);
 
-    const fetchPatients = async () => {
-      try {
-        const data = await ApiService.getPatients();
-        const clean = (Array.isArray(data) ? data : []).filter((p) => {
+      if (Array.isArray(patData)) {
+        const clean = patData.filter((p) => {
           const last = (p.lastName || "").toLowerCase().trim();
           const first = (p.firstName || "").toLowerCase().trim();
           return (
@@ -68,11 +71,42 @@ const DashboardCabinet = () => {
         if (clean.length > 0) {
           setNewRdv((prev) => ({ ...prev, patientId: clean[0].id }));
         }
-      } catch (e) {
-        console.warn("Erreur chargement patients dans dashboard :", e);
       }
-    };
-    fetchPatients();
+
+      if (Array.isArray(aptData)) {
+        setAppointments(aptData);
+      }
+
+      if (Array.isArray(waitData)) {
+        const cleanWait = waitData.filter((w) => {
+          const name = (w.patientName || w.patient_name || "").toLowerCase().trim();
+          return (
+            !name.includes("sophie") &&
+            !name.includes("bernard") &&
+            !name.includes("marc") &&
+            !name.includes("lemoine")
+          );
+        });
+        setWaitingRoom(cleanWait);
+        try {
+          localStorage.setItem("cabinet_waiting_list", JSON.stringify(cleanWait));
+        } catch (e) {}
+      }
+
+      if (Array.isArray(invData)) {
+        setInvoices(invData);
+      }
+    } catch (e) {
+      console.warn("Erreur chargement données dashboard :", e);
+    }
+  };
+
+  useEffect(() => {
+    changeBackground({ value: "light", label: "Light" });
+    fetchDashboardData();
+
+    const onFocus = () => fetchDashboardData();
+    window.addEventListener("focus", onFocus);
 
     let channel;
     try {
@@ -85,6 +119,13 @@ const DashboardCabinet = () => {
     } catch (e) {}
 
     const handleStorage = (e) => {
+      if (
+        e.key === "new_appointment_booked" ||
+        e.key === "cabinet_client_appointments" ||
+        e.key === "cabinet_appointments"
+      ) {
+        fetchDashboardData();
+      }
       if (e.key === "cabinet_waiting_list" && e.newValue) {
         try {
           setWaitingRoom(JSON.parse(e.newValue));
@@ -93,24 +134,44 @@ const DashboardCabinet = () => {
     };
     window.addEventListener("storage", handleStorage);
 
+    const intervalTimer = setInterval(() => {
+      fetchDashboardData();
+    }, 15000);
+
     return () => {
       if (channel) channel.close();
+      window.removeEventListener("focus", onFocus);
       window.removeEventListener("storage", handleStorage);
+      clearInterval(intervalTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Date locale d'aujourd'hui (YYYY-MM-DD)
+  const todayStr = (() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  })();
+
+  // Rendez-vous programmés pour aujourd'hui
+  const todayAppointmentsList = appointments
+    .filter((a) => (a.date || "").trim() === todayStr)
+    .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+
   // Statistiques calculées du cabinet
   const totalPatientsCount = patients.length; // Nombre réel de patients en DB
-  const todayAppointments = appointments.length;
-  const waitingCount = waitingRoom.filter((w) => w.status === "En attente").length;
-  const completedToday = appointments.filter((a) => a.status === "Terminé").length;
-  const todayRevenue = initialInvoices
+  const todayAppointments = todayAppointmentsList.length;
+  const waitingCount = waitingRoom.filter((w) => w.status === "En attente" || (w.status && w.status.toLowerCase().includes("attente"))).length;
+  const completedToday = todayAppointmentsList.filter((a) => a.status === "Terminé" || a.status === "En consultation" || a.status === "Arrivé").length;
+  const todayRevenue = (invoices.length > 0 ? invoices : initialInvoices)
     .filter((inv) => inv.status === "Payée")
-    .reduce((acc, curr) => acc + curr.amount, 0);
-  const pendingInvoicesAmount = initialInvoices
+    .reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const pendingInvoicesAmount = (invoices.length > 0 ? invoices : initialInvoices)
     .filter((inv) => inv.status !== "Payée")
-    .reduce((acc, curr) => acc + curr.amount, 0);
+    .reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
 
   const handleCreateRdv = (e) => {
     e.preventDefault();
@@ -249,7 +310,7 @@ const DashboardCabinet = () => {
       {/* Rangée Principale : Graphiques & Activités du Cabinet */}
       <div className="row">
         {/* Graphique de fréquentation du site public en temps réel */}
-        <div className="col-xl-6 col-xxl-6 col-lg-12">
+        <div className="col-12">
           <div className="card">
             <div className="card-header border-0 pb-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
               <div>
@@ -272,52 +333,6 @@ const DashboardCabinet = () => {
             <div className="card-body px-3 pt-2 pb-0">
               <div id="chartStrock">
                 <VisitorChart />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Répartition des actes et patientèle */}
-        <div className="col-xl-6 col-xxl-6 col-lg-12">
-          <div className="card">
-            <div className="card-header border-0 pb-0">
-              <div>
-                <h4 className="card-title mb-1">Typologie des Actes</h4>
-                <p className="mb-0 text-muted fs-13">Consultations et suivis</p>
-              </div>
-            </div>
-            <div className="card-body pt-2">
-              <div className="row align-items-center">
-                <div className="col-sm-7 px-0">
-                  <div id="chartCircle">
-                    <ChartCircle />
-                  </div>
-                </div>
-                <div className="col-sm-5 px-0">
-                  <div className="patients-chart-deta">
-                    <div className="col px-0 mb-3">
-                      <span className="bg-primary"></span>
-                      <div>
-                        <p className="mb-0 text-muted">Consultation Générale (G)</p>
-                        <h4 className="mb-0">65%</h4>
-                      </div>
-                    </div>
-                    <div className="col px-0 mb-3">
-                      <span className="bg-success"></span>
-                      <div>
-                        <p className="mb-0 text-muted">Suivi Pathologies / ALD</p>
-                        <h4 className="mb-0">22%</h4>
-                      </div>
-                    </div>
-                    <div className="col px-0">
-                      <span className="bg-warning"></span>
-                      <div>
-                        <p className="mb-0 text-muted">Pédiatrie & Urgences</p>
-                        <h4 className="mb-0">13%</h4>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -354,70 +369,117 @@ const DashboardCabinet = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {appointments.map((rdv) => (
-                      <tr key={rdv.id}>
-                        <td>
-                          <span className="badge badge-light text-primary font-w600" style={{ fontSize: "11px", padding: "4px 8px" }}>
-                            <i className="flaticon-381-clock me-1"></i>
-                            {rdv.time}
-                          </span>
-                        </td>
-                        <td>
-                          <Link
-                            to="/admin/patient-details"
-                            className="font-w600 text-dark hover-primary"
-                          >
-                            {rdv.patientName}
-                            {!rdv.patientId && <span className="text-primary font-w700 ms-1">(sc)</span>}
-                          </Link>
-                          {/* Date et statut visibles sous le nom sur petit écran */}
-                          <div className="d-block d-md-none text-muted fs-11 mt-1">
-                            {rdv.date}
-                          </div>
-                          <div className="d-block d-sm-none mt-1">
-                            {getStatusBadge(rdv.status)}
-                          </div>
-                        </td>
-                        <td className="d-none d-md-table-cell">
-                          <span className="text-muted">{rdv.date}</span>
-                        </td>
-                        <td className="d-none d-md-table-cell">{rdv.phone}</td>
-                        <td className="d-none d-sm-table-cell">{getStatusBadge(rdv.status)}</td>
-                        <td style={{ width: "95px", whiteSpace: "nowrap" }} className="text-end pe-0">
-                          <div className="d-flex gap-1 justify-content-end">
-                            {rdv.status === "Arrivé" && (
-                              <button
-                                className="btn btn-primary btn-xs"
-                                onClick={() => navigate("/admin/consultations")}
-                                title="Lancer la consultation"
-                              >
-                                Consulter
-                              </button>
-                            )}
-                            {rdv.status === "Confirmé" && (
-                              <button
-                                className="btn btn-outline-success btn-xs"
-                                onClick={() => {
-                                  const updated = appointments.map((a) =>
-                                    a.id === rdv.id ? { ...a, status: "Arrivé" } : a
-                                  );
-                                  setAppointments(updated);
-                                }}
-                              >
-                                Marquer arrivé
-                              </button>
-                            )}
-                            <Link
-                              to="/admin/patient-details"
-                              className="btn btn-light btn-xs"
-                              title="Dossier"
-                            >
-                              <i className="flaticon-381-folder"></i>
-                            </Link>
-                          </div>
+                    {todayAppointmentsList.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="text-center py-4 text-muted">
+                          <i className="flaticon-381-calendar-1 fs-24 d-block mb-2 text-primary opacity-50"></i>
+                          Aucun rendez-vous programmé pour aujourd'hui
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      todayAppointmentsList.map((rdv) => (
+                        <tr key={rdv.id}>
+                          <td>
+                            <span className="badge badge-light text-primary font-w600" style={{ fontSize: "11px", padding: "4px 8px" }}>
+                              <i className="flaticon-381-clock me-1"></i>
+                              {rdv.time}
+                            </span>
+                          </td>
+                          <td>
+                            <Link
+                              to={rdv.patientId ? `/admin/patient-details?id=${rdv.patientId}` : "#"}
+                              className="font-w600 text-dark hover-primary"
+                            >
+                              {(rdv.patientName || "Patient").replace(/\s*\(sc\)/gi, "").trim()}
+                            </Link>
+                            {/* Date et statut visibles sous le nom sur petit écran */}
+                            <div className="d-block d-md-none text-muted fs-11 mt-1">
+                              {rdv.date}
+                            </div>
+                            <div className="d-block d-sm-none mt-1">
+                              {getStatusBadge(rdv.status)}
+                            </div>
+                          </td>
+                          <td className="d-none d-md-table-cell">
+                            <span className="text-muted">{rdv.date}</span>
+                          </td>
+                          <td className="d-none d-md-table-cell">{rdv.phone || "—"}</td>
+                          <td className="d-none d-sm-table-cell">{getStatusBadge(rdv.status)}</td>
+                          <td style={{ width: "95px", whiteSpace: "nowrap" }} className="text-end pe-0">
+                            <div className="d-flex gap-1 justify-content-end">
+                              {rdv.status === "Arrivé" && (
+                                <button
+                                  className="btn btn-primary btn-xs"
+                                  onClick={() => navigate("/admin/consultations")}
+                                  title="Lancer la consultation"
+                                >
+                                  Consulter
+                                </button>
+                              )}
+                              {rdv.status === "Confirmé" && (
+                                <button
+                                  className="btn btn-outline-success btn-xs"
+                                  onClick={async () => {
+                                    try {
+                                      await ApiService.updateAppointment({ id: rdv.id, status: "Arrivé" });
+                                      setAppointments((prev) =>
+                                        prev.map((a) => (a.id === rdv.id ? { ...a, status: "Arrivé" } : a))
+                                      );
+                                    } catch (e) {
+                                      console.error(e);
+                                    }
+                                  }}
+                                  title="Marquer le patient comme arrivé en salle d'attente"
+                                >
+                                  Arrivé
+                                </button>
+                              )}
+                              {rdv.status === "En attente" && (
+                                <>
+                                  <button
+                                    className="btn btn-success btn-xs p-1 px-2"
+                                    onClick={async () => {
+                                      try {
+                                        await ApiService.updateAppointment({ id: rdv.id, status: "Confirmé" });
+                                        setAppointments((prev) =>
+                                          prev.map((a) => (a.id === rdv.id ? { ...a, status: "Confirmé" } : a))
+                                        );
+                                      } catch (e) {
+                                        console.error(e);
+                                      }
+                                    }}
+                                    title="Accepter le rendez-vous"
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    className="btn btn-danger btn-xs p-1 px-2"
+                                    onClick={async () => {
+                                      try {
+                                        await ApiService.deleteAppointment(rdv.id);
+                                        setAppointments((prev) => prev.filter((a) => a.id !== rdv.id));
+                                      } catch (e) {
+                                        console.error(e);
+                                      }
+                                    }}
+                                    title="Refuser et supprimer"
+                                  >
+                                    ✕
+                                  </button>
+                                </>
+                              )}
+                              <Link
+                                to={rdv.patientId ? `/admin/patient-details?id=${rdv.patientId}` : "/admin/appointments"}
+                                className="btn btn-light btn-xs"
+                                title="Voir détails"
+                              >
+                                <i className="flaticon-381-folder"></i>
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -455,12 +517,9 @@ const DashboardCabinet = () => {
                           </div>
                           <div className="media-body">
                             <h6 className="mb-1 font-w600">{w.patientName}</h6>
-                            <p className="mb-1 text-muted fs-12">
+                            <p className="mb-0 text-muted fs-12">
                               Arrivé à {w.arrivalTime} • RDV {w.appointmentTime}
                             </p>
-                            <span className="badge badge-warning light fs-11">
-                              Attente: {w.waitTimeMinutes} min
-                            </span>
                           </div>
                           <button
                             className="btn btn-primary btn-xs ms-2"

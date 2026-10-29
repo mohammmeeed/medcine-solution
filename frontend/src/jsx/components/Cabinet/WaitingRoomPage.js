@@ -295,15 +295,7 @@ const WaitingRoomPage = () => {
         </div>
 
         <div className="d-flex align-items-center gap-2 flex-wrap">
-          <a
-            href="/admin/affichage-salle-attente"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-outline-info btn-rounded"
-            title="Ouvrir l'affichage grand écran pour la télévision de la salle d'attente"
-          >
-            <i className="fa fa-tv me-2"></i> Affichage Salle d'attente
-          </a>
+
 
           <Button
             variant="primary"
@@ -381,7 +373,7 @@ const WaitingRoomPage = () => {
                         ) : (
                           <span className="font-w600 text-dark">
                             {p.patientName}{" "}
-                            <span className="badge badge-xs badge-info light ms-1">(sc)</span>{p.phone ? <div className="text-muted fs-12 mt-1">📞 {p.phone}</div> : null}
+                            {p.phone ? <div className="text-muted fs-12 mt-1">📞 {p.phone}</div> : null}
                           </span>
                         )}
                         {/* Motif et statut visibles sous le nom uniquement sur mobile */}

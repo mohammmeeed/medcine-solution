@@ -56,6 +56,15 @@ const getInitialCabinetSettings = () => {
   };
 };
 
+const cleanPatientName = (name) => {
+  if (!name) return "Patiente De Passage";
+  const cleaned = name.replace(/\s*\(sc\)/gi, "").replace(/sans compte/gi, "").trim();
+  if (!cleaned || cleaned.toLowerCase() === "patient" || cleaned.toLowerCase() === "patiente") {
+    return "Patiente De Passage";
+  }
+  return cleaned;
+};
+
 const ConsultationsPage = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -215,14 +224,35 @@ const ConsultationsPage = () => {
     echoConclusion: "",
   });
 
-  const patientOptions = patients.map((p) => ({
-    value: p.id,
-    label: `${p.lastName.toUpperCase()} ${p.firstName} — ${p.fileNumber} (Née le ${p.dob} • ${p.age} ans)`,
-  }));
+  const patientOptions = [
+    {
+      value: "sans_compte",
+      label: "👤 Patient(e) sans compte (de passage / sans dossier)",
+    },
+    ...patients.map((p) => ({
+      value: p.id,
+      label: `${(p.lastName || "").toUpperCase()} ${p.firstName || ""} — ${p.fileNumber || ""} (Née le ${p.dob || "-"} • ${p.age || "-"} ans)`,
+    })),
+  ];
 
   const selectedPatientOption = formConsult.patientId
     ? patientOptions.find((opt) => String(opt.value) === String(formConsult.patientId)) || null
     : null;
+
+  const consultationTypeOptions = consultationTypes
+    .filter((t) => t.active !== false)
+    .map((t) => {
+      const label = formatBillingCode(t.name, t.price);
+      return {
+        value: label,
+        label: label,
+        type: t,
+      };
+    });
+
+  const selectedBillingOption =
+    consultationTypeOptions.find((opt) => opt.value === formConsult.billingCode) ||
+    (formConsult.billingCode ? { value: formConsult.billingCode, label: formConsult.billingCode } : null);
 
   const patientSelectStyles = {
     control: (base, state) => ({
@@ -327,10 +357,14 @@ const ConsultationsPage = () => {
       });
       return;
     }
-    const selPat =
-      patients.find((p) => String(p.id) === String(formConsult.patientId)) ||
-      initialPatients.find((p) => String(p.id) === String(formConsult.patientId)) ||
-      patients[0];
+    const isGuest = formConsult.patientId === "sans_compte" || formConsult.patientId === "guest";
+    const selPat = isGuest
+      ? { id: null, firstName: "Patient(e)", lastName: "De Passage", ddr: "-", terme: "-" }
+      : (
+          patients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+          initialPatients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+          patients[0]
+        );
 
     const echoData = {
       id: Date.now(),
@@ -427,10 +461,14 @@ const ConsultationsPage = () => {
       });
       return;
     }
-    const selPat =
-      patients.find((p) => String(p.id) === String(formConsult.patientId)) ||
-      initialPatients.find((p) => String(p.id) === String(formConsult.patientId)) ||
-      patients[0];
+    const isGuest = formConsult.patientId === "sans_compte" || formConsult.patientId === "guest";
+    const selPat = isGuest
+      ? { id: null, firstName: "Patient(e)", lastName: "De Passage", ddr: "-", terme: "-" }
+      : (
+          patients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+          initialPatients.find((p) => String(p.id) === String(formConsult.patientId)) ||
+          patients[0]
+        );
 
     const hasPrescription = showPrescriptionSection && prescriptionItems.some((item) => item.medication.trim() !== "");
     const prescData = hasPrescription
@@ -521,7 +559,7 @@ const ConsultationsPage = () => {
 
     // Enregistrement des documents / fichiers joints dans medical_documents (Dossier Médical)
     const nbFiles = attachedFiles.length;
-    if (nbFiles > 0) {
+    if (nbFiles > 0 && !isGuest && selPat?.id) {
       for (const fItem of attachedFiles) {
         try {
           await ApiService.saveDocument({
@@ -640,8 +678,8 @@ const ConsultationsPage = () => {
       <PageTitle motherMenu="Gestion médicale" activeMenu="Consultations" />
 
       {/* Barre d'action supérieure */}
-      <div className="form-head d-flex mb-3 mb-md-4 align-items-center flex-wrap justify-content-between gap-2">
-        <div className="input-group search-area w-100 w-sm-auto">
+      <div className="d-flex mb-3 mb-md-4 align-items-center justify-content-between flex-wrap gap-3">
+        <div className="input-group search-area" style={{ width: "auto", minWidth: "280px", maxWidth: "380px" }}>
           <input
             type="text"
             className="form-control"
@@ -656,7 +694,13 @@ const ConsultationsPage = () => {
 
         <Button
           variant={showNewModal ? "outline-primary" : "primary"}
-          className="btn-rounded w-100 w-sm-auto"
+          className="btn-rounded d-inline-flex align-items-center ms-auto"
+          style={{
+            padding: "10px 22px",
+            fontWeight: 600,
+            boxShadow: "0 2px 8px rgba(37, 99, 235, 0.2)",
+            whiteSpace: "nowrap",
+          }}
           onClick={() => {
             const nextShow = !showNewModal;
             setShowNewModal(nextShow);
@@ -762,7 +806,7 @@ const ConsultationsPage = () => {
             </div>
             <ConsultationEchoForm
               patients={patients}
-              initialPatientId={formConsult.patientId}
+              initialPatientId={formConsult.patientId === "sans_compte" ? "guest" : formConsult.patientId}
               initialDoctor={initialDoctor}
               onSave={handleSaveEchoConsultation}
               onPrintEcho={(echoPayload) => {
@@ -822,7 +866,7 @@ const ConsultationsPage = () => {
               <div className="card-body">
                 {/* 1. Informations Patiente & Acte */}
                 <div className="row mb-3">
-                  <div className="col-md-7 mb-2">
+                  <div className="col-md-6 mb-2">
                     <label className="form-label font-w600">
                       Patiente / Patient <span className="text-danger">*</span>
                     </label>
@@ -847,14 +891,18 @@ const ConsultationsPage = () => {
                     />
                   </div>
 
-                  <div className="col-md-5 mb-2">
+                  <div className="col-md-6 mb-2">
                     <label className="form-label font-w600">Acte & Cotation</label>
-                    <select
-                      className="form-control"
-                      value={formConsult.billingCode}
-                      onChange={(e) => {
-                        const newCode = e.target.value;
-                        const matched = consultationTypes.find(
+                    <Select
+                      isSearchable={true}
+                      isClearable={false}
+                      placeholder="Sélectionner l'acte et la cotation..."
+                      options={consultationTypeOptions}
+                      value={selectedBillingOption}
+                      styles={patientSelectStyles}
+                      onChange={(selected) => {
+                        const newCode = selected ? selected.value : "";
+                        const matched = selected?.type || consultationTypes.find(
                           (t) => formatBillingCode(t.name, t.price) === newCode
                         );
                         setFormConsult({
@@ -863,24 +911,8 @@ const ConsultationsPage = () => {
                           reason: matched ? matched.name : formConsult.reason,
                         });
                       }}
-                    >
-                      {consultationTypes
-                        .filter((t) => t.active !== false)
-                        .map((t) => {
-                          const label = formatBillingCode(t.name, t.price);
-                          return (
-                            <option key={t.id || t.name} value={label}>
-                              {label}
-                            </option>
-                          );
-                        })}
-                      {formConsult.billingCode &&
-                        !consultationTypes.some(
-                          (t) => formatBillingCode(t.name, t.price) === formConsult.billingCode
-                        ) && (
-                          <option value={formConsult.billingCode}>{formConsult.billingCode}</option>
-                        )}
-                    </select>
+                      noOptionsMessage={() => "Aucun acte disponible"}
+                    />
                   </div>
                 </div>
 
@@ -978,16 +1010,16 @@ const ConsultationsPage = () => {
                 <div className="row mb-3">
                   <div className="col-md-6 mb-2">
                     <label className="form-label fs-13 font-w500">Diagnostic Médical (CIM-10) *</label>
-                    <input
-                      type="text"
+                    <textarea
                       className="form-control"
+                      rows="2"
                       placeholder="Ex: Bilan de santé normal, Rhinopharyngite, Hypertension, Grossesse débutante..."
                       value={formConsult.diagnosis}
                       onChange={(e) =>
                         setFormConsult({ ...formConsult, diagnosis: e.target.value })
                       }
                       required
-                    />
+                    ></textarea>
                   </div>
                   <div className="col-md-6 mb-2">
                     <label className="form-label fs-13 font-w500">Conduite à tenir & Conseils</label>
@@ -1275,7 +1307,7 @@ const ConsultationsPage = () => {
                   Détails de la Consultation Clinique — {selectedConsultation.consultationNumber}
                 </h4>
                 <p className="text-muted fs-13 mb-0">
-                  Patiente : <strong>{selectedConsultation.patientName}</strong> • Date : {selectedConsultation.date} à {selectedConsultation.time} • {initialDoctor.name}
+                  Patiente : <strong>{cleanPatientName(selectedConsultation.patientName)}</strong> • Date : {selectedConsultation.date} à {selectedConsultation.time} • {initialDoctor.name}
                 </p>
               </div>
               <Button
@@ -1293,12 +1325,18 @@ const ConsultationsPage = () => {
               <div className="p-3 mb-3 rounded bg-light border d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
                   <span className="text-muted fs-12 d-block">Patiente & Dossier Médical</span>
-                  <Link
-                    to={`/patient-details?id=${selectedConsultation.patientId}`}
-                    className="fs-16 font-w600 text-dark hover-primary"
-                  >
-                    {selectedConsultation.patientName}
-                  </Link>
+                  {selectedPatient ? (
+                    <Link
+                      to={`/admin/patient-details?id=${selectedConsultation.patientId}`}
+                      className="fs-16 font-w600 text-dark hover-primary"
+                    >
+                      {cleanPatientName(selectedConsultation.patientName)}
+                    </Link>
+                  ) : (
+                    <span className="fs-16 font-w600 text-dark">
+                      {cleanPatientName(selectedConsultation.patientName)}
+                    </span>
+                  )}
                   {selectedPatient && (
                     <span className="text-muted fs-12 ms-2">
                       (Dossier #{selectedPatient.fileNumber} • Née le {selectedPatient.dob} ({selectedPatient.age} ans) • Groupe {selectedPatient.bloodGroup})
@@ -1312,7 +1350,7 @@ const ConsultationsPage = () => {
                   </div>
                   <div>
                     <span className="text-muted fs-12 d-block">Cotation & Acte</span>
-                    <span className="consult-sober-tag">{selectedConsultation.billingCode}</span>
+                    <span className="text-dark font-w600">{selectedConsultation.billingCode}</span>
                   </div>
                 </div>
               </div>
@@ -1559,7 +1597,9 @@ const ConsultationsPage = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredConsultations.map((cs) => (
+                  filteredConsultations.map((cs) => {
+                    const hasAccount = !cs.isGuest && cs.patientId && String(cs.patientId) !== "guest" && !String(cs.patientName || "").toLowerCase().includes("(sc)");
+                    return (
                     <tr key={cs.id} className={selectedConsultation?.id === cs.id ? "table-primary" : ""}>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <strong className="text-primary">{cs.date}</strong>
@@ -1567,12 +1607,18 @@ const ConsultationsPage = () => {
                         <div className="d-block d-sm-none text-muted fs-11">{cs.time}</div>
                       </td>
                       <td>
-                        <Link
-                          to={`/patient-details?id=${cs.patientId}`}
-                          className="font-w600 text-dark hover-primary"
-                        >
-                          {cs.patientName}
-                        </Link>
+                        {hasAccount ? (
+                          <Link
+                            to={`/admin/patient-details?id=${cs.patientId}`}
+                            className="font-w600 text-dark hover-primary"
+                          >
+                            {cleanPatientName(cs.patientName)}
+                          </Link>
+                        ) : (
+                          <span className="font-w600 text-dark">
+                            {cleanPatientName(cs.patientName)}
+                          </span>
+                        )}
                         {/* Motif et diagnostic visibles sous le nom sur mobile */}
                         <div className="d-block d-md-none text-muted fs-11 mt-1">
                           {cs.reason}
@@ -1588,15 +1634,13 @@ const ConsultationsPage = () => {
                         <span className="text-dark font-w500">{cs.diagnosis}</span>
                       </td>
                       <td className="d-none d-md-table-cell">
-                        <span className="consult-sober-tag">
-                          {cs.billingCode}
-                        </span>
+                        <span className="text-dark font-w500">{cs.billingCode}</span>
                       </td>
                       <td style={{ width: "170px", whiteSpace: "nowrap" }} className="text-end pe-0">
-                        <div className="d-flex gap-1 justify-content-end align-items-center">
+                        <div className="d-flex justify-content-end align-items-center">
                           <button
                             type="button"
-                            className={`btn ${selectedConsultation?.id === cs.id ? "btn-primary" : "btn-outline-primary"} btn-xs`}
+                            className={`btn ${selectedConsultation?.id === cs.id ? "btn-primary" : "btn-info text-white"} shadow btn-xs sharp me-1`}
                             onClick={() => {
                               if (selectedConsultation?.id === cs.id) {
                                 setSelectedConsultation(null);
@@ -1617,33 +1661,69 @@ const ConsultationsPage = () => {
                           <button
                             type="button"
                             onClick={() => setPreviewEchoReport(cs)}
-                            className="btn btn-outline-primary btn-xs"
+                            className="btn btn-success shadow btn-xs sharp me-1"
                             title="Imprimer le compte-rendu échographique officiel"
                           >
-                            <i className="flaticon-381-print"></i>
-                            <span className="d-none d-sm-inline ms-1">Écho</span>
+                            <i className="fa fa-stethoscope"></i>
                           </button>
-                          <Link
-                            to={`/patient-details?id=${cs.patientId}`}
-                            className="btn btn-primary btn-xs"
-                            title="Voir le dossier patient"
-                          >
-                            <i className="flaticon-381-folder"></i>
-                          </Link>
-                          {cs.prescriptionCreated && (
+                          {hasAccount ? (
+                            <Link
+                              to={`/admin/patient-details?id=${cs.patientId}`}
+                              className="btn btn-primary shadow btn-xs sharp me-1"
+                              title="Voir le dossier patient"
+                            >
+                              <i className="fa fa-folder-open"></i>
+                            </Link>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="btn btn-xs sharp me-1"
+                              style={{
+                                backgroundColor: "#e2e8f0",
+                                borderColor: "#cbd5e1",
+                                color: "#94a3b8",
+                                cursor: "not-allowed",
+                                pointerEvents: "auto",
+                                boxShadow: "none",
+                              }}
+                              title="Patiente sans compte / sans dossier médical"
+                            >
+                              <i className="fa fa-folder-open"></i>
+                            </button>
+                          )}
+                          {cs.prescriptionCreated ? (
                             <button
                               type="button"
                               onClick={() => handleOpenPrescription(cs)}
-                              className="btn btn-outline-success btn-xs"
+                              className="btn btn-warning shadow btn-xs sharp text-white"
                               title="Imprimer l'ordonnance médicale officielle"
                             >
-                              <i className="flaticon-381-file-1"></i>
+                              <i className="fa fa-file-text"></i>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="btn btn-xs sharp"
+                              style={{
+                                backgroundColor: "#e2e8f0",
+                                borderColor: "#cbd5e1",
+                                color: "#94a3b8",
+                                cursor: "not-allowed",
+                                pointerEvents: "auto",
+                                boxShadow: "none",
+                              }}
+                              title="Aucune ordonnance associée à cette consultation"
+                            >
+                              <i className="fa fa-file-text"></i>
                             </button>
                           )}
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

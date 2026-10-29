@@ -5,6 +5,10 @@ import "../../css/patient-portal.css";
 import ApiService from "../../services/ApiService";
 import { jsPDF } from "jspdf";
 import {
+
+
+
+
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -35,6 +39,14 @@ import {
   Download,
   Folder,
 } from "lucide-react";
+
+const getCleanMapIframeUrl = (url) => {
+  if (!url || url.includes("embed?pb=") || url.includes("!1s0x")) {
+    return "https://maps.google.com/maps?q=35.714476270634655,-0.6038324575020871&hl=fr&z=17&output=embed";
+  }
+  return url;
+};
+
 
 // Générateur dynamique de créneaux horaires selon la durée configurée (ex: 20 min, 30 min, 40 min...)
 const generateSlots = (startStr = "09:00", endStr = "12:30", step = 30) => {
@@ -131,7 +143,7 @@ export default function PatientPortal() {
       secretaryPhone: "0560 06 74 66",
       phone: "041 53 97 82",
       mapsUrl: "https://maps.google.com/?q=Gynecologue+Belbachir+Ouldhennia!5e0",
-      mapsIframe: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1362.0324598325215!2d-0.6038324575020871!3d35.714476270634655!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd7e88208f3036ef%3A0xe61f6a97eabb0912!2sGynecologue%20Belbachir%20Ouldhennia!5e0!3m2!1sfr!2sdz!4v1792679429928!5m2!1sfr!2sdz",
+      mapsIframe: "https://maps.google.com/maps?q=35.714476270634655,-0.6038324575020871&hl=fr&z=17&output=embed",
       slotDuration: 30,
       slotStartMorning: "09:00",
       slotEndMorning: "12:30",
@@ -307,6 +319,35 @@ export default function PatientPortal() {
 
   const [selectedDay, setSelectedDay] = useState(getInitialDay);
 
+  // Liste des créneaux horaires déjà occupés / bloqués pour la date sélectionnée (synchronisé MySQL)
+  const [occupiedSlots, setOccupiedSlots] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchOccupiedSlots = async () => {
+      try {
+        const monthStr = String(selectedMonth + 1).padStart(2, "0");
+        const dayStr = String(selectedDay).padStart(2, "0");
+        const dateStr = `${selectedYear}-${monthStr}-${dayStr}`;
+        const res = await fetch(getApiUrl(`appointments.php?date=${dateStr}`));
+        const resJson = await res.json();
+        if (active && resJson && Array.isArray(resJson.data)) {
+          // Bloquer les créneaux dont le statut n'est pas "Annulé" ou "Refusé"
+          const booked = resJson.data
+            .filter((a) => a.status !== "Annulé" && a.status !== "Refusé")
+            .map((a) => (a.time || "").slice(0, 5));
+          setOccupiedSlots(booked);
+        }
+      } catch (err) {
+        console.warn("Erreur chargement créneaux occupés:", err);
+      }
+    };
+    fetchOccupiedSlots();
+    return () => {
+      active = false;
+    };
+  }, [selectedDay, selectedMonth, selectedYear]);
+
   // Si la date sélectionnée devient fermée suite au chargement des jours fériés / vacances, avancer au prochain jour ouvert
   useEffect(() => {
     if (isClosedDay(selectedDay, selectedMonth, selectedYear)) {
@@ -348,12 +389,19 @@ export default function PatientPortal() {
     const m = month !== undefined ? month : selectedMonth;
     const y = year !== undefined ? year : selectedYear;
     const slots = period === "matin" ? morningSlots : eveningSlots;
-    const available = slots.filter((s) => !isSlotPast(s, day, m, y));
+    const available = slots.filter((s) => !isSlotPast(s, day, m, y) && !occupiedSlots.includes(s));
     if (available.length > 0) return available[0];
     const otherSlots = period === "matin" ? eveningSlots : morningSlots;
-    const otherAvailable = otherSlots.filter((s) => !isSlotPast(s, day, m, y));
+    const otherAvailable = otherSlots.filter((s) => !isSlotPast(s, day, m, y) && !occupiedSlots.includes(s));
     return otherAvailable.length > 0 ? otherAvailable[0] : (slots[0] || "09:00");
   };
+
+  useEffect(() => {
+    if (occupiedSlots.includes(selectedTime)) {
+      const validSlot = getFirstAvailableSlot(selectedDay, timePeriod, selectedMonth, selectedYear);
+      if (validSlot && validSlot !== selectedTime) setSelectedTime(validSlot);
+    }
+  }, [occupiedSlots]);
 
   const initialPeriod = getInitialPeriod(selectedDay, selectedMonth, selectedYear);
   const [timePeriod, setTimePeriod] = useState(initialPeriod);
@@ -1596,6 +1644,10 @@ export default function PatientPortal() {
       alert("Ce créneau horaire est déjà passé. Veuillez sélectionner un horaire futur disponible.");
       return;
     }
+    if (occupiedSlots.includes(selectedTime)) {
+      alert("Ce créneau horaire est déjà réservé et bloqué par le cabinet. Veuillez choisir un autre créneau disponible.");
+      return;
+    }
 
     const ticketNumber = getTicketNumber(selectedTime);
 
@@ -1616,6 +1668,7 @@ export default function PatientPortal() {
       email: patientEmail.trim(),
       consultationType: consultationReason,
       reason: consultationReason,
+      status: "En attente",
       price: `${Number(consultationPrice).toLocaleString("fr-FR")} DA`,
       location: clinicInfo.address || "Haï Essedikia, Avenue Seghier Benali, Oran",
       createdAt: new Date().toISOString(),
@@ -1638,7 +1691,7 @@ export default function PatientPortal() {
           reason: consultationReason,
           consultationType: consultationReason,
           price: consultationPrice,
-          status: "Confirmé",
+          status: "En attente",
           notes: `[Ticket N° ${ticketNumber}] Réservation en ligne depuis l'application patient`,
         }),
       });
@@ -1655,6 +1708,7 @@ export default function PatientPortal() {
       const existing = JSON.parse(localStorage.getItem("cabinet_client_appointments") || "[]");
       existing.unshift(bookingData);
       localStorage.setItem("cabinet_client_appointments", JSON.stringify(existing));
+      localStorage.setItem("new_appointment_booked", String(Date.now()));
       setPatientAppointments(existing);
     } catch (err) {
       console.error(err);
@@ -1796,37 +1850,37 @@ export default function PatientPortal() {
               <ArrowRight size={18} style={{ marginLeft: "auto" }} />
             </button>
 
-            {/* MES RENDEZ-VOUS À VENIR SUR LA PAGE D'ACCUEIL */}
-            <div
-              className="glass-panel"
-              style={{
-                padding: "8px 14px",
-                marginBottom: "20px",
-              }}
-            >
-              <div style={{ marginBottom: openSections.homeAppointments && homeAppointments.length > 0 ? "10px" : "0px" }}>
-                <div
-                  onClick={() => toggleSection("homeAppointments")}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: openSections.homeAppointments ? "10px" : "0px",
-                    cursor: "pointer",
-                    userSelect: "none",
-                    padding: "8px 4px",
-                    borderRadius: "10px",
-                    transition: "background 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(2, 132, 199, 0.04)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                >
-                  <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-                    <Calendar size={15} color="var(--accent-mint)" />
-                    <span>Mes Rendez-vous ({homeAppointments.length})</span>
-                  </h4>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    {homeAppointments.length > 0 && (
+            {/* MES RENDEZ-VOUS A VENIR SUR LA PAGE D'ACCUEIL (Affiches uniquement s'il y a des rendez-vous) */}
+            {homeAppointments && homeAppointments.length > 0 && (
+              <div
+                className="glass-panel"
+                style={{
+                  padding: "8px 14px",
+                  marginBottom: "20px",
+                }}
+              >
+                <div style={{ marginBottom: openSections.homeAppointments ? "10px" : "0px" }}>
+                  <div
+                    onClick={() => toggleSection("homeAppointments")}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: openSections.homeAppointments ? "10px" : "0px",
+                      cursor: "pointer",
+                      userSelect: "none",
+                      padding: "8px 4px",
+                      borderRadius: "10px",
+                      transition: "background 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(2, 132, 199, 0.04)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                      <Calendar size={15} color="var(--accent-mint)" />
+                      <span>Mes Rendez-vous ({homeAppointments.length})</span>
+                    </h4>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1848,41 +1902,24 @@ export default function PatientPortal() {
                       >
                         Effacer
                       </button>
-                    )}
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: "24px",
-                        height: "24px",
-                        borderRadius: "6px",
-                        background: "rgba(2, 132, 199, 0.08)",
-                        color: "var(--accent-mint)",
-                      }}
-                    >
-                      {openSections.homeAppointments ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                    </div>
-                  </div>
-                </div>
-
-                {openSections.homeAppointments && (
-                  homeAppointments.length === 0 ? (
-                    <div
-                      style={{
-                        padding: "16px 14px",
-                        textAlign: "center",
-                        background: "rgba(241, 245, 249, 0.7)",
-                        border: "1px dashed var(--border-subtle)",
-                        borderRadius: "14px",
-                        marginBottom: "6px",
-                      }}
-                    >
-                      <div style={{ fontSize: "12.5px", fontWeight: "600", color: "var(--text-secondary)" }}>
-                        Aucun rendez-vous à venir
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "24px",
+                          height: "24px",
+                          borderRadius: "6px",
+                          background: "rgba(2, 132, 199, 0.08)",
+                          color: "var(--accent-mint)",
+                        }}
+                      >
+                        {openSections.homeAppointments ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                       </div>
                     </div>
-                  ) : (
+                  </div>
+
+                  {openSections.homeAppointments && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "6px" }}>
                       {homeAppointments.map((apt, index) => (
                         <div
@@ -1942,10 +1979,10 @@ export default function PatientPortal() {
                         </div>
                       ))}
                     </div>
-                  )
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -2272,16 +2309,35 @@ export default function PatientPortal() {
                   >
                     {(timePeriod === "matin" ? morningSlots : eveningSlots).map((slot) => {
                       const isPast = isSlotPast(slot, selectedDay, selectedMonth, selectedYear);
-                      const isSelected = selectedTime === slot && !isPast;
+                      const isBooked = occupiedSlots.includes(slot);
+                      const isDisabled = isPast || isBooked;
+                      const isSelected = selectedTime === slot && !isDisabled;
 
                       return (
                         <div
                           key={slot}
-                          className={`time-slot-pill ${isPast ? "disabled" : isSelected ? "selected" : ""}`}
-                          onClick={!isPast ? () => setSelectedTime(slot) : undefined}
-                          title={isPast ? `${slot} (Passé - non réservable)` : `Réserver pour ${slot}`}
+                          className={`time-slot-pill ${isDisabled ? "disabled" : isSelected ? "selected" : ""}`}
+                          onClick={!isDisabled ? () => setSelectedTime(slot) : undefined}
+                          style={
+                            isBooked && !isPast
+                              ? {
+                                  opacity: 0.6,
+                                  cursor: "not-allowed",
+                                  backgroundColor: "rgba(239, 68, 68, 0.08)",
+                                  borderColor: "#fca5a5",
+                                  color: "#dc2626",
+                                }
+                              : {}
+                          }
+                          title={
+                            isPast
+                              ? `${slot} (Passé - non réservable)`
+                              : isBooked
+                              ? `${slot} (Créneau déjà réservé et bloqué par le cabinet)`
+                              : `Réserver pour ${slot}`
+                          }
                         >
-                          {slot}
+                          <span>{slot}</span>
                         </div>
                       );
                     })}
@@ -3759,7 +3815,7 @@ export default function PatientPortal() {
               >
                 <iframe
                   title={`Localisation ${clinicInfo.clinicName || "Cabinet Médical"}`}
-                  src={clinicInfo.mapsIframe || "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1362.0324598325215!2d-0.6038324575020871!3d35.714476270634655!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd7e88208f3036ef%3A0xe61f6a97eabb0912!2sGynecologue%20Belbachir%20Ouldhennia!5e0!3m2!1sfr!2sdz!4v1792679429928!5m2!1sfr!2sdz"}
+                  src={getCleanMapIframeUrl(clinicInfo.mapsIframe)}
                   width="100%"
                   height="100%"
                   style={{ border: 0, display: "block" }}

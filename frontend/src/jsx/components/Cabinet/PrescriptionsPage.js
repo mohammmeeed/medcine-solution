@@ -587,14 +587,14 @@ const PrescriptionsPage = () => {
                       </td>
                       <td className="d-none d-md-table-cell">{ord.validity}</td>
                       <td style={{ width: "125px", whiteSpace: "nowrap" }} className="text-end pe-0">
-                        <div className="d-flex gap-1 align-items-center justify-content-end">
+                        <div className="d-flex align-items-center justify-content-end">
                           <button
-                            className="btn btn-outline-primary btn-xs"
+                            type="button"
+                            className="btn btn-primary shadow btn-xs sharp me-1"
                             onClick={() => setPreviewPrescription(ord)}
                             title="Aperçu & Impression officielle"
                           >
-                            <i className="flaticon-381-print me-1"></i>
-                            <span className="d-none d-sm-inline">Imprimer</span>
+                            <i className="fa fa-print"></i>
                           </button>
                           <button
                             type="button"

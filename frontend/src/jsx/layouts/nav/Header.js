@@ -7,26 +7,35 @@ import { Link, useLocation } from "react-router-dom";
 /// Image
 // import profile from "../../../images/profile/17.jpg";  
 // import profile2 from "../../../images/profile/pic1.jpg";
-import { useContext } from "react";
-import { ThemeContext } from "../../../context/ThemeContext";
 // import { set } from "date-fns/esm";
 
 
 
 const Header = ({ onNote }) => {
     const [fullScreen, setFullScreen] = useState(false);
-    const {background, changeBackground} = useContext(ThemeContext);
     const location = useLocation();
 
-    function handelChangeMode(){
-      if(background.value==="light"){
-          changeBackground({ value: "dark", label: "Dark" });  
+    // Récupération dynamique de l'utilisateur connecté
+    let authUser = null;
+    try {
+      const stored = localStorage.getItem("cabinet_auth_user");
+      if (stored) {
+        authUser = JSON.parse(stored);
       }
-      else {
-        changeBackground({ value: "light", label: "Light" });  
-      }
-    }
-  
+    } catch (e) {}
+
+    const userName = authUser?.name || "Dr N. BELBACHIR OULD HENNIA";
+
+    // Calcul propre des initiales de l'avatar (ex: NB pour Dr N. BELBACHIR)
+    const initials = (() => {
+      if (!userName) return "NB";
+      const cleaned = userName.replace(/^(dr\.?|docteur)\s+/i, "").trim();
+      const parts = cleaned.split(/[\s.]+/).filter(Boolean);
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return "NB";
+    })();
+
     // Titres en français adaptés au cabinet médical
     const routeTitles = {
       "": "Tableau de bord",
@@ -43,7 +52,7 @@ const Header = ({ onNote }) => {
       "invoices": "Factures",
       "payments": "Règlements & Caisse",
       "reports": "Rapports & Statistiques",
-      "staff": "Personnel & Droits",
+      "staff": "Utilisateurs",
       "clinic": "Mon Cabinet",
       "settings": "Paramètres",
       "smtp": "Configuration SMTP",
@@ -100,24 +109,49 @@ const Header = ({ onNote }) => {
             </div>
 
             <ul className="navbar-nav header-right d-flex flex-row align-items-center flex-nowrap mb-0 gap-2"> 
-                <li className="nav-item d-none d-md-flex align-items-center">
-                  <Link
-                    to="/"
-                    className="btn btn-outline-primary btn-sm rounded-pill d-flex align-items-center gap-1 px-3 py-1 text-nowrap"
-                    title="Voir le site public (Prise de rendez-vous)"
+              <li className="nav-item dropdown notification_dropdown d-none d-md-flex align-items-center">
+                <a
+                  href="/admin/affichage-salle-attente"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="nav-link"
+                  title="Écran Salle d'attente (ouvrir dans une nouvelle fenêtre)"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    textDecoration: "none",
+                  }}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width={22}
+                    height={22}
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   >
-                    <i className="fa fa-globe"></i>
-                    <span>Portail Patient</span>
-                  </Link>
-                </li>
-                <li className="nav-item dropdown notification_dropdown d-none d-md-flex align-items-center">
-                  <Link to={"#"} className={`nav-link bell dz-theme-mode ${ background.value === "dark" ? "active": ""}`}
-                    onClick={handelChangeMode}
-                  >
-									  <i id="icon-light" className="fas fa-sun"/>
-                    <i id="icon-dark" className="fas fa-moon" />									
-                  </Link>
-							  </li>
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </a>
+              </li>
+              <li className="nav-item d-none d-md-flex align-items-center">
+                <a
+                  href="/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-outline-primary btn-sm rounded-pill d-flex align-items-center gap-1 px-3 py-1 text-nowrap"
+                  title="Ouvrir le portail patient dans une nouvelle fenêtre / nouvel onglet"
+                >
+                  <i className="fa fa-globe"></i>
+                  <span>Portail Patient</span>
+                </a>
+              </li> 
               {fullScreen ? (
                 <li
                   className="nav-item dropdown notification_dropdown d-none d-md-flex align-items-center"
@@ -201,9 +235,24 @@ const Header = ({ onNote }) => {
                   className="nav-link i-false d-flex align-items-center text-decoration-none"
                   to="#"                  
                 >
-                  <div className="header-info d-none d-lg-block text-end pe-1">
-                    <span className="fw-semibold text-primary d-block">Dr N. BELBACHIR OULD HENNIA</span>
-                    <small className="text-muted d-block">Gynécologie Obstétrique</small>
+
+                  <div
+                    className="avatar-initials rounded-circle d-flex align-items-center justify-content-center"
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      minWidth: "38px",
+                      background: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+                      color: "#1d4ed8",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                      border: "1.5px solid #bfdbfe",
+                      boxShadow: "0 1px 3px rgba(37, 99, 235, 0.12)",
+                      letterSpacing: "0.5px",
+                    }}
+                    title={userName}
+                  >
+                    {initials}
                   </div>
                 </Dropdown.Toggle>
                 <Dropdown.Menu

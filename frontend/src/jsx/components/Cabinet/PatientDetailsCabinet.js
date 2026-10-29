@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import WheelDatePicker from "./WheelDatePicker";
 import { Modal } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PrescriptionPreviewModal from "./PrescriptionPreviewModal";
@@ -2028,10 +2029,7 @@ const PatientDetailsCabinet = () => {
                         {ord.validity})
                       </h6>
                       <div className="d-flex gap-2 align-items-center">
-                        <span className="patient-badge-status">
-                          <span className="patient-status-dot-pulse"></span>
-                          Validée & Signée
-                        </span>
+
                         <button
                           type="button"
                           className="patient-btn-back"
@@ -2290,11 +2288,10 @@ const PatientDetailsCabinet = () => {
                       <label className="form-label font-w600 fs-13 text-dark">
                         Date du document
                       </label>
-                      <input
-                        type="date"
-                        className="form-control"
+                      <WheelDatePicker
                         value={docDate}
                         onChange={(e) => setDocDate(e.target.value)}
+                        title="DATE DU DOCUMENT"
                       />
                     </div>
 

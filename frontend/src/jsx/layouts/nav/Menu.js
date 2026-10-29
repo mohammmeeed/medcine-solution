@@ -26,12 +26,7 @@ export const MenuList = [
         to: "admin/waiting-room",
         iconStyle: <i className="flaticon-381-clock-1" />
     },
-    {
-        title: "Écran Salle d'attente",
-        to: "admin/affichage-salle-attente",
-        target: "_blank",
-        iconStyle: <i className="flaticon-381-television" />
-    },
+
 
     // B. Gestion médicale
     {
@@ -67,14 +62,10 @@ export const MenuList = [
     {
         title: "Journal de Caisse",
         to: "admin/cashflow",
-        iconStyle: <i className="flaticon-381-notebook-1" />
+        iconStyle: <i className="fa fa-cash-register" />
     },
 
-    {
-        title: "Rapports & Stats",
-        to: "admin/reports",
-        iconStyle: <i className="flaticon-381-controls-3" />
-    },
+
 
     // D. Cabinet et configuration
     {
@@ -82,23 +73,14 @@ export const MenuList = [
         classsChange: "menu-title"
     },
     {
-        title: "Personnel & Droits",
+        title: "Utilisateurs",
         to: "admin/staff",
         iconStyle: <i className="flaticon-381-user-9" />
     },
-    {
-        title: "Mon cabinet",
-        to: "admin/clinic",
-        iconStyle: <i className="flaticon-381-home-2" />
-    },
+
     {
         title: "Paramètres",
         to: "admin/settings",
         iconStyle: <i className="flaticon-381-settings-2" />
-    },
-    {
-        title: "Aide & Support",
-        to: "admin/support",
-        iconStyle: <i className="flaticon-381-help" />
     }
 ];

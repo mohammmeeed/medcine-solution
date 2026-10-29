@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import WheelDatePicker from "./WheelDatePicker";
 import { Modal, Button, Badge } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
@@ -330,11 +331,10 @@ const ExaminationsPage = () => {
               </div>
               <div className="col-md-6">
                 <label className="form-label font-w600">Date du relevé</label>
-                <input
-                  type="date"
-                  className="form-control"
+                <WheelDatePicker
                   value={formExam.date}
                   onChange={(e) => setFormExam({ ...formExam, date: e.target.value })}
+                  title="DATE DU RELEVÉ"
                   required
                 />
               </div>

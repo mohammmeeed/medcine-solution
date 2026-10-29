@@ -1,0 +1,252 @@
+/* frontend/src/css/modern-cabinet-ui.css */
+/* Thème Moderne & Épuré inspiré de Personnel & Droits (satnaing/shadcn-admin) */
+
+/* 1. FOND GÉNÉRAL & STRUCTURE */
+body {
+  background-color: #f8fafc !important;
+  color: #1e293b;
+}
+
+#main-wrapper {
+  background-color: #f8fafc !important;
+}
+
+.content-body {
+  background-color: #f8fafc !important;
+}
+
+/* 2. HEADER SUPÉRIEUR BLANC PUR AVEC SÉPARATEUR FIN */
+.header {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+}
+
+.nav-header {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  border-right: 1px solid #f1f5f9 !important;
+}
+
+.deznav {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+.footer {
+  background-color: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+/* 3. CARTES ÉPURÉES AVEC COINS ARRONDIS ET MICRO-OMBRES */
+.card {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03) !important;
+  margin-bottom: 1.5rem;
+}
+
+.card-header {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 1.25rem 1.5rem !important;
+}
+
+.card-header .card-title {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+/* 4. TABLEAUX PROFESSIONNELS ET AÉRÉS */
+.table {
+  color: #334155 !important;
+  border-color: #f1f5f9 !important;
+}
+
+.table thead th {
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  border-top: none !important;
+  border-bottom: 1.5px solid #e2e8f0 !important;
+  padding: 14px 18px !important;
+  vertical-align: middle !important;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid #f1f5f9 !important;
+  transition: background-color 0.15s ease-in-out !important;
+}
+
+.table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+.table tbody td {
+  padding: 14px 18px !important;
+  vertical-align: middle !important;
+}
+
+/* 5. BADGES MODERNES (STYLE PILULE DOUCE AVEC BORDURE FINE) */
+.badge {
+  border-radius: 20px !important;
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.3px !important;
+}
+
+.badge-primary.light,
+.badge-info.light,
+.badge.bg-primary {
+  background-color: #eff6ff !important;
+  color: #2563eb !important;
+  border: 1px solid #dbeafe !important;
+}
+
+.badge-success.light,
+.badge.bg-success {
+  background-color: #f0fdf4 !important;
+  color: #15803d !important;
+  border: 1px solid #bbf7d0 !important;
+}
+
+.badge-warning.light,
+.badge.bg-warning {
+  background-color: #fffbeb !important;
+  color: #b45309 !important;
+  border: 1px solid #fde68a !important;
+}
+
+.badge-danger.light,
+.badge.bg-danger {
+  background-color: #fef2f2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #fecaca !important;
+}
+
+/* 6. BOUTONS MODERNES */
+.btn {
+  border-radius: 9px !important;
+  font-weight: 600 !important;
+  transition: all 0.15s ease !important;
+}
+
+.btn-primary {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2) !important;
+}
+
+.btn-primary:hover {
+  background-color: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+}
+
+.btn-outline-primary {
+  border-color: #2563eb !important;
+  color: #2563eb !important;
+}
+
+.btn-outline-primary:hover {
+  background-color: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+/* 7. MODERN LIGHT BACKGROUNDS */
+.bg-light {
+  background-color: #f8fafc !important;
+}
+
+/* 8. CHAMPS DE FORMULAIRES */
+.form-control,
+.form-select {
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background-color: #ffffff;
+  color: #0f172a;
+  height: auto;
+  min-height: 38px;
+  line-height: 1.5;
+  font-size: 13.5px;
+  box-sizing: border-box;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12) !important;
+}
+
+.form-control.form-control-sm,
+.form-select.form-select-sm,
+.form-control-sm,
+.form-select-sm {
+  height: auto !important;
+  min-height: 32px !important;
+  max-height: 36px !important;
+  padding: 4px 8px !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+}
+
+select.form-control,
+select.form-select,
+select.form-control-sm,
+select.form-select-sm {
+  height: auto !important;
+  min-height: 32px !important;
+  line-height: normal !important;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+  padding-left: 8px !important;
+  padding-right: 24px !important;
+  vertical-align: middle !important;
+  box-sizing: border-box !important;
+}
+/* ========================================================
+   WHEEL DATE PICKER (Style iOS / Roue tambour moderne)
+   ======================================================== */
+@keyframes wheelFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes wheelPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.wheel-picker-column::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.wheel-picker-item:hover {
+  color: #1e60d5 !important;
+  opacity: 0.8 !important;
+}
+
+.wheel-datepicker-wrapper .input-group:hover input {
+  border-color: #1e60d5;
+}
+
+.wheel-datepicker-wrapper .input-group:hover .input-group-text {
+  border-color: #1e60d5;
+  background-color: #eef4ff !important;
+}

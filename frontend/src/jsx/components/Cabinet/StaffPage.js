@@ -104,7 +104,7 @@ export const SITE_PAGES = [
   },
   {
     id: "staff",
-    name: "Personnel & Droits",
+    name: "Utilisateurs",
     path: "/staff",
     category: "Configuration",
     icon: "flaticon-381-user-9",
@@ -1376,7 +1376,7 @@ const StaffPage = ({ initialView = "list" }) => {
     <>
       <PageTitle
         motherMenu="Cabinet & Configuration"
-        activeMenu="Personnel & Droits d'Accès"
+        activeMenu="Utilisateurs"
       />
 
       {/* Boutons d'Action Supérieurs */}
@@ -1472,7 +1472,6 @@ const StaffPage = ({ initialView = "list" }) => {
                     <th className="d-none d-md-table-cell">Identifiant</th>
                     <th>Rôle</th>
                     <th className="d-none d-md-table-cell">Accès Modules</th>
-                    <th className="d-none d-md-table-cell">Contact</th>
                     <th>Statut</th>
                     <th className="text-end pe-3 pe-md-4">Actions</th>
                   </tr>
@@ -1510,29 +1509,22 @@ const StaffPage = ({ initialView = "list" }) => {
                               <h6 className="mb-0 font-w600 text-dark fs-13">
                                 {acc.name}
                               </h6>
-                              <code className="d-inline-block d-md-none text-primary fs-11 mt-1" style={{ backgroundColor: "#eff6ff", padding: "1px 4px", borderRadius: "4px" }}>
+                              <span className="d-inline-block d-md-none text-muted fs-11 mt-1">
                                 @{acc.username}
-                              </code>
-                              {acc.username === "admin" && (
-                                <span className="badge bg-primary-light text-primary fs-11 py-0 px-2 d-none d-md-inline-block ms-1">
-                                  Compte Principal
-                                </span>
-                              )}
+                              </span>
+
                             </div>
                           </div>
                         </td>
                         <td className="d-none d-md-table-cell">
-                          <code className="text-primary font-w600 fs-12 px-2 py-1 rounded" style={{ backgroundColor: "#eff6ff" }}>
+                          <span className="text-dark fs-13 font-w500">
                             @{acc.username}
-                          </code>
+                          </span>
                         </td>
                         <td>
-                          <Badge
-                            bg={roleObj?.badgeColor || "primary"}
-                            className="light font-w600 fs-11"
-                          >
+                          <span className="text-dark fs-13 font-w500">
                             {roleObj?.name || acc.roleName || "Sans rôle"}
-                          </Badge>
+                          </span>
                         </td>
                         <td className="d-none d-md-table-cell">
                           <span className="font-w600 text-dark">
@@ -1540,28 +1532,10 @@ const StaffPage = ({ initialView = "list" }) => {
                           </span>{" "}
                           <span className="text-muted fs-11">pages</span>
                         </td>
-                        <td className="d-none d-md-table-cell">
-                          <div>
-                            {acc.email ? (
-                              <div className="text-muted fs-12">
-                                <i className="flaticon-381-mail me-1 text-primary"></i>
-                                {acc.email}
-                              </div>
-                            ) : null}
-                            {acc.phone ? (
-                              <div className="text-muted fs-12">
-                                <i className="flaticon-381-smartphone me-1 text-primary"></i>
-                                {acc.phone}
-                              </div>
-                            ) : null}
-                          </div>
-                        </td>
+
                         <td>
                           <span
-                            className={`badge ${acc.status === "Actif"
-                                ? "bg-success text-white"
-                                : "bg-danger text-white"
-                              } cursor-pointer fs-11`}
+                            className={`fs-13 font-w600 ${acc.status === "Actif" ? "text-success" : "text-danger"}`}
                             onClick={() => handleToggleStatus(acc)}
                             title="Cliquer pour changer le statut"
                             style={{ cursor: "pointer" }}
@@ -1570,23 +1544,23 @@ const StaffPage = ({ initialView = "list" }) => {
                           </span>
                         </td>
                         <td className="text-end pe-3 pe-md-4">
-                          <div className="d-inline-flex gap-1">
+                          <div className="d-inline-flex align-items-center">
                             <button
                               type="button"
-                              className="btn btn-outline-primary btn-sm px-2 py-1"
+                              className="btn btn-info shadow btn-xs sharp me-1 text-white"
                               onClick={() => handleEditAccount(acc)}
                               title="Modifier ce compte"
                             >
-                              <i className="flaticon-381-edit"></i>
+                              <i className="fa fa-pencil"></i>
                             </button>
                             {acc.username !== "admin" && (
                               <button
                                 type="button"
-                                className="btn btn-outline-danger btn-sm px-2 py-1"
+                                className="btn btn-danger shadow btn-xs sharp"
                                 onClick={() => handleDeleteAccount(acc)}
                                 title="Supprimer ce compte"
                               >
-                                <i className="flaticon-381-trash-1"></i>
+                                <i className="fa fa-trash"></i>
                               </button>
                             )}
                           </div>
@@ -1618,46 +1592,19 @@ const StaffPage = ({ initialView = "list" }) => {
             const allowedPages = SITE_PAGES.filter(
               (p) => role.pages && role.pages[p.id]
             );
-            const userCount = accounts.filter((a) => a.roleId === role.id).length;
-
             return (
               <div key={role.id} className="col-xl-6 col-lg-12 mb-4">
                 <div className="card h-100 border-0 shadow-sm">
-                  <div className="card-header border-bottom py-3 px-4 d-flex justify-content-between align-items-start">
-                    <div>
-                      <div className="d-flex align-items-center gap-2 mb-1">
-                        <h5 className="card-title font-w600 mb-0 text-dark">
-                          {role.name}
-                        </h5>
-                        <Badge
-                          bg={role.badgeColor || "primary"}
-                          className="light font-w600 fs-11"
-                        >
-                          {role.isSystem ? "Système" : "Personnalisé"}
-                        </Badge>
-                      </div>
-                      <p className="text-muted fs-12 mb-0">{role.description}</p>
-                    </div>
-                    <span className="badge text-primary font-w600 fs-12 py-2 px-3" style={{ backgroundColor: "#eff6ff" }}>
-                      {userCount} utilisateur{userCount > 1 ? "s" : ""}
-                    </span>
+                  <div className="card-header border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
+                    <h5 className="card-title font-w600 mb-0 text-dark">
+                      {role.name}
+                    </h5>
                   </div>
 
                   <div className="card-body px-4 py-3">
-                    <div className="d-flex align-items-center justify-content-between mb-3">
+                    <div className="mb-3">
                       <span className="text-muted fs-12 font-w600 text-uppercase">
-                        Habilitations Modules ({allowedPages.length} /{" "}
-                        {SITE_PAGES.length} autorisés) :
-                      </span>
-                      <span
-                        className={`badge ${allowedPages.length === SITE_PAGES.length
-                            ? "bg-success"
-                            : "bg-info"
-                          } light fs-11`}
-                      >
-                        {allowedPages.length === SITE_PAGES.length
-                          ? "Plein Accès"
-                          : "Accès Restreint"}
+                        Habilitations Modules ({allowedPages.length} / {SITE_PAGES.length} autorisés) :
                       </span>
                     </div>
 

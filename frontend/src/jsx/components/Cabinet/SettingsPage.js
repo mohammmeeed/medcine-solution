@@ -236,13 +236,16 @@ const SettingsPage = () => {
     <>
       <PageTitle motherMenu="Cabinet et configuration" activeMenu="Paramètres" />
 
-      {/* Onglets de navigation entre Paramètres et SMTP */}
+      {/* Onglets de navigation entre Paramètres, SMTP et Mon Cabinet */}
       <div className="d-flex align-items-center gap-2 mb-3">
         <button type="button" className="btn btn-sm btn-primary btn-rounded px-3 py-2">
           <i className="flaticon-381-settings-2 me-1"></i> Tarifs & Consultations
         </button>
         <Link to="/admin/smtp" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
           <i className="flaticon-381-email me-1"></i> Configuration SMTP
+        </Link>
+        <Link to="/admin/clinic" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
+          <i className="flaticon-381-home-2 me-1"></i> Mon Cabinet
         </Link>
       </div>
 
@@ -411,28 +414,28 @@ const SettingsPage = () => {
                                 </div>
                               </td>
                               <td className="text-end pe-3">
-                                <div className="d-flex align-items-center justify-content-end gap-2">
+                                <div className="d-flex align-items-center justify-content-end">
                                   {!isDefault ? (
                                     <button
                                       type="button"
-                                      className="btn btn-xxs btn-outline-secondary"
+                                      className="btn btn-xs btn-outline-primary me-2"
                                       onClick={() => handleConsultationTypeChange(item.name)}
                                       title="Définir ce type et son prix par défaut"
                                     >
                                       Choisir
                                     </button>
                                   ) : (
-                                    <span className="badge badge-sm badge-primary light font-w600">
+                                    <span className="badge badge-sm badge-primary light font-w600 me-2">
                                       <i className="fa fa-check me-1"></i> Actuel
                                     </span>
                                   )}
                                   <button
                                     type="button"
-                                    className="btn btn-xxs btn-outline-danger p-1 px-2"
+                                    className="btn btn-danger shadow btn-xs sharp"
                                     onClick={() => handleDeleteConsultationType(item)}
                                     title="Supprimer ce type de consultation"
                                   >
-                                    <i className="flaticon-381-trash-1"></i>
+                                    <i className="fa fa-trash"></i>
                                   </button>
                                 </div>
                               </td>

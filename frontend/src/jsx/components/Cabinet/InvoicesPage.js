@@ -60,6 +60,15 @@ const InvoicesPage = () => {
     fetchData();
   }, []);
 
+  const cleanPatientName = (name) => {
+    if (!name) return "Patiente De Passage";
+    const cleaned = name.replace(/\s*\(sc\)/gi, "").replace(/sans compte/gi, "").trim();
+    if (!cleaned || cleaned.toLowerCase() === "patient" || cleaned.toLowerCase() === "patiente") {
+      return "Patiente De Passage";
+    }
+    return cleaned;
+  };
+
   const getPatientPassword = (inv) => {
     if (!inv || inv.isGuest || !inv.patientId) return "";
     if (inv.patientName && (inv.patientName.includes('(sc)') || inv.patientName.toLowerCase().includes('sans compte'))) return "";
@@ -294,12 +303,18 @@ const InvoicesPage = () => {
                         <small className="text-muted d-block">🕒 {inv.time || "10:30"}</small>
                       </td>
                       <td>
-                        <Link
-                          to={`/patient-details?id=${inv.patientId}`}
-                          className="font-w600 text-dark hover-primary"
-                        >
-                          {inv.patientName}
-                        </Link>
+                        {inv.isGuest || !inv.patientId || String(inv.patientName || "").toLowerCase().includes("(sc)") ? (
+                          <span className="font-w600 text-dark">
+                            {cleanPatientName(inv.patientName)}
+                          </span>
+                        ) : (
+                          <Link
+                            to={`/admin/patient-details?id=${inv.patientId}`}
+                            className="font-w600 text-dark hover-primary"
+                          >
+                            {cleanPatientName(inv.patientName)}
+                          </Link>
+                        )}
                         {/* Numéro de facture visible sur mobile sous le patient */}
                         <div className="d-block d-md-none text-muted fs-11 mt-1">
                           {inv.invoiceNumber}
@@ -451,7 +466,7 @@ const InvoicesPage = () => {
           <h5 className="modal-title font-w600">Facture Médicale • فاتورة طبية</h5>
           <button type="button" className="btn-close" onClick={() => setPreviewInvoice(null)}></button>
         </div>
-        <div className="modal-body p-4 bg-light">
+        <div className="modal-body p-4" style={{ backgroundColor: "#f1f5f9" }}>
           {previewInvoice && (
             <div id="simple-invoice-printable" className="p-4 bg-white shadow-sm border rounded">
               {/* En-tête officiel bilingue : Français (gauche) & Arabe (droite) */}
@@ -482,11 +497,17 @@ const InvoicesPage = () => {
               </div>
 
               {/* Informations Essentielles : Patient, Facture N°, Date & Heure, Mot de passe */}
-              <div className="bg-light p-3 rounded mb-3 border">
+              <div
+                className="p-3 rounded-3 mb-3 border"
+                style={{
+                  backgroundColor: "#f8fafc",
+                  borderColor: "#e2e8f0",
+                }}
+              >
                 <div className="row g-3">
                   <div className="col-sm-6">
                     <span className="text-muted fs-12 d-block text-uppercase">Patient(e) / المريض(ة)</span>
-                    <strong className="fs-16 text-dark">{previewInvoice.patientName}</strong>
+                    <strong className="fs-16 text-dark">{cleanPatientName(previewInvoice.patientName)}</strong>
                   </div>
                   <div className="col-sm-6 text-sm-end">
                     <span className="text-muted fs-12 d-block text-uppercase">N° Facture / رقم الفاتورة</span>

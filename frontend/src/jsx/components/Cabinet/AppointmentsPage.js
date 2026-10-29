@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
+import WheelDatePicker from "./WheelDatePicker";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { Button } from "react-bootstrap";
+import { Button, Modal } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
@@ -61,6 +62,7 @@ const AppointmentsPage = () => {
   const [defaultConsultationTypeName, setDefaultConsultationTypeName] = useState("Consultation de médecine générale");
 
   const [showModal, setShowModal] = useState(false);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [cabinetInfo, setCabinetInfo] = useState(() => {
     try {
       const saved = localStorage.getItem("cabinet_info");
@@ -81,7 +83,9 @@ const AppointmentsPage = () => {
   };
 
   const [editId, setEditId] = useState(null);
+  const [isGuestPatient, setIsGuestPatient] = useState(false);
   const [formRdv, setFormRdv] = useState({
+    customPatientName: "",
     patientId: 1,
     date: new Date().toISOString().split("T")[0],
     time: "14:00",
@@ -157,6 +161,13 @@ const AppointmentsPage = () => {
     const onFocus = () => fetchAppointments(true);
     window.addEventListener("focus", onFocus);
 
+    const onStorage = (e) => {
+      if (e.key === "new_appointment_booked" || e.key === "cabinet_client_appointments") {
+        fetchAppointments(true);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
     const timer = setInterval(() => fetchAppointments(true), 10000);
     const clockTimer = setInterval(() => {
       setLiveTime(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
@@ -171,6 +182,7 @@ const AppointmentsPage = () => {
 
     return () => {
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("storage", onStorage);
       clearInterval(timer);
       clearInterval(clockTimer);
       clearTimeout(scrollInitTimer);
@@ -188,9 +200,16 @@ const AppointmentsPage = () => {
   };
 
   // Événements pour FullCalendar
+  const pendingAppointments = appointments.filter(
+    (a) =>
+      a.status === "En attente" ||
+      (a.status && a.status.toLowerCase().includes("attente"))
+  );
+  const pendingCount = pendingAppointments.length;
+
   const calendarEvents = appointments.map((rdv, idx) => ({
     id: String(rdv.id),
-    title: `${rdv.time} - ${rdv.patientName}${!rdv.patientId ? " (sc)" : ""}${rdv.phone ? ` (${rdv.phone})` : ""}`,
+    title: `${rdv.time} - ${rdv.patientName}${rdv.phone ? ` (${rdv.phone})` : ""}`,
     start: `${rdv.date}T${rdv.time}:00`,
     end: calculateEndTime(rdv.date, rdv.time, rdv.duration || "60 min"),
     extendedProps: {
@@ -298,12 +317,14 @@ const AppointmentsPage = () => {
 
   const handleOpenAdd = () => {
     setEditId(null);
+    setIsGuestPatient(false);
     const defType =
       consultationTypesList.find((t) => t.name === defaultConsultationTypeName) ||
       consultationTypesList[0] ||
       defaultConsultationTypes[0];
     setFormRdv({
-      patientId: patients[0]?.id || initialPatients[0]?.id || 1,
+      patientId: patients[0]?.id || initialPatients[0]?.id || "sans_compte",
+      customPatientName: "",
       date: new Date().toISOString().split("T")[0],
       time: "10:00",
       duration: defType.duration || "20 min",
@@ -321,11 +342,15 @@ const AppointmentsPage = () => {
 
   const handleOpenEdit = (rdv) => {
     setEditId(rdv.id);
+    const isGuest = !rdv.patientId || String(rdv.patientId) === "sans_compte";
+    setIsGuestPatient(isGuest);
     const matchedType = consultationTypesList.find(
       (t) => t.name === rdv.consultationType || t.name === rdv.reason
     );
     setFormRdv({
-      patientId: rdv.patientId, phone: rdv.phone || "",
+      patientId: isGuest ? "sans_compte" : rdv.patientId,
+      customPatientName: isGuest ? (rdv.patientName || "") : "",
+      phone: rdv.phone || "",
       date: rdv.date,
       time: rdv.time,
       duration: rdv.duration || "20 min",
@@ -451,15 +476,29 @@ const AppointmentsPage = () => {
       return;
     }
 
-    const existingApt = editId ? appointments.find((a) => a.id === editId) : null;
-    const patientList = patients && patients.length > 0 ? patients : initialPatients;
-    const patient = patientList.find((p) => p.id === parseInt(formRdv.patientId)) || {
-      id: formRdv.patientId ? parseInt(formRdv.patientId) : (existingApt?.patientId || null),
-      firstName: existingApt?.firstName || (existingApt?.patientName?.split(" ")[0] || "Patient"),
-      lastName: existingApt?.lastName || (existingApt?.patientName?.split(" ").slice(1).join(" ") || ""),
-      phone: existingApt?.phone || "",
-    };
-    const pFullName = (existingApt && String(formRdv.patientId || "") === String(existingApt.patientId || "")) ? (existingApt.patientName || "Patient") : `${patient.firstName} ${patient.lastName}`.trim();
+    const isGuest = isGuestPatient || formRdv.patientId === "sans_compte" || !formRdv.patientId;
+    let pFullName = "";
+    let pId = null;
+    let pPhone = formRdv.phone || "";
+
+    if (isGuest) {
+      pId = null;
+      pFullName = (formRdv.customPatientName || "").trim() || "Patient(e) de passage";
+    } else {
+      const existingApt = editId ? appointments.find((a) => a.id === editId) : null;
+      const patientList = patients && patients.length > 0 ? patients : initialPatients;
+      const patient = patientList.find((p) => p.id === parseInt(formRdv.patientId)) || {
+        id: formRdv.patientId ? parseInt(formRdv.patientId) : (existingApt?.patientId || null),
+        firstName: existingApt?.firstName || (existingApt?.patientName?.split(" ")[0] || "Patient"),
+        lastName: existingApt?.lastName || (existingApt?.patientName?.split(" ").slice(1).join(" ") || ""),
+        phone: existingApt?.phone || "",
+      };
+      pId = patient.id || null;
+      pFullName = (existingApt && String(formRdv.patientId || "") === String(existingApt.patientId || "")) 
+        ? (existingApt.patientName || "Patient") 
+        : `${patient.firstName} ${patient.lastName}`.trim();
+      if (!pPhone) pPhone = patient.phone || "";
+    }
 
     if (editId) {
       setAppointments(
@@ -467,9 +506,9 @@ const AppointmentsPage = () => {
           a.id === editId
             ? {
                 ...a,
-                patientId: patient.id || null,
+                patientId: pId,
                 patientName: pFullName,
-                phone: patient.phone,
+                phone: pPhone,
                 date: formRdv.date,
                 time: formRdv.time,
                 duration: formRdv.duration,
@@ -485,7 +524,10 @@ const AppointmentsPage = () => {
 
       // Synchronisation MySQL
       ApiService.updateAppointment({
-        id: editId, phone: formRdv.phone || patient.phone || "",
+        id: editId,
+        patientId: pId,
+        patientName: pFullName,
+        phone: pPhone,
         date: formRdv.date,
         time: formRdv.time,
         duration: formRdv.duration,
@@ -499,9 +541,9 @@ const AppointmentsPage = () => {
       if (formRdv.status === "Arrivé") {
         syncArrivalToWaitingRoom({
           appointmentId: editId,
-          patientId: patient.id || null,
+          patientId: pId,
           patientName: pFullName,
-          phone: patient.phone,
+          phone: pPhone,
           appointmentTime: formRdv.time,
           reason: formRdv.reason,
         });
@@ -524,9 +566,9 @@ const AppointmentsPage = () => {
     } else {
       const newAppt = {
         id: appointments.length + 1,
-        patientId: patient.id || null,
+        patientId: pId,
         patientName: pFullName,
-        phone: patient.phone,
+        phone: pPhone,
         date: formRdv.date,
         time: formRdv.time,
         duration: formRdv.duration,
@@ -540,9 +582,9 @@ const AppointmentsPage = () => {
 
       // Synchronisation MySQL
       ApiService.createAppointment({
-        patientId: patient.id || null,
+        patientId: pId,
         patientName: pFullName,
-        phone: patient.phone,
+        phone: pPhone,
         date: formRdv.date,
         time: formRdv.time,
         duration: formRdv.duration,
@@ -556,9 +598,9 @@ const AppointmentsPage = () => {
       if (formRdv.status === "Arrivé") {
         syncArrivalToWaitingRoom({
           appointmentId: newAppt.id,
-          patientId: patient.id || null,
+          patientId: pId,
           patientName: pFullName,
-          phone: patient.phone,
+          phone: pPhone,
           appointmentTime: formRdv.time,
           reason: formRdv.reason,
         });
@@ -610,6 +652,63 @@ const AppointmentsPage = () => {
     });
   };
 
+  const handleAcceptRdv = async (rdv, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    try {
+      setAppointments((prev) =>
+        prev.map((a) => (a.id === rdv.id ? { ...a, status: "Confirmé" } : a))
+      );
+      await ApiService.updateAppointment({ id: rdv.id, status: "Confirmé" });
+      Swal.fire({
+        icon: "success",
+        title: "Rendez-vous accepté !",
+        text: `Le rendez-vous de ${(rdv.patientName || "ce patient").replace(/\s*\(sc\)/gi, "").trim()} (${rdv.time}) est confirmé et le créneau est bloqué sur le site web.`,
+        timer: 1800,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      console.error(err);
+      Swal.fire("Erreur", "Impossible de valider : " + err.message, "error");
+    }
+  };
+
+  const handleRefuseRdv = (rdv, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    Swal.fire({
+      title: "Refuser ce rendez-vous ?",
+      text: `Voulez-vous refuser le rendez-vous de ${(rdv.patientName || "ce patient").replace(/\s*\(sc\)/gi, "").trim()} (${rdv.time}) ? Le rendez-vous sera retiré et le créneau libéré dans la base de données.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#f72b50",
+      cancelButtonColor: "#6e6e6e",
+      confirmButtonText: "Oui, refuser et retirer",
+      cancelButtonText: "Annuler",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        setAppointments((prev) => prev.filter((a) => a.id !== rdv.id));
+        try {
+          await ApiService.deleteAppointment(rdv.id);
+          Swal.fire({
+            icon: "success",
+            title: "Rendez-vous retiré",
+            text: "Le rendez-vous a été retiré et le créneau est de nouveau libre.",
+            timer: 1800,
+            showConfirmButton: false,
+          });
+        } catch (e) {
+          console.warn("Erreur suppression rdv MySQL :", e);
+          Swal.fire("Erreur", "Erreur lors du retrait : " + e.message, "error");
+        }
+      }
+    });
+  };
+
   const handleDeleteRdv = (id) => {
     Swal.fire({
       title: "Annuler ce rendez-vous ?",
@@ -642,10 +741,27 @@ const AppointmentsPage = () => {
   });
 
   const getStatusBadge = (status) => {
+    const isPending =
+      status === "En attente" ||
+      (status && status.toLowerCase().includes("attente"));
     return (
-      <span className="appointment-status-badge">
-        <span className="status-dot"></span>
-        {status}
+      <span
+        className="appointment-status-badge"
+        style={
+          isPending
+            ? {
+                backgroundColor: "#fffbeb",
+                color: "#b45309",
+                borderColor: "#fde68a",
+              }
+            : {}
+        }
+      >
+        <span
+          className="status-dot"
+          style={isPending ? { backgroundColor: "#f59e0b" } : {}}
+        ></span>
+        {status || "En attente"}
       </span>
     );
   };
@@ -727,34 +843,23 @@ const AppointmentsPage = () => {
               <i className="flaticon-381-search-2"></i>
             </span>
           </div>
-
-          <select
-            className="form-control default-select" style={{ width: "auto", minWidth: "180px" }}
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="all">Tous les statuts</option>
-            <option value="Confirmé">Confirmé</option>
-            <option value="Arrivé">Arrivé</option>
-            <option value="En consultation">En consultation</option>
-            <option value="Terminé">Terminé</option>
-            <option value="Absent">Absent</option>
-          </select>
         </div>
 
         {/* Boutons d'action et mode à droite */}
         <div className="d-flex align-items-center gap-2 flex-wrap ms-auto justify-content-end">
-          <div className="btn-group" role="group">
+          <div className="d-flex align-items-center gap-2">
             <button
               type="button"
-              className={`btn btn-sm ${viewMode === "calendar" ? "btn-primary" : "btn-outline-primary"}`}
+              className={`btn btn-sm ${viewMode === "calendar" ? "btn-primary shadow-sm" : "btn-outline-primary"}`}
+              style={{ borderRadius: "8px", fontWeight: 600, padding: "7px 16px" }}
               onClick={() => setViewMode("calendar")}
             >
               <i className="flaticon-381-calendar me-1"></i> Calendrier
             </button>
             <button
               type="button"
-              className={`btn btn-sm ${viewMode === "list" ? "btn-primary" : "btn-outline-primary"}`}
+              className={`btn btn-sm ${viewMode === "list" ? "btn-primary shadow-sm" : "btn-outline-primary"}`}
+              style={{ borderRadius: "8px", fontWeight: 600, padding: "7px 16px" }}
               onClick={() => setViewMode("list")}
             >
               <i className="flaticon-381-list me-1"></i> Liste
@@ -804,31 +909,93 @@ const AppointmentsPage = () => {
             <div className="card-body">
               <div className="row">
                 <div className="col-md-4 mb-3">
-                  <label className="form-label">Patient</label>
-                  <select
-                    className="form-control"
-                    value={formRdv.patientId}
-                    onChange={(e) => setFormRdv({ ...formRdv, patientId: e.target.value })}
-                  >
-                    {editId && !patients.some((p) => p.id === parseInt(formRdv.patientId)) && (
-                      <option value={formRdv.patientId}>
-                        {appointments.find((a) => a.id === editId)?.patientName || "Patient en cours"} (sc){appointments.find((a) => a.id === editId)?.phone ? ` — ${appointments.find((a) => a.id === editId)?.phone}` : ""}
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <label className="form-label mb-0 fw-bold">Patient</label>
+                  </div>
+                  
+                  {/* Choix clair : Dossier existant ou Nom libre sans compte */}
+                  <div className="btn-group btn-group-sm w-100 mb-2" role="group">
+                    <button
+                      type="button"
+                      className={`btn ${!isGuestPatient ? "btn-primary shadow-sm" : "btn-outline-primary"}`}
+                      style={{ fontSize: "12px", padding: "5px 8px" }}
+                      onClick={() => {
+                        setIsGuestPatient(false);
+                        const firstId = patients[0]?.id || initialPatients[0]?.id || "";
+                        setFormRdv((prev) => ({ ...prev, patientId: firstId }));
+                      }}
+                    >
+                      <i className="fa fa-folder-open me-1"></i> Dossier existant
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${isGuestPatient ? "btn-primary shadow-sm" : "btn-outline-primary"}`}
+                      style={{ fontSize: "12px", padding: "5px 8px" }}
+                      onClick={() => {
+                        setIsGuestPatient(true);
+                        setFormRdv((prev) => ({ ...prev, patientId: "sans_compte" }));
+                      }}
+                    >
+                      <i className="fa fa-pencil me-1"></i> Nom libre (Sans compte)
+                    </button>
+                  </div>
+
+                  {isGuestPatient ? (
+                    <div>
+                      <div className="input-group">
+                        <span className="input-group-text bg-light text-primary">
+                          <i className="fa fa-user"></i>
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Tapez le nom & prénom (ex: Mohamed Belkacem)..."
+                          value={formRdv.customPatientName || ""}
+                          onChange={(e) => setFormRdv({ ...formRdv, customPatientName: e.target.value })}
+                          required
+                          autoFocus
+                        />
+                      </div>
+                      <small className="text-muted d-block mt-1" style={{ fontSize: "11px" }}>
+                        <i className="fa fa-info-circle me-1 text-primary"></i>
+                        RDV enregistré directement avec ce nom (sans créer de dossier patient).
+                      </small>
+                    </div>
+                  ) : (
+                    <select
+                      className="form-control"
+                      value={formRdv.patientId}
+                      onChange={(e) => {
+                        if (e.target.value === "sans_compte") {
+                          setIsGuestPatient(true);
+                          setFormRdv({ ...formRdv, patientId: "sans_compte" });
+                        } else {
+                          setFormRdv({ ...formRdv, patientId: e.target.value });
+                        }
+                      }}
+                    >
+                      <option value="sans_compte">
+                        ✍️ ＋ Saisir un nom sans compte (Passage)
                       </option>
-                    )}
-                    {(patients && patients.length > 0 ? patients : initialPatients).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.firstName} {p.lastName} — ({p.fileNumber || `DOS-${p.id}`})
-                      </option>
-                    ))}
-                  </select>
+                      {editId && !patients.some((p) => p.id === parseInt(formRdv.patientId)) && formRdv.patientId !== "sans_compte" && (
+                        <option value={formRdv.patientId}>
+                          {appointments.find((a) => a.id === editId)?.patientName || "Patient en cours"}
+                        </option>
+                      )}
+                      {(patients && patients.length > 0 ? patients : initialPatients).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.firstName} {p.lastName} — ({p.fileNumber || `DOS-${p.id}`})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div className="col-md-3 mb-3">
                   <label className="form-label">Date</label>
-                  <input
-                    type="date"
-                    className="form-control"
+                  <WheelDatePicker
                     value={formRdv.date}
                     onChange={(e) => setFormRdv({ ...formRdv, date: e.target.value })}
+                    title="DATE DU RENDEZ-VOUS"
                     required
                   />
                 </div>
@@ -977,32 +1144,36 @@ const AppointmentsPage = () => {
               <button
                 type="button"
                 className="cal-btn-approval"
-                onClick={() =>
-                  Swal.fire({
-                    icon: "info",
-                    title: "Demandes d'Approbation",
-                    text: "7 demandes d'approbation de rendez-vous en attente de validation.",
-                    confirmButtonColor: "#2563eb",
-                  })
-                }
-                title="Demandes d'approbation (7)"
+                onClick={() => setShowApprovalModal(true)}
+                title={`Demandes de réservation en attente (${pendingCount})`}
+                style={{
+                  position: "relative",
+                  background: pendingCount > 0 ? "rgba(239, 68, 68, 0.05)" : "#ffffff",
+                  borderColor: pendingCount > 0 ? "#fca5a5" : "#e2e8f0",
+                }}
               >
                 <svg
                   width="14"
                   height="14"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="currentColor"
+                  stroke={pendingCount > 0 ? "#ef4444" : "currentColor"}
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="me-0 me-sm-1 text-muted"
+                  className={`me-0 me-sm-1 ${pendingCount > 0 ? "text-danger" : "text-muted"}`}
                 >
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                   <circle cx="12" cy="7" r="4"></circle>
                 </svg>
-                <span className="d-none d-md-inline">Request Approval</span>
-                <span className="cal-badge-pill">7</span>
+                <span className="d-none d-md-inline" style={{ color: pendingCount > 0 ? "#b91c1c" : "inherit", fontWeight: pendingCount > 0 ? 600 : 500 }}>
+                  Demandes
+                </span>
+                {pendingCount > 0 && (
+                  <span className="cal-badge-pill">
+                    {pendingCount}
+                  </span>
+                )}
               </button>
 
               <button
@@ -1627,6 +1798,13 @@ const AppointmentsPage = () => {
                   const endM = String(totalMin % 60).padStart(2, "0");
                   const timeRange = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} - ${String(endH).padStart(2, "0")}:${endM}`;
 
+                  const isConfirmed = Boolean(
+                    rdv.status &&
+                    (rdv.status.toLowerCase().startsWith("confirm") ||
+                     rdv.status.toLowerCase().startsWith("arriv") ||
+                     rdv.status.toLowerCase().startsWith("termin") ||
+                     rdv.status.toLowerCase().startsWith("en consult"))
+                  );
                   return (
                     <div className="cal-card-box">
                       <div
@@ -1635,14 +1813,71 @@ const AppointmentsPage = () => {
                       />
                       <div className="cal-card-content">
                         <div>
-                          <div className="cal-patient-name" title={rdv.patientName}>
-                            {rdv.patientName}{!rdv.patientId ? " (sc)" : ""}
+                          <div className="d-flex justify-content-between align-items-start gap-1">
+                            <div className="cal-patient-name text-truncate" title={rdv.patientName} style={{ minWidth: 0, flex: 1 }}>
+                              {(rdv.patientName || "").replace(/\s*\(sc\)/gi, "").trim()}
+                            </div>
+
+                            {/* 2 Icônes : ✓ Accepter & ✕ Refuser (affichées tant que non accepté ; masquées dès que accepté) */}
+                            {!isConfirmed && (
+                              <div
+                                className="d-flex align-items-center gap-1 flex-shrink-0"
+                                style={{ position: "relative", zIndex: 10 }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="btn p-0 d-inline-flex align-items-center justify-content-center shadow-xs"
+                                  style={{
+                                    width: "21px",
+                                    height: "21px",
+                                    minWidth: "21px",
+                                    borderRadius: "50%",
+                                    background: "#10b981",
+                                    color: "#ffffff",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                  title="Accepter ce rendez-vous (bloquer le créneau sur le site web)"
+                                  onClick={(e) => handleAcceptRdv(rdv, e)}
+                                >
+                                  <i className="fa fa-check" style={{ fontSize: "10px", fontWeight: "bold" }}></i>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="btn p-0 d-inline-flex align-items-center justify-content-center shadow-xs"
+                                  style={{
+                                    width: "21px",
+                                    height: "21px",
+                                    minWidth: "21px",
+                                    borderRadius: "50%",
+                                    background: "#ffffff",
+                                    color: "#ef4444",
+                                    border: "1.5px solid #ef4444",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                  title="Refuser et supprimer ce rendez-vous"
+                                  onClick={(e) => handleRefuseRdv(rdv, e)}
+                                >
+                                  <i className="fa fa-times" style={{ fontSize: "10px", fontWeight: "bold" }}></i>
+                                </button>
+                              </div>
+                            )}
                           </div>
+
                           <div className="cal-patient-reason" title={rdv.date}>
-                            {rdv.phone && <div style={{ fontWeight: 600, color: "#0f172a" }}>📞 {rdv.phone}</div>}<div>{rdv.date}</div>
+                            {rdv.phone && <div style={{ fontWeight: 600, color: "#0f172a" }}>📞 {rdv.phone}</div>}
+                            <div>{rdv.date}</div>
                           </div>
                         </div>
-                        <div className="cal-card-footer">
+
+                        <div className="cal-card-footer d-flex justify-content-between align-items-center mt-1">
                           <span className="cal-card-time">
                             <svg
                               width="13"
@@ -1677,8 +1912,10 @@ const AppointmentsPage = () => {
                     consultationTypesList[0] ||
                     defaultConsultationTypes[0];
                   setEditId(null);
+                  setIsGuestPatient(false);
                   setFormRdv({
-                    patientId: patients[0]?.id || initialPatients[0]?.id || 1,
+                    patientId: patients[0]?.id || initialPatients[0]?.id || "sans_compte",
+                    customPatientName: "",
                     date: clickedDate,
                     time: clickedTime,
                     duration: defType.duration || "20 min",
@@ -1734,8 +1971,8 @@ const AppointmentsPage = () => {
                         </td>
                         <td>
                           <span className="font-w600 text-dark d-block">
-                            {rdv.patientName}
-                            {!rdv.patientId && <span className="text-primary font-w700 ms-1">(sc)</span>}
+                            {(rdv.patientName || "").replace(/\s*\(sc\)/gi, "").trim()}
+                            
                           </span>
                           <div className="d-block d-md-none mt-1">
                             {getStatusBadge(rdv.status)}
@@ -1746,69 +1983,116 @@ const AppointmentsPage = () => {
                         <td className="d-none d-md-table-cell">{rdv.phone}</td>
                         <td className="d-none d-md-table-cell">{getStatusBadge(rdv.status)}</td>
                         <td className="text-end">
-                          <div className="d-inline-flex align-items-center gap-2">
-                            <button
-                              type="button"
-                              className={`btn-action-simple btn-arrive ${rdv.status === "Arrivé" ? "active" : ""}`}
-                              onClick={() => handleMarkArrived(rdv)}
-                              title="Marquer comme Arrivé (Ajouter à la salle d'attente)"
-                            >
-                              <svg
-                                width="15"
-                                height="15"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                          {rdv.status === "En attente" || (rdv.status && rdv.status.toLowerCase().includes("attente")) ? (
+                            <div className="d-inline-flex align-items-center gap-2">
+                              {/* 2 icônes pour demande de réservation : ✓ Accepter & ✕ Refuser */}
+                              <button
+                                type="button"
+                                className="btn p-0 d-inline-flex align-items-center justify-content-center shadow-xs"
+                                style={{
+                                  width: "28px",
+                                  height: "28px",
+                                  minWidth: "28px",
+                                  borderRadius: "50%",
+                                  background: "#10b981",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  boxShadow: "0 2px 5px rgba(16, 185, 129, 0.3)",
+                                  transition: "all 0.15s ease",
+                                }}
+                                title="Accepter ce rendez-vous (bloquer le créneau sur le site web)"
+                                onClick={(e) => handleAcceptRdv(rdv, e)}
                               >
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                <circle cx="8.5" cy="7" r="4" />
-                                <polyline points="17 11 19 13 23 9" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-action-simple btn-edit"
-                              onClick={() => handleOpenEdit(rdv)}
-                              title="Modifier"
-                            >
-                              <svg
-                                width="15"
-                                height="15"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                                <i className="fa fa-check" style={{ fontSize: "12px", fontWeight: "bold" }}></i>
+                              </button>
+
+                              <button
+                                type="button"
+                                className="btn p-0 d-inline-flex align-items-center justify-content-center shadow-xs"
+                                style={{
+                                  width: "28px",
+                                  height: "28px",
+                                  minWidth: "28px",
+                                  borderRadius: "50%",
+                                  background: "#ffffff",
+                                  color: "#ef4444",
+                                  border: "1.5px solid #ef4444",
+                                  cursor: "pointer",
+                                  boxShadow: "0 2px 5px rgba(239, 68, 68, 0.15)",
+                                  transition: "all 0.15s ease",
+                                }}
+                                title="Refuser et supprimer ce rendez-vous"
+                                onClick={(e) => handleRefuseRdv(rdv, e)}
                               >
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-action-simple btn-delete"
-                              onClick={() => handleDeleteRdv(rdv.id)}
-                              title="Supprimer"
-                            >
-                              <svg
-                                width="15"
-                                height="15"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                                <i className="fa fa-times" style={{ fontSize: "12px", fontWeight: "bold" }}></i>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="d-inline-flex align-items-center gap-2">
+                              <button
+                                type="button"
+                                className={`btn-action-simple btn-arrive ${rdv.status === "Arrivé" ? "active" : ""}`}
+                                onClick={() => handleMarkArrived(rdv)}
+                                title="Marquer comme Arrivé (Ajouter à la salle d'attente)"
                               >
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              </svg>
-                            </button>
-                          </div>
+                                <svg
+                                  width="15"
+                                  height="15"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                  <circle cx="8.5" cy="7" r="4" />
+                                  <polyline points="17 11 19 13 23 9" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-action-simple btn-edit"
+                                onClick={() => handleOpenEdit(rdv)}
+                                title="Modifier"
+                              >
+                                <svg
+                                  width="15"
+                                  height="15"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-action-simple btn-delete"
+                                onClick={() => handleDeleteRdv(rdv.id)}
+                                title="Supprimer"
+                              >
+                                <svg
+                                  width="15"
+                                  height="15"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -1819,6 +2103,192 @@ const AppointmentsPage = () => {
           </div>
         </div>
       )}
+      {/* Modal Liste des Demandes de Réservation en Attente */}
+      <Modal
+        show={showApprovalModal}
+        onHide={() => setShowApprovalModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton style={{ borderBottom: "1px solid #f1f5f9", padding: "16px 20px" }}>
+          <div className="d-flex align-items-center gap-2">
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "10px",
+                background: pendingCount > 0 ? "rgba(239, 68, 68, 0.1)" : "rgba(37, 99, 235, 0.1)",
+                color: pendingCount > 0 ? "#ef4444" : "#2563eb",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <i className="fa fa-calendar-check-o fs-18"></i>
+            </div>
+            <div>
+              <Modal.Title style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
+                Demandes de Réservation en Ligne
+              </Modal.Title>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>
+                {pendingCount === 0
+                  ? "Aucune nouvelle demande en attente"
+                  : `${pendingCount} demande${pendingCount > 1 ? "s" : ""} en attente de confirmation`}
+              </div>
+            </div>
+          </div>
+        </Modal.Header>
+        <Modal.Body style={{ padding: "20px", maxHeight: "65vh", overflowY: "auto", background: "#f8fafc" }}>
+          {pendingAppointments.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "40px 20px",
+                background: "#ffffff",
+                borderRadius: "14px",
+                border: "1px dashed #cbd5e1",
+              }}
+            >
+              <div
+                style={{
+                  width: "56px",
+                  height: "56px",
+                  borderRadius: "50%",
+                  background: "rgba(16, 185, 129, 0.1)",
+                  color: "#10b981",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 14px",
+                }}
+              >
+                <i className="fa fa-check fs-24"></i>
+              </div>
+              <h5 style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", marginBottom: "4px" }}>
+                Toutes les demandes sont traitées
+              </h5>
+              <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>
+                Dès qu'un client réserve en ligne sur le portail patient, la demande apparaîtra ici et incrémentera le compteur.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {pendingAppointments.map((rdv) => (
+                <div
+                  key={rdv.id}
+                  style={{
+                    background: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderLeft: "4px solid #f59e0b",
+                    borderRadius: "12px",
+                    padding: "16px",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "14px",
+                  }}
+                >
+                  <div style={{ minWidth: "220px", flex: 1 }}>
+                    <div className="d-flex align-items-center gap-2 mb-1">
+                      <span style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>
+                        {(rdv.patientName || "Patient").replace(/\s*\(sc\)/gi, "").trim()}
+                      </span>
+                      {rdv.ticketNumber && (
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: "700",
+                            padding: "2px 8px",
+                            borderRadius: "6px",
+                            background: "rgba(37, 99, 235, 0.1)",
+                            color: "#2563eb",
+                          }}
+                        >
+                          Ticket #{rdv.ticketNumber}
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          fontSize: "10.5px",
+                          fontWeight: "700",
+                          padding: "2px 7px",
+                          borderRadius: "999px",
+                          background: "rgba(245, 158, 11, 0.12)",
+                          color: "#d97706",
+                        }}
+                      >
+                        En attente
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "14px", fontSize: "12.5px", color: "#475569" }}>
+                      {rdv.phone && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: "600" }}>
+                          📞 {rdv.phone}
+                        </span>
+                      )}
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        📅 {rdv.date} à 🕒 {rdv.time}
+                      </span>
+                      {rdv.reason && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#64748b" }}>
+                          🏷️ {rdv.reason}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="d-flex align-items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-success d-inline-flex align-items-center gap-1 shadow-xs"
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: "8px",
+                        fontSize: "12.5px",
+                        fontWeight: "600",
+                      }}
+                      onClick={async () => {
+                        await handleAcceptRdv(rdv);
+                      }}
+                      title="Accepter le rendez-vous et bloquer le créneau sur le site web"
+                    >
+                      <i className="fa fa-check"></i>
+                      <span>Accepter</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1"
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: "8px",
+                        fontSize: "12.5px",
+                        fontWeight: "600",
+                      }}
+                      onClick={() => {
+                        handleRefuseRdv(rdv);
+                      }}
+                      title="Refuser et supprimer ce rendez-vous"
+                    >
+                      <i className="fa fa-times"></i>
+                      <span>Refuser</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer style={{ borderTop: "1px solid #f1f5f9", padding: "12px 20px" }}>
+          <Button variant="secondary" size="sm" onClick={() => setShowApprovalModal(false)}>
+            Fermer
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
     </>
   );
 };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "react-bootstrap";
+import WheelDatePicker from "./WheelDatePicker";
 
 // Formules médicales de l'échographie
 export const lccToAge = (mm) => {
@@ -199,8 +200,8 @@ const ConsultationEchoForm = ({
   // Auto-remplissage patiente
   useEffect(() => {
     if (patientId === "guest") {
-      setNom("");
-      setPrenom("");
+      setNom("Patiente");
+      setPrenom("De Passage");
       setDdn("");
       return;
     }
@@ -376,10 +377,11 @@ const ConsultationEchoForm = ({
       : null;
 
     const isGuest = patientId === "guest" || !selectedPatient;
-    const cleanGuestName = `${nom} ${prenom}`.trim();
+    const cleanGuestName = `${nom} ${prenom}`.replace(/\s*\(sc\)/gi, "").trim();
+    const guestDisplayName = cleanGuestName || "Patiente De Passage";
     const payload = {
       patientId: isGuest ? null : (selectedPatient?.id || null),
-      patientName: isGuest ? (cleanGuestName.includes("(sc)") ? cleanGuestName : `${cleanGuestName} (sc)`) : `${selectedPatient?.firstName || prenom} ${selectedPatient?.lastName || nom}`,
+      patientName: isGuest ? guestDisplayName : `${selectedPatient?.firstName || prenom} ${selectedPatient?.lastName || nom}`.replace(/\s*\(sc\)/gi, "").trim(),
       isGuest,
       date: dateExam,
       time: `${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, "0")}`,
@@ -562,24 +564,51 @@ const ConsultationEchoForm = ({
           margin-bottom: 8px;
           font-size: 12.5px;
         }
+        .crecho-zone select,
+        .crecho-zone input,
+        .crecho-field-group select,
+        .crecho-field-group input {
+          height: 34px !important;
+          min-height: 34px !important;
+          max-height: 34px !important;
+          line-height: 1.4 !important;
+          padding: 4px 8px !important;
+          font-size: 13px !important;
+          border: 1.5px solid #cbd5e1 !important;
+          border-radius: 6px !important;
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+          box-sizing: border-box !important;
+          vertical-align: middle !important;
+        }
+        .crecho-field-group select {
+          padding-right: 22px !important;
+        }
         .crecho-radio-pill {
           cursor: pointer;
-          font-weight: bold;
-          color: #1a3a5c;
-          padding: 6px 14px;
-          border-radius: 4px;
-          border: 1.5px solid #b0c4d8;
-          background: #fff;
-          transition: all 0.15s;
+          font-weight: 600;
+          color: #334155;
+          padding: 7px 16px;
+          border-radius: 8px;
+          border: 1.5px solid #cbd5e1;
+          background: #ffffff;
+          transition: all 0.15s ease-in-out;
           display: inline-flex;
           align-items: center;
           gap: 6px;
           user-select: none;
+          font-size: 13px;
+        }
+        .crecho-radio-pill:hover {
+          border-color: #3b82f6;
+          color: #1d4ed8;
+          background: #eff6ff;
         }
         .crecho-radio-pill.active {
-          background: #1a3a5c;
-          color: #fff;
-          border-color: #1a3a5c;
+          background: #2563eb;
+          color: #ffffff;
+          border-color: #2563eb;
+          box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);
         }
         .term-badge-val {
           font-weight: bold;
@@ -627,7 +656,7 @@ const ConsultationEchoForm = ({
       <form onSubmit={handleSubmit}>
         <div className="card-body pt-2">
           {/* Sélection Patiente du Cabinet */}
-          <div className="p-3 mb-3 bg-light rounded border d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <div className="p-3 mb-3 rounded-3 border d-flex align-items-center justify-content-between flex-wrap gap-2" style={{ backgroundColor: "#f8fafc", borderColor: "#e2e8f0" }}>
             <div className="d-flex align-items-center gap-2 flex-grow-1">
               <span className="crecho-lbl">
                 <i className="flaticon-381-user-7 me-1 text-primary"></i> Sélection Patiente :
@@ -638,7 +667,7 @@ const ConsultationEchoForm = ({
                 onChange={(e) => setPatientId(e.target.value)}
                 required
               >
-                <option value="guest">👤 Patient(e) sans compte (de passage / sans dossier)</option>
+                <option value="guest">👤 Patiente De Passage (sans compte / sans dossier)</option>
                 {patients.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.lastName.toUpperCase()} {p.firstName} — {p.fileNumber} (Née le {p.dob || "-"})
@@ -646,21 +675,7 @@ const ConsultationEchoForm = ({
                 ))}
               </select>
             </div>
-            <div className="d-flex align-items-center gap-2">
-              <span className="crecho-lbl">Cotation :</span>
-              <select
-                className="form-control form-control-sm w-auto"
-                value={billingCode}
-                onChange={(e) => setBillingCode(e.target.value)}
-              >
-                <option value="Consultation gynécologique (2 500 DA)">Consultation gynécologique (2 500 DA)</option>
-                <option value="Suivi de grossesse (2 500 DA)">Suivi de grossesse (2 500 DA)</option>
-                <option value="Échographie obstétrique (4 000 DA)">Échographie obstétrique (4 000 DA)</option>
-                <option value="Échographie pelvienne (3 500 DA)">Échographie pelvienne (3 500 DA)</option>
-                <option value="Échographie obstétrique gémellaire (4 500 DA)">Échographie obstétrique gémellaire (4 500 DA)</option>
-                <option value="Consultation + Frottis FCU (3 500 DA)">Consultation + Frottis FCU (3 500 DA)</option>
-              </select>
-            </div>
+
           </div>
 
           {/* 1. Zone Patiente */}
@@ -694,11 +709,11 @@ const ConsultationEchoForm = ({
               <div className="col-md-3 col-6">
                 <div className="crecho-field-group w-100">
                   <span className="crecho-lbl">DDN :</span>
-                  <input
-                    type="date"
+                  <WheelDatePicker
                     className="form-control form-control-sm"
                     value={ddn}
                     onChange={(e) => setDdn(e.target.value)}
+                    title="DATE DE NAISSANCE"
                   />
                   {ageDisplay && (
                     <span className="badge badge-light border ms-1">{ageDisplay}</span>
@@ -708,11 +723,11 @@ const ConsultationEchoForm = ({
               <div className="col-md-3 col-6">
                 <div className="crecho-field-group w-100">
                   <span className="crecho-lbl">Date examen :</span>
-                  <input
-                    type="date"
+                  <WheelDatePicker
                     className="form-control form-control-sm"
                     value={dateExam}
                     onChange={(e) => setDateExam(e.target.value)}
+                    title="DATE DE L'EXAMEN"
                   />
                 </div>
               </div>
@@ -723,11 +738,12 @@ const ConsultationEchoForm = ({
               <div className="col-md-6 col-12">
                 <div className="crecho-field-group">
                   <span className="crecho-lbl">DDR (Dernières règles) :</span>
-                  <input
-                    type="date"
-                    className="form-control form-control-sm w-auto"
+                  <WheelDatePicker
+                    className="form-control form-control-sm"
+                    style={{ width: "160px" }}
                     value={ddr}
                     onChange={(e) => setDdr(e.target.value)}
+                    title="DATE DES DERNIÈRES RÈGLES"
                   />
                   <span className="crecho-lbl ms-2">→ Terme :</span>
                   <span className="term-badge-val">{termeDdrDisplay || "—"}</span>
@@ -758,11 +774,12 @@ const ConsultationEchoForm = ({
                     onChange={(e) => setDdrcJ(e.target.value)}
                   />
                   <span className="text-muted fs-11">j le</span>
-                  <input
-                    type="date"
-                    className="form-control form-control-sm w-auto"
+                  <WheelDatePicker
+                    className="form-control form-control-sm"
+                    style={{ width: "160px" }}
                     value={ddrcDate}
                     onChange={(e) => setDdrcDate(e.target.value)}
+                    title="DATE ÉCHOGRAPHIE"
                   />
                   {ddrcValDisplay && (
                     <span className="text-primary font-w600 fs-12 ms-1">
@@ -930,7 +947,7 @@ const ConsultationEchoForm = ({
           </div>
 
           {/* 3. Sélecteur Type d'Examen */}
-          <div className="p-2 mb-3 rounded bg-light border text-center">
+          <div className="p-3 mb-3 rounded-3 text-center" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)" }}>
             <span className="crecho-lbl me-3 d-inline-block">Type d'examen :</span>
             <div className="d-inline-flex flex-wrap gap-2 justify-content-center">
               {[
@@ -2298,7 +2315,7 @@ const ConsultationEchoForm = ({
             </div>
 
             {showPrescription && (
-              <div className="p-3 border rounded bg-light mb-3">
+              <div className="p-3 border rounded-3 mb-3" style={{ backgroundColor: "#f8fafc", borderColor: "#e2e8f0" }}>
                 <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
                   <div>
                     <h6 className="text-primary font-w600 mb-0">

@@ -2,6 +2,7 @@ import React, { Component } from "react";
 import Markup from "./jsx";
 
 import "./css/style.css";
+import "./css/modern-cabinet-ui.css";
 
 class ErrorBoundary extends Component {
   constructor(props) {

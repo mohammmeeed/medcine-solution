@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "react-bootstrap";
+import WheelDatePicker from "./WheelDatePicker";
+import { Link } from "react-router-dom";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
@@ -253,6 +255,19 @@ const ClinicProfilePage = () => {
   return (
     <>
       <PageTitle motherMenu="Cabinet et configuration" activeMenu="Mon cabinet" />
+
+      {/* Onglets de navigation entre Paramètres, SMTP et Mon Cabinet */}
+      <div className="d-flex align-items-center gap-2 mb-3">
+        <Link to="/admin/settings" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
+          <i className="flaticon-381-settings-2 me-1"></i> Tarifs & Consultations
+        </Link>
+        <Link to="/admin/smtp" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
+          <i className="flaticon-381-email me-1"></i> Configuration SMTP
+        </Link>
+        <button type="button" className="btn btn-sm btn-primary btn-rounded px-3 py-2">
+          <i className="flaticon-381-home-2 me-1"></i> Mon Cabinet
+        </button>
+      </div>
 
       <div className="row">
         <div className="col-xl-12">
@@ -691,8 +706,7 @@ const ClinicProfilePage = () => {
                         <label className="form-label fs-12 font-w600 mb-1">
                           {newClosure.mode === "range" ? "Date de début *" : "Date du jour fermé *"}
                         </label>
-                        <input
-                          type="date"
+                        <WheelDatePicker
                           className="form-control form-control-sm"
                           value={newClosure.startDate}
                           onChange={(e) =>
@@ -702,18 +716,18 @@ const ClinicProfilePage = () => {
                               endDate: prev.mode === "single" || prev.endDate < e.target.value ? e.target.value : prev.endDate,
                             }))
                           }
+                          title="DATE DE DÉBUT"
                         />
                       </div>
 
                       {newClosure.mode === "range" && (
                         <div className="col-md-2">
                           <label className="form-label fs-12 font-w600 mb-1">Date de fin *</label>
-                          <input
-                            type="date"
+                          <WheelDatePicker
                             className="form-control form-control-sm"
-                            min={newClosure.startDate}
                             value={newClosure.endDate}
                             onChange={(e) => setNewClosure((prev) => ({ ...prev, endDate: e.target.value }))}
+                            title="DATE DE FIN"
                           />
                         </div>
                       )}

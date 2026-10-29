@@ -296,33 +296,7 @@ const AffichageSalleAttente = () => {
 
         {/* Badge En Direct & Horloge */}
         <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              background: "rgba(16, 185, 129, 0.15)",
-              border: "1px solid rgba(16, 185, 129, 0.3)",
-              padding: "6px 14px",
-              borderRadius: "30px",
-              color: "#34d399",
-              fontSize: "13px",
-              fontWeight: "600",
-              textTransform: "uppercase",
-              letterSpacing: "1px",
-            }}
-          >
-            <span
-              style={{
-                width: "10px",
-                height: "10px",
-                borderRadius: "50%",
-                background: "#10b981",
-                boxShadow: "0 0 10px #10b981",
-              }}
-            ></span>
-            Salle d'attente
-          </div>
+
 
           {/* Horloge Numérique */}
           <div style={{ textAlign: "right" }}>
@@ -482,22 +456,6 @@ const AffichageSalleAttente = () => {
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "10px" }}>
                   <div
                     style={{
-                      display: "inline-block",
-                      padding: "6px 16px",
-                      borderRadius: "20px",
-                      background: "#fbbf24",
-                      color: "#78350f",
-                      fontWeight: "800",
-                      fontSize: "14px",
-                      textTransform: "uppercase",
-                      letterSpacing: "1.5px",
-                    }}
-                  >
-                    <i className="fa fa-bullhorn me-2"></i> Le médecin vous appelle
-                  </div>
-
-                  <div
-                    style={{
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "6px",
@@ -546,27 +504,7 @@ const AffichageSalleAttente = () => {
               </div>
             </div>
 
-            <div
-              style={{
-                textAlign: "right",
-                background: "rgba(0, 0, 0, 0.2)",
-                padding: "20px 28px",
-                borderRadius: "16px",
-                border: "1px solid rgba(255, 255, 255, 0.15)",
-              }}
-            >
-              <div style={{ color: "#93c5fd", fontSize: "14px", fontWeight: "600", textTransform: "uppercase" }}>
-                Médecin traitant
-              </div>
-              <div style={{ color: "#ffffff", fontSize: "20px", fontWeight: "700", marginTop: "4px" }}>
-                {calledPatient.doctorName || initialDoctor.name}
-              </div>
-              {calledPatient.calledAt && (
-                <div style={{ color: "#fef08a", fontSize: "13px", marginTop: "8px", fontWeight: "600" }}>
-                  Appelé à {calledPatient.calledAt}
-                </div>
-              )}
-            </div>
+
           </div>
         ) : (
           <div

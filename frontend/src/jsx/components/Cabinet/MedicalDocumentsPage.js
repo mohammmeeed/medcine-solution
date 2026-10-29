@@ -427,20 +427,21 @@ const MedicalDocumentsPage = () => {
                         <Badge bg="success" className="light">{doc.status}</Badge>
                       </td>
                       <td style={{ width: "95px", whiteSpace: "nowrap" }} className="text-end pe-0">
-                        <div className="d-flex gap-1 justify-content-end">
+                        <div className="d-flex justify-content-end align-items-center">
                           <button
-                            className="btn btn-outline-primary btn-xs"
+                            type="button"
+                            className="btn btn-info shadow btn-xs sharp me-1 text-white"
                             onClick={() => handleDownload(doc)}
                             title="Télécharger"
                           >
-                            <i className="flaticon-381-download"></i>
+                            <i className="fa fa-download"></i>
                           </button>
                           <Link
-                            to={`/patient-details?id=${doc.patientId}`}
-                            className="btn btn-light btn-xs"
+                            to={`/admin/patient-details?id=${doc.patientId}`}
+                            className="btn btn-primary shadow btn-xs sharp"
                             title="Voir le dossier"
                           >
-                            <i className="flaticon-381-folder"></i>
+                            <i className="fa fa-folder-open"></i>
                           </Link>
                         </div>
                       </td>

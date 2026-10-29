@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import WheelDatePicker from "./WheelDatePicker";
 import { Button } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
@@ -285,15 +286,6 @@ const PatientsPage = () => {
             </span>
           </div>
 
-          <select
-            className="form-control default-select" style={{ width: "auto", minWidth: "180px" }}
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="all">Tous les patients</option>
-            <option value="Suivi régulier">Suivi régulier</option>
-            <option value="Actif">Actif</option>
-          </select>
         </div>
 
         <Button
@@ -364,11 +356,10 @@ const PatientsPage = () => {
               <div className="row">
                 <div className="col-md-4 mb-3">
                   <label className="form-label">Date de naissance *</label>
-                  <input
-                    type="date"
-                    className="form-control"
+                  <WheelDatePicker
                     value={formData.dob}
                     onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                    title="DATE DE NAISSANCE"
                     required
                   />
                 </div>

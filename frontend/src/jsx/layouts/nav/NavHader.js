@@ -5,7 +5,8 @@ import { navtoggle } from "../../../store/actions/AuthActions";
 /// React router dom
 
 import { ThemeContext } from "../../../context/ThemeContext";
-import DoctorLogo from "./DoctorLogo";
+import logoArabic from "../../../images/logo-arabic.png";
+import logoArabicWhite from "../../../images/logo-arabic-white.png";
 
 const NavHader = () => {
   const dispatch = useDispatch();
@@ -20,15 +21,36 @@ const NavHader = () => {
 
   return (
     <div className="nav-header">
-      <div className="brand-logo d-none d-md-flex" style={{ alignItems: "center", cursor: "default", pointerEvents: "none" }}>
-        <DoctorLogo isDark={isDark} className="logo-abbr" />
+      <div
+        className="brand-logo d-none d-md-flex"
+        style={{
+          alignItems: "center",
+          justifyContent: sideMenu ? "center" : "flex-start",
+          paddingLeft: sideMenu ? "0" : "20px",
+          paddingRight: "15px",
+          cursor: "default",
+          pointerEvents: "none",
+        }}
+      >
+        <img
+          src={isDark ? logoArabicWhite : logoArabic}
+          alt="الدكتورة ن. بلبشير ولد هنية"
+          style={{
+            maxHeight: "30px",
+            maxWidth: sideMenu ? "48px" : "190px",
+            width: "auto",
+            height: "auto",
+            objectFit: "contain",
+            transition: "all 0.2s ease",
+          }}
+        />
       </div>
 
       <div
         className="nav-control"
         onClick={() => {
           // setToggle(!toggle);
-          handleToogle()
+          handleToogle();
           openMenuToggle();
         }}
       >

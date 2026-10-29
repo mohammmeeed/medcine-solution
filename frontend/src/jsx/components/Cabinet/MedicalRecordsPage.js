@@ -154,12 +154,22 @@ const MedicalRecordsPage = () => {
                       {p.gender} • Né(e) le {p.dob} ({p.age || 35} ans) • Groupe {p.bloodGroup}
                     </p>
                   </div>
-                  <Link
-                    to={`/patient-details?id=${p.id}`}
-                    className="btn btn-primary btn-sm btn-rounded"
-                  >
-                    Ouvrir dossier <i className="flaticon-381-next ms-1"></i>
-                  </Link>
+                  <div className="d-flex align-items-center">
+                    <Link
+                      to={`/admin/patient-details?id=${p.id}`}
+                      className="btn btn-primary shadow btn-xs sharp me-1"
+                      title="Ouvrir le dossier médical"
+                    >
+                      <i className="fa fa-folder-open"></i>
+                    </Link>
+                    <Link
+                      to={`/admin/consultations?patientId=${p.id}`}
+                      className="btn btn-success shadow btn-xs sharp"
+                      title="Nouvelle consultation"
+                    >
+                      <i className="fa fa-stethoscope"></i>
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="card-body">

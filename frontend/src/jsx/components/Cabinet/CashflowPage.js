@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Modal, Button, Badge } from "react-bootstrap";
+import WheelDatePicker from "./WheelDatePicker";
 import Swal from "sweetalert2";
 import PageTitle from "../../layouts/PageTitle";
 import ApiService from "../../../services/ApiService";
@@ -68,6 +69,10 @@ const CashflowPage = () => {
   // État formulaire ajout rapide de catégorie
   const [newRecetteCategory, setNewRecetteCategory] = useState("");
   const [newDepenseCategory, setNewDepenseCategory] = useState("");
+
+  // État modification en ligne d'une catégorie
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [editingCategoryName, setEditingCategoryName] = useState("");
 
   // Chargement des données depuis l'API backend MySQL
   const loadCashflowData = async () => {
@@ -252,6 +257,43 @@ const CashflowPage = () => {
     }
   };
 
+  // Modification en ligne d'une catégorie
+  const handleStartEditCategory = (cat) => {
+    setEditingCategoryId(cat.id);
+    setEditingCategoryName(cat.name);
+  };
+
+  const handleCancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName("");
+  };
+
+  const handleSaveEditCategory = async (cat, newName) => {
+    const trimmed = (newName || "").trim();
+    if (!trimmed) {
+      Swal.fire("Attention", "Le nom de la catégorie ne peut pas être vide", "warning");
+      return;
+    }
+    try {
+      await ApiService.saveCashCategory({
+        id: cat.id,
+        type: cat.type || (categories.recettes?.some((r) => r.id === cat.id) ? "RECETTE" : "DEPENSE"),
+        name: trimmed,
+      });
+      setEditingCategoryId(null);
+      setEditingCategoryName("");
+      Swal.fire({
+        icon: "success",
+        title: "Catégorie modifiée",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+      loadCashflowData();
+    } catch (err) {
+      Swal.fire("Erreur", "Impossible de modifier la catégorie : " + err.message, "error");
+    }
+  };
+
   // Suppression d'une catégorie
   const handleDeleteCategory = (cat) => {
     Swal.fire({
@@ -313,7 +355,7 @@ const CashflowPage = () => {
             <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
               <div>
                 <h3 className="font-w700 text-dark mb-1 d-flex align-items-center gap-2">
-                  <i className="flaticon-381-notebook-1 text-primary"></i>
+                  <i className="fa fa-cash-register text-primary"></i>
                   Journal de Caisse
                 </h3>
                 <p className="text-muted fs-14 mb-0">
@@ -479,27 +521,42 @@ const CashflowPage = () => {
                   <div className="d-flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className={`btn btn-sm rounded-pill font-w600 px-3 ${
-                        filterType === "ALL" ? "btn-dark text-white" : "btn-light text-dark"
-                      }`}
+                      className="btn btn-sm rounded-pill font-w600 px-3"
+                      style={{
+                        backgroundColor: filterType === "ALL" ? "#2563eb" : "#ffffff",
+                        color: filterType === "ALL" ? "#ffffff" : "#475569",
+                        border: filterType === "ALL" ? "1.5px solid #2563eb" : "1.5px solid #cbd5e1",
+                        boxShadow: filterType === "ALL" ? "0 2px 6px rgba(37, 99, 235, 0.25)" : "none",
+                        fontSize: "13px",
+                      }}
                       onClick={() => setFilterType("ALL")}
                     >
                       TOUT JOURNAL ({entries.length})
                     </button>
                     <button
                       type="button"
-                      className={`btn btn-sm rounded-pill font-w600 px-3 ${
-                        filterType === "RECETTE" ? "btn-success text-white" : "btn-light text-dark"
-                      }`}
+                      className="btn btn-sm rounded-pill font-w600 px-3"
+                      style={{
+                        backgroundColor: filterType === "RECETTE" ? "#16a34a" : "#ffffff",
+                        color: filterType === "RECETTE" ? "#ffffff" : "#475569",
+                        border: filterType === "RECETTE" ? "1.5px solid #16a34a" : "1.5px solid #cbd5e1",
+                        boxShadow: filterType === "RECETTE" ? "0 2px 6px rgba(22, 163, 74, 0.25)" : "none",
+                        fontSize: "13px",
+                      }}
                       onClick={() => setFilterType("RECETTE")}
                     >
                       ↓ RECETTES ({recettesCount})
                     </button>
                     <button
                       type="button"
-                      className={`btn btn-sm rounded-pill font-w600 px-3 ${
-                        filterType === "DEPENSE" ? "btn-danger text-white" : "btn-light text-dark"
-                      }`}
+                      className="btn btn-sm rounded-pill font-w600 px-3"
+                      style={{
+                        backgroundColor: filterType === "DEPENSE" ? "#dc2626" : "#ffffff",
+                        color: filterType === "DEPENSE" ? "#ffffff" : "#475569",
+                        border: filterType === "DEPENSE" ? "1.5px solid #dc2626" : "1.5px solid #cbd5e1",
+                        boxShadow: filterType === "DEPENSE" ? "0 2px 6px rgba(220, 38, 38, 0.25)" : "none",
+                        fontSize: "13px",
+                      }}
                       onClick={() => setFilterType("DEPENSE")}
                     >
                       ↑ DÉPENSES ({depensesCount})
@@ -610,7 +667,7 @@ const CashflowPage = () => {
                               {/* CLIENT / FOURNISSEUR */}
                               <td>
                                 <div className="font-w600 text-dark fs-13">
-                                  {row.partyName || "—"}
+                                  {(row.partyName || "").replace(/\s*\(sc\)/gi, "").trim() || "—"}
                                 </div>
                                 {row.partyPhone && (
                                   <small className="text-muted d-block fs-11">
@@ -626,14 +683,7 @@ const CashflowPage = () => {
 
                               {/* CATÉGORIE */}
                               <td className="d-none d-md-table-cell">
-                                <span
-                                  className="badge font-w600 text-uppercase fs-11"
-                                  style={{
-                                    background: "#f1f5f9",
-                                    color: "#475569",
-                                    border: "1px solid #e2e8f0",
-                                  }}
-                                >
+                                <span className="font-w500 text-dark fs-13">
                                   {row.category}
                                 </span>
                               </td>
@@ -746,9 +796,7 @@ const CashflowPage = () => {
                       <span className="badge bg-success text-white p-1">↓</span>
                       Catégories de Recettes (+ Entrées)
                     </h5>
-                    <Badge bg="success" className="fs-12 px-2 py-1">
-                      {categories.recettes?.length || 0} catégories
-                    </Badge>
+
                   </div>
 
                   <div className="card-body">
@@ -769,7 +817,7 @@ const CashflowPage = () => {
                       />
                       <button
                         type="submit"
-                        className="btn btn-dark text-nowrap font-w600 px-3"
+                        className="btn btn-primary text-nowrap font-w600 px-3"
                         disabled={!newRecetteCategory.trim()}
                       >
                         + Ajouter
@@ -778,39 +826,107 @@ const CashflowPage = () => {
 
                     {/* Liste des catégories de recettes */}
                     <div className="d-flex flex-column gap-2">
-                      {categories.recettes?.map((cat) => (
-                        <div
-                          key={cat.id}
-                          className="d-flex justify-content-between align-items-center p-3 rounded"
-                          style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}
-                        >
-                          <div className="d-flex align-items-center gap-2">
-                            <span
-                              style={{
-                                width: "9px",
-                                height: "9px",
-                                borderRadius: "50%",
-                                background: "#10b981",
-                                display: "inline-block",
-                              }}
-                            ></span>
-                            <span className="font-w700 text-dark fs-13 text-uppercase">
-                              {cat.name}
-                            </span>
-                          </div>
+                      {categories.recettes?.map((cat) => {
+                        const isEditingThis = editingCategoryId === cat.id;
+                        return (
+                          <div
+                            key={cat.id}
+                            className="d-flex justify-content-between align-items-center p-3 rounded"
+                            style={{
+                              background: isEditingThis ? "#ecfdf5" : "#f8fafc",
+                              border: isEditingThis ? "1.5px solid #10b981" : "1px solid #e2e8f0",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {isEditingThis ? (
+                              <div className="d-flex align-items-center gap-2 flex-grow-1 me-2">
+                                <span
+                                  style={{
+                                    width: "9px",
+                                    height: "9px",
+                                    borderRadius: "50%",
+                                    background: "#10b981",
+                                    display: "inline-block",
+                                  }}
+                                ></span>
+                                <input
+                                  type="text"
+                                  className="form-control form-control-sm font-w600"
+                                  style={{ fontSize: "13px" }}
+                                  value={editingCategoryName}
+                                  onChange={(e) => setEditingCategoryName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleSaveEditCategory(cat, editingCategoryName);
+                                    } else if (e.key === "Escape") {
+                                      handleCancelEditCategory();
+                                    }
+                                  }}
+                                  autoFocus
+                                />
+                              </div>
+                            ) : (
+                              <div className="d-flex align-items-center gap-2">
+                                <span
+                                  style={{
+                                    width: "9px",
+                                    height: "9px",
+                                    borderRadius: "50%",
+                                    background: "#10b981",
+                                    display: "inline-block",
+                                  }}
+                                ></span>
+                                <span className="font-w700 text-dark fs-13 text-uppercase">
+                                  {cat.name}
+                                </span>
+                              </div>
+                            )}
 
-                          <div className="d-flex gap-2">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-danger p-1 px-2 rounded"
-                              title="Supprimer la catégorie"
-                              onClick={() => handleDeleteCategory(cat)}
-                            >
-                              <i className="flaticon-381-trash-1"></i>
-                            </button>
+                            <div className="d-flex gap-1 align-items-center">
+                              {isEditingThis ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-success p-1 px-2 rounded text-white"
+                                    title="Enregistrer la modification"
+                                    onClick={() => handleSaveEditCategory(cat, editingCategoryName)}
+                                  >
+                                    <i className="fa fa-check"></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-secondary p-1 px-2 rounded"
+                                    title="Annuler"
+                                    onClick={handleCancelEditCategory}
+                                  >
+                                    <i className="fa fa-times"></i>
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-primary p-1 px-2 rounded"
+                                    title="Modifier la catégorie"
+                                    onClick={() => handleStartEditCategory(cat)}
+                                  >
+                                    <i className="fa fa-pencil"></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-danger p-1 px-2 rounded"
+                                    title="Supprimer la catégorie"
+                                    onClick={() => handleDeleteCategory(cat)}
+                                  >
+                                    <i className="flaticon-381-trash-1"></i>
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -824,9 +940,7 @@ const CashflowPage = () => {
                       <span className="badge bg-danger text-white p-1">↑</span>
                       Catégories de Dépenses (- Sorties)
                     </h5>
-                    <Badge bg="danger" className="fs-12 px-2 py-1">
-                      {categories.depenses?.length || 0} catégories
-                    </Badge>
+
                   </div>
 
                   <div className="card-body">
@@ -847,7 +961,7 @@ const CashflowPage = () => {
                       />
                       <button
                         type="submit"
-                        className="btn btn-dark text-nowrap font-w600 px-3"
+                        className="btn btn-primary text-nowrap font-w600 px-3"
                         disabled={!newDepenseCategory.trim()}
                       >
                         + Ajouter
@@ -856,39 +970,107 @@ const CashflowPage = () => {
 
                     {/* Liste des catégories de dépenses */}
                     <div className="d-flex flex-column gap-2">
-                      {categories.depenses?.map((cat) => (
-                        <div
-                          key={cat.id}
-                          className="d-flex justify-content-between align-items-center p-3 rounded"
-                          style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}
-                        >
-                          <div className="d-flex align-items-center gap-2">
-                            <span
-                              style={{
-                                width: "9px",
-                                height: "9px",
-                                borderRadius: "50%",
-                                background: "#ef4444",
-                                display: "inline-block",
-                              }}
-                            ></span>
-                            <span className="font-w700 text-dark fs-13 text-uppercase">
-                              {cat.name}
-                            </span>
-                          </div>
+                      {categories.depenses?.map((cat) => {
+                        const isEditingThis = editingCategoryId === cat.id;
+                        return (
+                          <div
+                            key={cat.id}
+                            className="d-flex justify-content-between align-items-center p-3 rounded"
+                            style={{
+                              background: isEditingThis ? "#fef2f2" : "#f8fafc",
+                              border: isEditingThis ? "1.5px solid #ef4444" : "1px solid #e2e8f0",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {isEditingThis ? (
+                              <div className="d-flex align-items-center gap-2 flex-grow-1 me-2">
+                                <span
+                                  style={{
+                                    width: "9px",
+                                    height: "9px",
+                                    borderRadius: "50%",
+                                    background: "#ef4444",
+                                    display: "inline-block",
+                                  }}
+                                ></span>
+                                <input
+                                  type="text"
+                                  className="form-control form-control-sm font-w600"
+                                  style={{ fontSize: "13px" }}
+                                  value={editingCategoryName}
+                                  onChange={(e) => setEditingCategoryName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleSaveEditCategory(cat, editingCategoryName);
+                                    } else if (e.key === "Escape") {
+                                      handleCancelEditCategory();
+                                    }
+                                  }}
+                                  autoFocus
+                                />
+                              </div>
+                            ) : (
+                              <div className="d-flex align-items-center gap-2">
+                                <span
+                                  style={{
+                                    width: "9px",
+                                    height: "9px",
+                                    borderRadius: "50%",
+                                    background: "#ef4444",
+                                    display: "inline-block",
+                                  }}
+                                ></span>
+                                <span className="font-w700 text-dark fs-13 text-uppercase">
+                                  {cat.name}
+                                </span>
+                              </div>
+                            )}
 
-                          <div className="d-flex gap-2">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-danger p-1 px-2 rounded"
-                              title="Supprimer la catégorie"
-                              onClick={() => handleDeleteCategory(cat)}
-                            >
-                              <i className="flaticon-381-trash-1"></i>
-                            </button>
+                            <div className="d-flex gap-1 align-items-center">
+                              {isEditingThis ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-success p-1 px-2 rounded text-white"
+                                    title="Enregistrer la modification"
+                                    onClick={() => handleSaveEditCategory(cat, editingCategoryName)}
+                                  >
+                                    <i className="fa fa-check"></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-secondary p-1 px-2 rounded"
+                                    title="Annuler"
+                                    onClick={handleCancelEditCategory}
+                                  >
+                                    <i className="fa fa-times"></i>
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-primary p-1 px-2 rounded"
+                                    title="Modifier la catégorie"
+                                    onClick={() => handleStartEditCategory(cat)}
+                                  >
+                                    <i className="fa fa-pencil"></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-danger p-1 px-2 rounded"
+                                    title="Supprimer la catégorie"
+                                    onClick={() => handleDeleteCategory(cat)}
+                                  >
+                                    <i className="flaticon-381-trash-1"></i>
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -978,11 +1160,11 @@ const CashflowPage = () => {
                 <label className="form-label font-w600 fs-13">
                   DATE D'OPÉRATION <span className="text-danger">*</span>
                 </label>
-                <input
-                  type="date"
+                <WheelDatePicker
                   className="form-control form-control-lg"
                   value={formEntry.entryDate}
                   onChange={(e) => setFormEntry({ ...formEntry, entryDate: e.target.value })}
+                  title="DATE D'OPÉRATION"
                   required
                 />
               </div>

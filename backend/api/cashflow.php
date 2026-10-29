@@ -149,6 +149,7 @@ function handlePostCashflow($db) {
 
     try {
         if ($action === 'category' || $action === 'save_category') {
+            $id = !empty($input['id']) ? (int)$input['id'] : null;
             $type = strtoupper($input['type'] ?? 'RECETTE');
             $name = trim($input['name'] ?? '');
 
@@ -156,12 +157,31 @@ function handlePostCashflow($db) {
                 sendResponse('error', null, 'Le nom de la catégorie est obligatoire', 400);
             }
 
-            $stmt = $db->prepare("INSERT INTO cash_categories (type, name) VALUES (:type, :name)");
-            $stmt->execute([':type' => $type, ':name' => $name]);
-            $newId = $db->lastInsertId();
+            if ($id) {
+                // Récupérer l'ancien nom de catégorie pour mettre à jour les écritures associées
+                $oldStmt = $db->prepare("SELECT name, type FROM cash_categories WHERE id = :id");
+                $oldStmt->execute([':id' => $id]);
+                $oldCat = $oldStmt->fetch();
+                $oldName = $oldCat ? $oldCat['name'] : null;
 
-            sendResponse('success', ['id' => (int)$newId, 'name' => $name, 'type' => $type], 'Catégorie ajoutée avec succès', 201);
-            return;
+                $stmt = $db->prepare("UPDATE cash_categories SET name = :name, type = :type WHERE id = :id");
+                $stmt->execute([':name' => $name, ':type' => $type, ':id' => $id]);
+
+                if ($oldName && $oldName !== $name) {
+                    $upEntries = $db->prepare("UPDATE cash_entries SET category = :newName WHERE category = :oldName AND type = :type");
+                    $upEntries->execute([':newName' => $name, ':oldName' => $oldName, ':type' => $type]);
+                }
+
+                sendResponse('success', ['id' => $id, 'name' => $name, 'type' => $type], 'Catégorie modifiée avec succès');
+                return;
+            } else {
+                $stmt = $db->prepare("INSERT INTO cash_categories (type, name) VALUES (:type, :name)");
+                $stmt->execute([':type' => $type, ':name' => $name]);
+                $newId = $db->lastInsertId();
+
+                sendResponse('success', ['id' => (int)$newId, 'name' => $name, 'type' => $type], 'Catégorie ajoutée avec succès', 201);
+                return;
+            }
         }
 
         // Création ou Mise à jour d'une écriture comptable

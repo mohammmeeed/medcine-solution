@@ -130,7 +130,7 @@ function handleCreateAppointment($db) {
     }
 
     try {
-        $patientId = !empty($body['patientId']) ? intval($body['patientId']) : null;
+        $patientId = (!empty($body['patientId']) && $body['patientId'] !== 'sans_compte') ? intval($body['patientId']) : null;
         $patientName = trim($body['patientName'] ?? '');
         $patientPhone = trim($body['patientPhone'] ?? ($body['phone'] ?? ''));
         $patientEmail = trim($body['patientEmail'] ?? ($body['email'] ?? ''));
@@ -256,6 +256,10 @@ function handleUpdateAppointment($db) {
         if (isset($body['patientEmail']) || isset($body['email'])) {
             $fields[] = "patient_email = :pemail";
             $params[':pemail'] = trim($body['patientEmail'] ?? $body['email']);
+        }
+        if (array_key_exists('patientId', $body)) {
+            $fields[] = "patient_id = :pid";
+            $params[':pid'] = (!empty($body['patientId']) && $body['patientId'] !== 'sans_compte') ? intval($body['patientId']) : null;
         }
         if (isset($body['patientName'])) {
             $fields[] = "patient_name = :pname";

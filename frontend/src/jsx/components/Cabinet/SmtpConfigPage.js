@@ -157,7 +157,7 @@ const SmtpConfigPage = () => {
     <>
       <PageTitle motherMenu="Cabinet et configuration" activeMenu="Configuration SMTP" />
 
-      {/* Onglets de navigation entre Paramètres et SMTP */}
+      {/* Onglets de navigation entre Paramètres, SMTP et Mon Cabinet */}
       <div className="d-flex align-items-center gap-2 mb-3">
         <Link to="/admin/settings" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
           <i className="flaticon-381-settings-2 me-1"></i> Tarifs & Consultations
@@ -165,6 +165,9 @@ const SmtpConfigPage = () => {
         <button type="button" className="btn btn-sm btn-primary btn-rounded px-3 py-2">
           <i className="flaticon-381-email me-1"></i> Configuration SMTP
         </button>
+        <Link to="/admin/clinic" className="btn btn-sm btn-outline-primary btn-rounded px-3 py-2">
+          <i className="flaticon-381-home-2 me-1"></i> Mon Cabinet
+        </Link>
       </div>
 
       <div className="card">

@@ -58,6 +58,8 @@ function handleGetWaitingRoom($db) {
                 LEFT JOIN patients p ON w.patient_id = p.id
                 LEFT JOIN appointments a ON w.appointment_id = a.id
                 WHERE w.status != 'Terminé'
+                  AND (w.patient_id NOT IN (2, 3) OR w.patient_id IS NULL)
+                  AND (w.patient_name NOT IN ('Sophie Bernard', 'Marc Lemoine') OR w.patient_name IS NULL)
                 ORDER BY w.arrival_time DESC, w.id DESC";
 
         $stmt = $db->query($sql);
