@@ -47,7 +47,23 @@ function handleGetDocuments($db) {
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
 
-        $data = array_map(function ($row) {
+        $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? '127.0.0.1:8000';
+        $baseUrl = $scheme . '://' . $host;
+
+        $data = array_map(function ($row) use ($baseUrl) {
+            $rawPath = $row['file_path'];
+            $fileUrl = null;
+
+            if (!empty($rawPath)) {
+                if (str_starts_with($rawPath, 'data:') || str_starts_with($rawPath, 'http://') || str_starts_with($rawPath, 'https://')) {
+                    $fileUrl = $rawPath;
+                } else {
+                    // Chemin relatif serveur (ex: uploads/documents/doc_...)
+                    $fileUrl = $baseUrl . '/' . ltrim($rawPath, '/');
+                }
+            }
+
             return [
                 'id' => (int)$row['id'],
                 'patientId' => (int)$row['patient_id'],
@@ -57,8 +73,8 @@ function handleGetDocuments($db) {
                 'category' => $row['category'],
                 'date' => $row['doc_date'],
                 'author' => $row['author'] ?? 'Dr N. BELBACHIR OULD HENNIA',
-                'filePath' => $row['file_path'],
-                'fileDataUrl' => (!empty($row['file_path']) && (str_starts_with($row['file_path'], 'data:') || str_starts_with($row['file_path'], 'http'))) ? $row['file_path'] : null,
+                'filePath' => $fileUrl ?? $rawPath,
+                'fileDataUrl' => $fileUrl ?? $rawPath,
                 'fileSize' => $row['file_size'] ?? '250 Ko',
                 'fileType' => $row['file_type'] ?? 'PDF',
                 'status' => $row['status'] ?? 'Validé',
@@ -91,6 +107,35 @@ function handleSaveDocument($db) {
         $fileType = $input['fileType'] ?? ($input['type'] ?? 'PDF');
         $status = $input['status'] ?? 'Validé';
 
+        // Si le fichier est envoyé au format base64 data URL, le sauvegarder physiquement sur le disque
+        if (!empty($filePath) && preg_match('/^data:([^;]+);base64,(.*)$/s', $filePath, $matches)) {
+            $mimeType = $matches[1];
+            $base64Data = $matches[2];
+            $binaryData = base64_decode($base64Data);
+
+            if ($binaryData !== false) {
+                $ext = 'bin';
+                if (stripos($mimeType, 'png') !== false) $ext = 'png';
+                elseif (stripos($mimeType, 'jpeg') !== false || stripos($mimeType, 'jpg') !== false) $ext = 'jpg';
+                elseif (stripos($mimeType, 'webp') !== false) $ext = 'webp';
+                elseif (stripos($mimeType, 'gif') !== false) $ext = 'gif';
+                elseif (stripos($mimeType, 'pdf') !== false) $ext = 'pdf';
+                elseif (stripos($mimeType, 'word') !== false || stripos($mimeType, 'docx') !== false) $ext = 'docx';
+
+                $uploadDir = __DIR__ . '/../uploads/documents';
+                if (!is_dir($uploadDir)) {
+                    @mkdir($uploadDir, 0777, true);
+                }
+
+                $fileName = 'doc_' . $patientId . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                $targetFile = $uploadDir . '/' . $fileName;
+
+                if (@file_put_contents($targetFile, $binaryData) !== false) {
+                    $filePath = 'uploads/documents/' . $fileName;
+                }
+            }
+        }
+
         $stmt = $db->prepare("
             INSERT INTO medical_documents (
                 patient_id, consultation_id, title, category,
@@ -115,7 +160,7 @@ function handleSaveDocument($db) {
         ]);
 
         $newId = (int)$db->lastInsertId();
-        sendResponse('success', ['id' => $newId, 'title' => $title], 'Document enregistré avec succès dans MySQL', 201);
+        sendResponse('success', ['id' => $newId, 'title' => $title, 'filePath' => $filePath], 'Document enregistré avec succès', 201);
     } catch (PDOException $e) {
         sendResponse('error', null, 'Erreur enregistrement document : ' . $e->getMessage(), 500);
     }
@@ -133,6 +178,17 @@ function handleDeleteDocument($db) {
     }
 
     try {
+        // Supprimer le fichier physique s'il existe sur le serveur
+        $stmtGet = $db->prepare("SELECT file_path FROM medical_documents WHERE id = :id");
+        $stmtGet->execute([':id' => (int)$id]);
+        $docRow = $stmtGet->fetch();
+        if ($docRow && !empty($docRow['file_path']) && str_starts_with($docRow['file_path'], 'uploads/documents/')) {
+            $physicalPath = __DIR__ . '/../' . $docRow['file_path'];
+            if (file_exists($physicalPath)) {
+                @unlink($physicalPath);
+            }
+        }
+
         $stmt = $db->prepare("DELETE FROM medical_documents WHERE id = :id");
         $stmt->execute([':id' => (int)$id]);
         sendResponse('success', null, 'Document supprimé avec succès');

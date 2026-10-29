@@ -147,15 +147,11 @@ const PatientDetailsCabinet = () => {
         const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
         setDocTitle(cleanName);
       }
-      if (file.type.startsWith("image/")) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          setDocFilePreview(event.target.result);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        setDocFilePreview(null);
-      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setDocFilePreview(event.target.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -2167,7 +2163,7 @@ const PatientDetailsCabinet = () => {
 
                         {docFile ? (
                           <div className="d-flex align-items-center justify-content-center gap-3 flex-wrap">
-                            {docFilePreview ? (
+                            {docFilePreview && docFile && docFile.type && docFile.type.startsWith("image/") ? (
                               <img
                                 src={docFilePreview}
                                 alt="Aperçu"

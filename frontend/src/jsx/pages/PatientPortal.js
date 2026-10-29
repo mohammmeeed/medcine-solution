@@ -1392,7 +1392,12 @@ export default function PatientPortal() {
     try {
       if (doc.fileDataUrl || doc.filePath) {
         const fileSrc = doc.fileDataUrl || doc.filePath;
-        const isImg = (doc.fileType || "").includes("image") || fileSrc.startsWith("data:image") || /\.(jpe?g|png|webp|gif)$/i.test(fileSrc);
+        const fType = (doc.fileType || "").toUpperCase();
+        const isImg =
+          fType.includes("IMAGE") ||
+          ["PNG", "JPG", "JPEG", "WEBP", "GIF"].includes(fType) ||
+          fileSrc.startsWith("data:image") ||
+          /\.(jpe?g|png|webp|gif)(\?.*)?$/i.test(fileSrc);
         setPreviewModal({
           title: doc.title || "Document Médical",
           url: fileSrc,
@@ -1415,18 +1420,41 @@ export default function PatientPortal() {
   };
 
   // Téléchargement d'un document médical (fichier joint ou PDF généré)
-  const handleDownloadDocument = (doc) => {
+  const handleDownloadDocument = async (doc) => {
     try {
       if (doc.fileDataUrl || doc.filePath) {
-        const link = document.createElement("a");
-        link.href = doc.fileDataUrl || doc.filePath;
-        const ext = (doc.fileType || "").toLowerCase().includes("png")
+        const fileSrc = doc.fileDataUrl || doc.filePath;
+        const fType = (doc.fileType || "").toLowerCase();
+        const ext = fType.includes("png")
           ? "png"
-          : (doc.fileType || "").toLowerCase().includes("jp")
-          ? "jpg"
-          : "pdf";
-        link.download = `${(doc.title || "document").replace(/\s+/g, "_")}.${ext}`;
+          : (fType.includes("jp") ? "jpg" : (fType.includes("webp") ? "webp" : "pdf"));
+        const filename = `${(doc.title || "document").replace(/[^a-zA-Z0-9_-]/g, "_")}.${ext}`;
+
+        if (fileSrc.startsWith("http://") || fileSrc.startsWith("https://")) {
+          try {
+            const resp = await fetch(fileSrc);
+            const blob = await resp.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(blobUrl);
+            return;
+          } catch (e) {
+            // fallback classique si fetch échoue
+          }
+        }
+
+        const link = document.createElement("a");
+        link.href = fileSrc;
+        link.download = filename;
+        link.target = "_blank";
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
         return;
       }
 
@@ -4121,13 +4149,60 @@ export default function PatientPortal() {
             </div>
 
             {/* Body Modal Preview */}
-            <div style={{ flex: 1, padding: "12px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0, background: "#f1f5f9" }}>
+            <div style={{ flex: 1, padding: "12px", overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0, background: "#f1f5f9" }}>
               {previewModal.type === "image" ? (
-                <img
-                  src={previewModal.url}
-                  alt={previewModal.title}
-                  style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: "8px" }}
-                />
+                <>
+                  <img
+                    src={previewModal.url}
+                    alt={previewModal.title}
+                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: "8px" }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                      const fb = document.getElementById("imgPreviewFallback");
+                      if (fb) fb.style.display = "flex";
+                    }}
+                  />
+                  <div
+                    id="imgPreviewFallback"
+                    style={{
+                      display: "none",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "30px 20px",
+                      textAlign: "center",
+                      background: "#ffffff",
+                      borderRadius: "12px",
+                      border: "1px dashed #cbd5e1",
+                      maxWidth: "360px",
+                    }}
+                  >
+                    <div style={{ fontSize: "36px", marginBottom: "10px" }}>📷</div>
+                    <h6 style={{ fontWeight: 700, color: "#1e293b", marginBottom: "6px" }}>
+                      Impossible d'afficher l'aperçu de l'image
+                    </h6>
+                    <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "14px" }}>
+                      L'image a été importée dans un format non supporté ou est trop ancienne.
+                    </p>
+                    {previewModal.onDownload && (
+                      <button
+                        onClick={previewModal.onDownload}
+                        style={{
+                          background: "var(--accent-mint)",
+                          color: "var(--accent-mint-dark)",
+                          border: "none",
+                          padding: "8px 16px",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                          fontWeight: "700",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Télécharger le fichier
+                      </button>
+                    )}
+                  </div>
+                </>
               ) : (
                 <iframe
                   src={previewModal.url}
