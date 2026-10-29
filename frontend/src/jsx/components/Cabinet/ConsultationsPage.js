@@ -1548,14 +1548,13 @@ const ConsultationsPage = () => {
                   <th className="d-none d-md-table-cell"><strong>MOTIF</strong></th>
                   <th className="d-none d-md-table-cell"><strong>DIAGNOSTIC (CIM-10)</strong></th>
                   <th className="d-none d-md-table-cell"><strong>COTATION</strong></th>
-                  <th className="d-none d-sm-table-cell"><strong>DÉTAIL</strong></th>
-                  <th className="text-end" style={{ width: "125px" }}><strong>ACTIONS</strong></th>
+                  <th className="text-end" style={{ width: "170px" }}><strong>ACTIONS</strong></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredConsultations.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-5 text-muted">
+                    <td colSpan="6" className="text-center py-5 text-muted">
                       Aucune consultation trouvée.
                     </td>
                   </tr>
@@ -1593,30 +1592,28 @@ const ConsultationsPage = () => {
                           {cs.billingCode}
                         </span>
                       </td>
-                      <td className="d-none d-sm-table-cell">
-                        <button
-                          type="button"
-                          className={`btn ${selectedConsultation?.id === cs.id ? "btn-primary" : "btn-outline-primary"} btn-xs`}
-                          onClick={() => {
-                            if (selectedConsultation?.id === cs.id) {
-                              setSelectedConsultation(null);
-                            } else {
-                              setSelectedConsultation(cs);
-                              setTimeout(() => {
-                                const el = document.getElementById("consultation-details-card");
-                                if (el) {
-                                  el.scrollIntoView({ behavior: "smooth", block: "start" });
-                                }
-                              }, 100);
-                            }
-                          }}
-                          title={selectedConsultation?.id === cs.id ? "Masquer les détails" : "Afficher les détails de la consultation"}
-                        >
-                          <i className="fa fa-eye"></i>
-                        </button>
-                      </td>
-                      <td style={{ width: "125px", whiteSpace: "nowrap" }} className="text-end pe-0">
-                        <div className="d-flex gap-1 justify-content-end">
+                      <td style={{ width: "170px", whiteSpace: "nowrap" }} className="text-end pe-0">
+                        <div className="d-flex gap-1 justify-content-end align-items-center">
+                          <button
+                            type="button"
+                            className={`btn ${selectedConsultation?.id === cs.id ? "btn-primary" : "btn-outline-primary"} btn-xs`}
+                            onClick={() => {
+                              if (selectedConsultation?.id === cs.id) {
+                                setSelectedConsultation(null);
+                              } else {
+                                setSelectedConsultation(cs);
+                                setTimeout(() => {
+                                  const el = document.getElementById("consultation-details-card");
+                                  if (el) {
+                                    el.scrollIntoView({ behavior: "smooth", block: "start" });
+                                  }
+                                }, 100);
+                              }
+                            }}
+                            title={selectedConsultation?.id === cs.id ? "Masquer les détails" : "Afficher les détails de la consultation"}
+                          >
+                            <i className="fa fa-eye"></i>
+                          </button>
                           <button
                             type="button"
                             onClick={() => setPreviewEchoReport(cs)}
